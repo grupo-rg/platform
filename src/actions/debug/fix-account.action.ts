@@ -44,6 +44,7 @@ export async function ensureLeadProfile(userId: string) {
                 otpCode: undefined,
                 otpExpiresAt: undefined
             } as LeadVerification,
+            null, // <--- Added null for `profile`
             new Date(),
             new Date()
         );

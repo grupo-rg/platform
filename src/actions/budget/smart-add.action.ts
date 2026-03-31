@@ -1,14 +1,23 @@
 'use server';
 
-import { extractionFlow } from '@/backend/ai/private/flows/budget/extraction.flow';
-import { priceBookRetrieverTool } from '@/backend/ai/core/tools/price-book-retriever.tool';
+import { extractionFlow } from '@/backend/ai/private-core/flows/budget/extraction.flow';
+import { priceBookRetrieverTool } from '@/backend/ai/private-core/tools/price-book-retriever.tool';
+import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { EditableBudgetLineItem } from '@/types/budget-editor';
 import { v4 as uuidv4 } from 'uuid';
 
-export async function smartAddAction(input: string): Promise<{ success: boolean; items?: EditableBudgetLineItem[]; error?: string }> {
+export async function smartAddAction(input: string, leadId?: string): Promise<{ success: boolean; items?: EditableBudgetLineItem[]; error?: string }> {
     try {
         if (!input || input.trim().length === 0) {
             return { success: false, error: "Input cannot be empty" };
+        }
+
+        if (leadId) {
+            const leadRepo = new FirestoreLeadRepository();
+            const leadDoc = await leadRepo.findById(leadId);
+            if (leadDoc && leadDoc.demoPdfsDownloaded > 0) {
+                return { success: false, error: "Acción no permitida: Has superado el límite de operaciones de IA en esta demo tras descargar el PDF." };
+            }
         }
 
         console.log(`[SmartAdd] Processing: "${input}"`);
@@ -28,7 +37,7 @@ export async function smartAddAction(input: string): Promise<{ success: boolean;
 
             try {
                 // Try Price Book Search
-                const searchResult = await priceBookRetrieverTool({ query: task.searchQuery, limit: 1, year: 2024 });
+                const searchResult = await priceBookRetrieverTool({ query: task.searchQuery, limit: 1, year: 2025 });
                 bestMatch = searchResult.items && searchResult.items.length > 0 ? searchResult.items[0] : null;
 
                 // Validation: Keyword Check

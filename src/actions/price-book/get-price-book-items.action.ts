@@ -10,7 +10,8 @@ export async function getPriceBookItems(year: number, limitCount: number = 50) {
         console.log(`[Action] Fetching price book items for year ${year} (limit: ${limitCount})...`);
         initFirebaseAdminApp();
         const db = getFirestore();
-        const collectionRef = db.collection('price_book_items');
+        const collectionName = year === 2025 ? 'price_book_2025' : 'price_book_2025';
+        const collectionRef = db.collection(collectionName);
 
         console.log(`[Action] Querying Firestore...`);
         // Query by year

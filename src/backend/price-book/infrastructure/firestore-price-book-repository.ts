@@ -26,10 +26,12 @@ import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/a
 
 export class FirestorePriceBookRepository implements PriceBookRepository {
     private db;
+    private collectionName: string;
 
-    constructor() {
+    constructor(collectionName: string = 'price_book_2025') {
         initFirebaseAdminApp();
         this.db = getFirestore();
+        this.collectionName = collectionName;
     }
     async saveBatch(items: PriceBookItem[]): Promise<void> {
         // Reduced from 400 to 50 because Embeddings increase payload size significantly
@@ -46,7 +48,7 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
             chunk.forEach(item => {
                 // Create a deterministic ID or auto-id
                 const docId = `${item.year}_${item.code.replace(/\./g, '_')}`;
-                const docRef = this.db.collection('price_book_items').doc(docId);
+                const docRef = this.db.collection(this.collectionName).doc(docId);
 
                 // IMPORTANT: Must convert raw array to VectorValue for Vector Search to index it!
                 const { embedding, ...itemData } = item;
@@ -81,7 +83,7 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
     }
 
     async findByYear(year: number): Promise<PriceBookItem[]> {
-        const q = this.db.collection('price_book_items').where('year', '==', year);
+        const q = this.db.collection(this.collectionName).where('year', '==', year);
         const snapshot = await q.get();
         return snapshot.docs.map(doc => {
             const data = doc.data();
@@ -111,14 +113,13 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
         return [];
     }
 
-    async searchByVector(embedding: number[], limit: number = 10, year?: number, keywordFilter?: string, queryText?: string): Promise<(PriceBookItem & { matchScore: number })[]> {
-        const collectionRef = this.db.collection('price_book_items');
+    async searchByVector(embedding: number[], limit: number = 10, year?: number, keywordFilter?: string): Promise<(PriceBookItem & { matchScore: number })[]> {
+        const collectionRef = this.db.collection(this.collectionName);
 
         const vectorValue = FieldValue.vector(embedding);
 
-        // RRF Hybrid Strategy: Fetch more candidates via Vector Search (Loose Net), then Re-rank via Keyword Fusion
-        const isRRF = queryText && queryText.trim().length > 0;
-        const candidateLimit = isRRF ? Math.max(limit * 5, 50) : (keywordFilter ? limit * 3 : limit);
+        // Hybrid Strategy: Fetch more candidates via Vector Search (Loose Net), then Re-rank via Keyword
+        const candidateLimit = keywordFilter ? limit * 3 : limit;
 
         let vectorQuery = collectionRef.findNearest('embedding', vectorValue, {
             limit: candidateLimit,
@@ -160,89 +161,34 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
             } as PriceBookItem & { matchScore: number };
         });
 
-        const normalizeText = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        // Hybrid Re-ranking
+        if (keywordFilter && keywordFilter.trim().length > 0) {
+            const keywords = keywordFilter.toLowerCase().split(/\s+/).filter(k => k.length > 2); // Ignore small words
 
-        // RRF Hybrid Re-ranking
-        if (isRRF && queryText) {
-            const K = 60;
-            const normalizeAndTokenize = (text: string): string[] => {
-                if (!text) return [];
-                const tokens = normalizeText(text).split(/\W+/).filter(t => t.length > 2);
-                return Array.from(new Set(tokens));
-            };
-
-            const computeKeywordScore = (qTokens: string[], docText: string): number => {
-                const docTokens = normalizeAndTokenize(docText);
-                let overlap = 0;
-                for (const q of qTokens) {
-                    if (docTokens.includes(q)) overlap++;
-                }
-                return qTokens.length > 0 ? overlap / qTokens.length : 0;
-            };
-
-            const queryTokens = normalizeAndTokenize(queryText);
-
-            // Rank 1: Semantic (Already sorted by vector search matchScore natively, but sorting to be 100% sure)
-            candidates.sort((a, b) => b.matchScore - a.matchScore);
-            const semanticRanked = [...candidates];
-
-            // Rank 2: Lexical (Keyword Matching)
-            const lexicalScored = candidates.map((item) => {
-                const fullText = `${item.description} ${item.chapter || ''} ${item.section || ''}`;
-                const lexicalScore = computeKeywordScore(queryTokens, fullText);
-                return { item, lexicalScore };
-            });
-
-            lexicalScored.sort((a, b) => b.lexicalScore - a.lexicalScore);
-
-            const lexicalRankMap = new Map<string, number>();
-            lexicalScored.forEach((entry, idx) => {
-                lexicalRankMap.set(entry.item.code, idx + 1);
-            });
-
-            const rrfResults = semanticRanked.map((item, semanticIdx) => {
-                const semanticRank = semanticIdx + 1;
-                const lexicalRank = lexicalRankMap.get(item.code) || candidateLimit;
-
-                const semanticRRF = 1 / (K + semanticRank);
-                const lexicalRRF = 1 / (K + lexicalRank);
-
-                // Weight Semantic much higher (85%) because construction vocabulary heavily diverges 
-                // between user layman terms and formal BBDD descriptions.
-                const finalRRFScore = (semanticRRF * 0.85) + (lexicalRRF * 0.15);
-
-                // If chapter filter exists, give it a tiny contextual tie-breaker boost
-                const chapterMatchBoost = (keywordFilter && item.chapter && item.chapter.toLowerCase() === keywordFilter.toLowerCase()) ? 0.001 : 0;
-
-                return {
-                    ...item,
-                    matchScore: finalRRFScore + chapterMatchBoost
-                };
-            });
-            candidates = rrfResults;
-
-        } else if (keywordFilter && keywordFilter.trim().length > 0) {
-            const keywords = normalizeText(keywordFilter).split(/\s+/).filter(k => k.length > 2);
             candidates = candidates.map(candidate => {
-                const descriptionText = normalizeText(candidate.description || "");
-                const chapterText = normalizeText(candidate.chapter || "");
-                const sectionText = normalizeText(candidate.section || "");
-                const fullTextToSearch = `${descriptionText} ${chapterText} ${sectionText}`;
-
+                const text = (candidate.description || "").toLowerCase();
                 let keywordScore = 0;
                 let matches = 0;
-                let taxonomyMatches = 0;
 
                 keywords.forEach(kw => {
-                    if (fullTextToSearch.includes(kw)) matches++;
-                    if (chapterText.includes(kw) || sectionText.includes(kw)) taxonomyMatches++;
+                    if (text.includes(kw)) {
+                        matches++;
+                        // Bonus for exact word match vs substring? 
+                        // Simple inclusion is fine for now.
+                    }
                 });
 
                 if (keywords.length > 0) {
-                    keywordScore = (matches / keywords.length) + (taxonomyMatches / keywords.length);
-                    return { ...candidate, matchScore: candidate.matchScore * (1 + 0.05 * keywordScore) };
+                    keywordScore = matches / keywords.length; // 0 to 1
                 }
-                return candidate;
+
+                // Weighted Score: Vector (Semantic) + Keyword (Exactness)
+                // We want to boost items that match keywords but still respect vector similarity
+                // New Score = Vector * (1 + 0.5 * KeywordScore)
+                return {
+                    ...candidate,
+                    matchScore: candidate.matchScore * (1 + 0.5 * keywordScore)
+                };
             });
         }
 
@@ -257,7 +203,7 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
         filters: import('../domain/price-book-repository').SearchFilters,
         limit: number = 10
     ): Promise<(PriceBookItem & { matchScore: number })[]> {
-        const collectionRef = this.db.collection('price_book_items');
+        const collectionRef = this.db.collection(this.collectionName);
 
         let queryRef: any = collectionRef;
 

@@ -31,7 +31,7 @@ export interface PriceBookRepository {
      * @param limit Number of results to return.
      * @param year Optional filter by year.
      */
-    searchByVector(embedding: number[], limit: number, year?: number, keywordFilter?: string, queryText?: string): Promise<PriceBookItem[]>;
+    searchByVector(embedding: number[], limit: number, year?: number, keywordFilter?: string): Promise<PriceBookItem[]>;
 
     /**
      * Performs a hybrid search: Vector Similarity + Structured Filters.

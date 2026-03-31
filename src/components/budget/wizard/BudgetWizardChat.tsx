@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Sparkles, Home, Hammer, Layers, Square, Send, Info, FileText, Image as ImageIcon, Mic, ChevronRight, CheckCircle2, ChevronDown, Bot, Loader2, PlayCircle, PlusCircle, PenTool, Paperclip, ExternalLink, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Mic, Paperclip, Sparkles, Loader2, Square, CheckCircle2, ExternalLink, Bot, X, FileText, FileImage, Trash2, Check, Activity } from 'lucide-react';
-import { useBudgetWizard, Message, WizardState } from './useBudgetWizard';
+import { useBudgetWizard, Message, ConversationThread } from './useBudgetWizard';
 import { useWidgetContext } from '@/context/budget-widget-context';
 import { useAudioRecorder } from '@/hooks/use-audio-recorder';
 import { Button } from '@/components/ui/button';
@@ -14,64 +14,32 @@ import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import { BudgetGenerationProgress, GenerationStep } from '@/components/budget/BudgetGenerationProgress';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
-import { BudgetStreamListener } from './BudgetStreamListener';
-import { Toaster as SileoToaster } from 'sileo';
-import 'sileo/styles.css';
-import { useBudgetStream } from './useBudgetStream'; // NEW: Import useBudgetStream
-import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader } from '@/components/ui/sheet';
+import { useTranslations } from 'next-intl';
+import { Drawer, DrawerContent, DrawerTitle, DrawerDescription, DrawerHeader } from '@/components/ui/drawer';
 
-// Update to accept 'state' to override score if AI thinks it's done
-function calculateProgress(reqs: Partial<BudgetRequirement>, state: WizardState) {
-    if (state === 'review') return 100;
+import { Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+// removed sileo imports
+import { Logo } from '@/components/logo';
+import { Budget } from '@/backend/budget/domain/budget';
+import { BudgetWizardTips } from './BudgetWizardTips';
 
-    let score = 0;
-    let maxScore = 0;
 
-    // 1. NLP / Aparejador Logic
-    const hasNlpContext = !!reqs.projectScale || (reqs.phaseChecklist && Object.keys(reqs.phaseChecklist).length > 0);
-    if (hasNlpContext) {
-        maxScore += 2; // scale + at least one chapter
-        if (reqs.projectScale) score += 1;
-        if (reqs.phaseChecklist) {
-            const chapters = Object.values(reqs.phaseChecklist);
-            if (chapters.length > 0) {
-                const totalChapters = chapters.length;
-                const addressedChapters = chapters.filter(s => s === 'addressed' || s === 'not_applicable').length;
-                score += (addressedChapters / totalChapters);
-            }
-        }
-    }
-
-    // 2. Public / Specs Logic
-    const hasSpecsContext = !!reqs.specs || !!reqs.targetBudget || !!reqs.urgency;
-    if (hasSpecsContext) {
-        maxScore += 3;
-        if (reqs.specs?.propertyType) score += 1;
-        if (reqs.specs?.interventionType) score += 1;
-        if (reqs.specs?.totalArea) score += 1;
-    }
-
-    // 3. Fallback generic base
-    if (!hasNlpContext && !hasSpecsContext) {
-        if (Object.keys(reqs).length > 0) return 15;
-        return 0;
-    }
-
-    if (maxScore === 0) return 0;
-
-    // Add a bump if the agent explicitly signals it's ready
-    if (reqs.isReadyForGeneration) return 100;
-
-    const basePercentage = Math.round((score / maxScore) * 100);
-    return Math.min(basePercentage, 95); // cap at 95 until ready
-}
-
-export function BudgetWizardChat({ mode = 'public' }: { mode?: 'public' | 'private' }) {
-    const { messages, input, setInput, sendMessage, state, requirements } = useBudgetWizard(mode);
-    const { leadId } = useWidgetContext();
-    const { events: streamEvents, clearEvents } = useBudgetStream(); // NEW: Connecting SSE logs
+export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { isAdmin?: boolean, isPublicMode?: boolean }) {
+    const t = useTranslations('home');
+    const w = t.raw('basis.wizardChat');
+    const {
+        messages,
+        input,
+        setInput,
+        sendMessage,
+        addSystemMessage,
+        state,
+        setState,
+        requirements,
+        conversations, conversationId, isLoadingChats, startNewConversation, switchConversation, deleteConversation, resetConversation
+    } = useBudgetWizard(isAdmin);
+    const { leadId, closeWidget, initialPrompt, setInitialPrompt } = useWidgetContext();
     const { isRecording, startRecording, stopRecording, recordingTime } = useAudioRecorder();
-    const [budgetResult, setBudgetResult] = React.useState<{ id: string; total: number; itemCount: number } | null>(null);
     const router = useRouter();
     const [generationProgress, setGenerationProgress] = React.useState<{
         step: GenerationStep;
@@ -80,51 +48,176 @@ export function BudgetWizardChat({ mode = 'public' }: { mode?: 'public' | 'priva
         currentItem?: string;
         error?: string;
     }>({ step: 'idle' });
-    const [deepGeneration, setDeepGeneration] = React.useState(true); // Default to Deep Generation
-
-    // NEW: Staged Files State
-    const [stagedFiles, setStagedFiles] = React.useState<{ file: File; base64: string; preview: string; isPdf: boolean }[]>([]);
-
-    // Computed based on backend state rather than front-end local state to avoid getting stuck during NLP flows
-    const isPdfProcessing = !!(requirements as any)?.activeBatchJobId && !budgetResult;
 
 
+
+    // Auto-resume generation after answering the Architect
+    const [isAwaitingArchitect, setIsAwaitingArchitect] = React.useState(false);
+    
+    // PDF Strategy Triage
+    const [pdfAwaitingStrategy, setPdfAwaitingStrategy] = useState<File | null>(null);
+
+    // Replay logic
+    const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [leadName, setLeadName] = React.useState<string | null>(null);
+
+    // Persistent lock check from chat history
+    const isLimitReached = messages.some(m => m.content.toLowerCase().includes('ya has agotado tu presupuesto gratuito'));
+
+    useEffect(() => {
+        if (isPublicMode && leadId) {
+            import('@/actions/lead/dashboard.action').then(m => {
+                m.getLeadByIdAction(leadId).then(L => {
+                    if (L && L.personalInfo?.name) {
+                        setLeadName(L.personalInfo.name.split(' ')[0]);
+                    }
+                }).catch(e => console.error(e));
+            });
+        }
+    }, [isPublicMode, leadId]);
 
     const handleAttachmentClick = () => {
         fileInputRef.current?.click();
     };
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const [showRequirements, setShowRequirements] = useState(false);
+    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    const [isDragging, setIsDragging] = useState(false);
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            setPendingFiles(prev => [...prev, ...Array.from(files)]);
+        }
+    };
+
+    const handleRemovePendingFile = (index: number) => {
+        setPendingFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleSubmit = async () => {
+        const currentInput = input.trim();
+        if ((!currentInput && pendingFiles.length === 0) || isLimitReached || state === 'uploading') return;
+
+        if (pendingFiles.length > 0) {
+            // Upload flow
+            setState('uploading');
+            const filesToUpload = [...pendingFiles];
+            setPendingFiles([]); // clear from UI
+            
+            const hasPdf = filesToUpload.some(file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
+
+            if (hasPdf) {
+                 const pdfFile = filesToUpload.find(file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))!;
+                 setPdfAwaitingStrategy(pdfFile);
+                 
+                 // Simular un mini mensaje de log para que el usuario entienda
+                 addSystemMessage("He detectado un PDF de mediciones. Por favor, selecciona el tipo de formato en la caja inferior para aplicar el mapeo correcto.");
+                 return;
+            }
+
+            const base64Files = await Promise.all(filesToUpload.map(file => {
+                return new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            }));
+
+            const formData = new FormData();
+            filesToUpload.forEach(file => {
+                formData.append('files', file);
+            });
+
+            try {
+                const { processAttachmentsAction } = await import('@/actions/attachments/process-attachments.action');
+                const result = await processAttachmentsAction(formData);
+
+                if (result.success && result.analysis) {
+                    const hiddenContext = `[Sistema: El usuario ha subido archivos. Análisis de visión por computadora: ${result.analysis}]`;
+                    const userDisplayMessage = currentInput || "He subido estos archivos. Crea el presupuesto con ellos.";
+                    
+                    setInput("");
+                    await sendMessage(userDisplayMessage, result.urls || base64Files, hiddenContext);
+                } else {
+                    console.error(result.error);
+                    setState('idle');
+                    setPendingFiles(filesToUpload); // restore
+                }
+            } catch (error) {
+                console.error("Upload failed", error);
+                setState('idle');
+                setPendingFiles(filesToUpload); // restore
+            }
+        } else {
+            // Text only flow
+            setInput("");
+            await sendMessage(currentInput);
+        }
+    };
+
+    const handleConfirmPdfStrategy = async (strategy: 'INLINE' | 'ANNEXED') => {
+        if (!pdfAwaitingStrategy) return;
+        
+        setState('processing_pdf');
+        setGenerationProgress({ step: 'extracting', currentItem: "Analizando presupuesto PDF estructural..." });
+        
+        const formData = new FormData();
+        formData.append('file', pdfAwaitingStrategy);
+        setPdfAwaitingStrategy(null); // Clear triage UI
+
+        try {
+            const { extractMeasurementPdfAction } = await import('@/actions/budget/extract-measurement-pdf.action');
+            const result = await extractMeasurementPdfAction(formData, leadId || 'unknown-lead', strategy);
+
+            if (result.success && result.budgetId) {
+                if (result.isPending) return;
+
+                setGenerationProgress({ step: 'complete', currentItem: "¡Presupuesto Generado!" });
+                const viewLink = isAdmin
+                    ? `/dashboard/admin/budgets/${result.budgetId}/edit`
+                    : isPublicMode ? `/demo/viewer/${result.budgetId}` : `/budget/${result.budgetId}`;
+
+                setTimeout(() => {
+                    setGenerationProgress({ step: 'idle' });
+                    addSystemMessage(`¡Estado de Mediciones procesado y tasado con éxito!\n\n[Ver el resultado y Descargar](${viewLink})`);
+                    setState(isPublicMode ? 'generated' : 'idle');
+                }, 1500);
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error: any) {
+            console.error("Fast Track PDF processing failed", error);
+            setGenerationProgress({ step: 'error', error: error.message || "Error procesando el PDF." });
+            setTimeout(() => setState('idle'), 3000);
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        // Collect new staged files
-        const newStagedFiles = await Promise.all(Array.from(files).map(async (file) => {
-            const isPdf = file.type === 'application/pdf';
-            let preview = '';
-
-            if (!isPdf) {
-                preview = URL.createObjectURL(file);
-            }
-
-            const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result?.toString().split(',')[1] || '');
-                reader.onerror = error => reject(error);
-            });
-
-            return { file, base64, preview, isPdf };
-        }));
-
-        setStagedFiles(prev => [...prev, ...newStagedFiles]);
-
+        setPendingFiles(prev => [...prev, ...Array.from(files)]);
+        
         if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
-    const removeStagedFile = (index: number) => {
-        setStagedFiles(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleMicClick = async () => {
@@ -136,7 +229,7 @@ export function BudgetWizardChat({ mode = 'public' }: { mode?: 'public' | 'priva
                 formData.append('audio', blob, 'recording.webm');
 
                 // Optimistic UI update or loading state could go here
-                setInput("Transcribiendo audio...");
+                setInput(w.input.transcribing);
 
                 try {
                     const { processAudioAction } = await import('@/actions/audio/process-audio.action');
@@ -145,7 +238,7 @@ export function BudgetWizardChat({ mode = 'public' }: { mode?: 'public' | 'priva
                     if (result.success && result.transcription) {
                         // Append transcription to current input or replace it? 
                         // Let's replace for now, or append if input existed.
-                        setInput(prev => prev === "Transcribiendo audio..." ? result.transcription : `${prev} ${result.transcription}`);
+                        setInput(prev => prev === w.input.transcribing ? result.transcription : `${prev} ${result.transcription}`);
                     } else {
                         console.error(result.error);
                         setInput(""); // Clear loading text on error
@@ -162,7 +255,7 @@ export function BudgetWizardChat({ mode = 'public' }: { mode?: 'public' | 'priva
     };
     const handleReset = async () => {
         if (!leadId) return;
-        if (!confirm("¿Estás seguro de que quieres borrar la conversación? Esto no se puede deshacer.")) return;
+        if (!confirm(w.errors.resetConfirm)) return;
 
         setInput("Reseteando conversación...");
         try {
@@ -184,454 +277,394 @@ export function BudgetWizardChat({ mode = 'public' }: { mode?: 'public' | 'priva
         }
     }, [messages]);
 
-    // Batch Job Polling
+    // Auto-resume generation when the Architect question is answered
     useEffect(() => {
-        const jobId = (requirements as any).activeBatchJobId;
-        if (!jobId || budgetResult) return;
-
-        let isPolling = true;
-        let pollCount = 1;
-
-        const pollStatus = async () => {
-            if (!isPolling) return;
-
-            try {
-                const { checkBatchJobStatusAction, processBatchJobResultAction } = await import('@/actions/ai/check-batch-status.action');
-                const statusResult = await checkBatchJobStatusAction(jobId);
-
-                if (statusResult.success) {
-                    const state = statusResult.state;
-
-                    if (state === 'JOB_STATE_RUNNING' || state === 'RUNNING') {
-                        setGenerationProgress({ step: 'extracting', currentItem: `[Revisión ${pollCount}] Analizando partidas de tu documento PDF...` });
-                    } else if (state === 'JOB_STATE_PENDING' || state === 'PENDING') {
-                        setGenerationProgress({ step: 'extracting', currentItem: `[Revisión ${pollCount}] Trabajo en cola (esperando servidor)...` });
-                    } else if (state === 'JOB_STATE_SUCCEEDED' || state === 'SUCCEEDED') {
-                        isPolling = false;
-                        setGenerationProgress({ step: 'searching', currentItem: 'Buscando precios en catálogo (Vector Search)...' });
-
-                        // Process the result immediately
-                        const processResult = await processBatchJobResultAction(jobId);
-                        if (processResult.success && processResult.data) {
-                            const newBudgetId = "batch-" + Date.now();
-                            const itemCount = processResult.data.summary.totalItems;
-                            const total = processResult.data.summary.total;
-                            const matchedItems = processResult.data.summary.matchedItems;
-
-                            setGenerationProgress({
-                                step: 'complete',
-                                extractedItems: itemCount,
-                                matchedItems: matchedItems
-                            });
-
-                            await new Promise(r => setTimeout(r, 1500));
-                            setBudgetResult({ id: newBudgetId, total, itemCount });
-                        } else {
-                            setGenerationProgress({ step: 'error', error: processResult.error || 'Error al procesar el resultado del batch.' });
-                        }
-                    } else if (state === 'JOB_STATE_FAILED' || state === 'FAILED' || state === 'JOB_STATE_CANCELLED') {
-                        isPolling = false;
-                        setGenerationProgress({ step: 'error', error: 'El procesamiento en la nube ha fallado.' });
-                    }
-                } else {
-                    // Gracefully continue polling if API unavailable (e.g. 503)
-                    setGenerationProgress({ step: 'extracting', currentItem: `[Revisión ${pollCount}] La API está temporalmente saturada, reintentando...` });
-                }
-            } catch (error) {
-                console.error("Polling error", error);
-                setGenerationProgress({ step: 'extracting', currentItem: `[Revisión ${pollCount}] Error temporal de conexión. Reintentando...` });
-            }
-
-            if (isPolling) {
-                pollCount++;
-                setTimeout(pollStatus, 30000); // Poll every 30 seconds
-            }
-        };
-
-        // Start polling
-        setGenerationProgress({ step: 'extracting', currentItem: 'Iniciando procesamiento profundo (esto puede tardar unos minutos)...' });
-        // Set an initial delay of 15 seconds to let the job queue
-        const initialTimer = setTimeout(pollStatus, 15000);
-
-        return () => {
-            isPolling = false;
-            clearTimeout(initialTimer);
-        };
-    }, [(requirements as any).activeBatchJobId, budgetResult]);
-
-    // NEW: Synchronous Job Completion Listener
-    useEffect(() => {
-        const completedId = (requirements as any).completedBudgetId;
-        const total = (requirements as any).completedBudgetTotal || 0;
-        const itemCount = (requirements as any).completedBudgetItems || 0;
-
-        if (completedId && !budgetResult) {
-            setGenerationProgress({
-                step: 'complete',
-            });
-            // Give a small delay for UI smoothness
-            const timer = setTimeout(() => {
-                setBudgetResult({
-                    id: completedId,
-                    total: total,
-                    itemCount: itemCount
-                });
-            }, 1000);
-            return () => clearTimeout(timer);
+        if (state === 'review' && isAwaitingArchitect && generationProgress.step === 'idle') {
+            setIsAwaitingArchitect(false);
+            handleGenerateBudget();
         }
-    }, [(requirements as any).completedBudgetId, budgetResult]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state, isAwaitingArchitect, generationProgress.step]);
 
-    if (budgetResult) {
-        return (
-            <div className="w-full h-full flex items-center justify-center p-4">
-                <div className="w-full max-w-lg mx-auto bg-white dark:bg-zinc-900/50 p-8 rounded-3xl md:border md:border-black/5 dark:border-white/5 md:shadow-xl md:-mt-10 animate-in fade-in zoom-in-95 duration-500 relative z-20">
-                    <div className="text-center space-y-6">
-                        <div className="mx-auto h-20 w-20 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30">
-                            <CheckCircle2 className="h-10 w-10 text-white" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-bold text-foreground">¡Presupuesto Generado!</h2>
-                            <p className="text-muted-foreground mt-2 font-medium">
-                                {budgetResult.itemCount} partidas • Total: {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(budgetResult.total)}
-                            </p>
-                            <div className="flex items-center justify-center gap-2 mt-4 mb-4">
-                                <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                    {requirements.specs?.propertyType ? requirements.specs.propertyType : 'Nuevo Proyecto'}
-                                </Badge>
-                                {requirements.specs?.totalArea && (
-                                    <Badge variant="secondary" className="text-[10px]">
-                                        {requirements.specs.totalArea} m²
-                                    </Badge>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            <Button
-                                size="lg"
-                                className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-lg"
-                                onClick={() => router.push(`/dashboard/admin/budgets/${budgetResult.id}/edit`)}
-                            >
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                Ir al Presupuesto
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                    setBudgetResult(null);
-                                    setGenerationProgress({ step: 'idle' });
-                                    window.location.reload();
-                                }}
-                            >
-                                Crear otro presupuesto
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    // Auto-send initial prompt from context if present
+    const initialPromptSentRef = useRef(false);
 
-    const handleKeyDown = async (e: React.KeyboardEvent) => {
+    useEffect(() => {
+        if (initialPrompt && initialPrompt.trim() !== '' && !initialPromptSentRef.current) {
+            initialPromptSentRef.current = true;
+            // Give the UI a tiny bit to mount then send
+            setTimeout(() => {
+                sendMessage(initialPrompt);
+                setInitialPrompt(''); // clear so it only happens once
+            }, 300);
+        }
+    }, [initialPrompt, sendMessage, setInitialPrompt]);
+
+    const handleGenerateBudget = async () => {
+        if (!requirements || !requirements.specs) return;
+
+        if (!isAdmin && !leadId) {
+            console.error("Lead ID missing");
+            return;
+        }
+
+        // removed mobile modal handling
+        setGenerationProgress({ step: 'extracting' });
+        addSystemMessage(w.progress.generatingMsg);
+
+        try {
+            const detectedCount = requirements.detectedNeeds?.length || 15;
+            setGenerationProgress({
+                step: 'extracting',
+                extractedItems: detectedCount
+            });
+
+            let result;
+
+            if (isAdmin) {
+                const { generateBudgetFromSpecsAction } = await import('@/actions/budget/generate-budget-from-specs.action');
+                // Ensure specs exists, we have guarded against it above
+                result = await generateBudgetFromSpecsAction(leadId, requirements as any, true);
+            } else if (isPublicMode) {
+                if (!leadId) return;
+                const { generatePublicDemoAction } = await import('@/actions/budget/generate-public-demo.action');
+
+                // Format history for the backend
+                const chatHistory = messages.map(m => ({ role: m.role, content: m.content }));
+                result = await generatePublicDemoAction(leadId, requirements as any, chatHistory);
+            } else {
+                if (!leadId) return;
+                const { generateDemoBudgetAction } = await import('@/actions/budget/generate-demo-budget.action');
+                result = await generateDemoBudgetAction(leadId, requirements);
+            }
+
+            if (result.success && result.budgetResult) {
+                setGenerationProgress({
+                    step: 'searching',
+                    extractedItems: detectedCount,
+                    currentItem: w.progress.searching
+                });
+                const typedResult: any = result;
+
+                const budgetId = typedResult.budgetId || typedResult.budgetResult?.id;
+                const itemCount = typedResult.budgetResult?.chapters?.reduce((acc: number, c: any) => acc + c.items.length, 0) || 0;
+                const total = typedResult.budgetResult?.costBreakdown?.total || typedResult.budgetResult?.totalEstimated || 0;
+
+                setGenerationProgress({
+                    step: 'complete',
+                    extractedItems: itemCount,
+                    matchedItems: itemCount
+                });
+
+                await new Promise(r => setTimeout(r, 1500));
+
+                // Instead of breaking the chat UX with a page redirect or a massive PDF viewer,
+                // we keep the immersive chat going by sending a system message with a direct link.
+                const viewLink = isAdmin
+                    ? `/dashboard/admin/budgets/${typedResult.budgetId}/edit`
+                    : isPublicMode
+                        ? `/demo/viewer/${typedResult.traceId}`
+                        : `/budget/${typedResult.budgetId}`;
+
+                setGenerationProgress({ step: 'idle' });
+                addSystemMessage(`¡El presupuesto se ha generado con éxito! \n\n[Ver el resultado y Descargar](${viewLink})`);
+                
+                if (isPublicMode) {
+                    setState('generated'); // Lock the wizard ONLY for public demo
+                } else {
+                    setState('idle'); // Leave open for others
+                }
+
+            } else if ((result as any).isAsking) {
+                // Return to chat with the system question
+                setGenerationProgress({ step: 'idle' });
+                addSystemMessage((result as any).question);
+                setIsAwaitingArchitect(true);
+                setState('idle'); // Break the infinite generation loop
+            } else {
+                setGenerationProgress({
+                    step: 'error',
+                    error: result.error || w.errors.generateError
+                });
+            }
+        } catch (e) {
+            console.error(e);
+            setGenerationProgress({
+                step: 'error',
+                error: w.errors.generateError
+            });
+        }
+    };
+
+
+
+    const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            handleSend();
+
+            // Check for Admin Commands
+            if (input.startsWith('/admin-claim')) {
+                const parts = input.split(' ');
+                const email = parts[1];
+                const secret = parts[2];
+
+                if (!email || !secret) {
+                    alert("Usage: /admin-claim <email> <secret>");
+                    return;
+                }
+
+                setInput("Setting admin claim...");
+                try {
+                    const { setAdminClaim } = await import('@/actions/debug/fix-account.action');
+                    const result = await setAdminClaim(email, secret);
+                    if (result.success) {
+                        alert(result.message);
+                        setInput("");
+                    } else {
+                        alert("Error: " + result.error);
+                        setInput("/admin-claim " + email + " " + secret);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert("Failed to execute command");
+                }
+                return;
+            }
+
+            handleSubmit();
         }
     };
 
-    const handleSend = async () => {
-        // Build arguments from state
-        const textToSend = input.trim();
-        const hasFiles = stagedFiles.length > 0;
+    // Only show button if AI explicitly marked it as complete ('review' state)
+    const showGenerateButton = state === 'review' && generationProgress.step === 'idle';
 
-        if (!textToSend && !hasFiles) return;
 
-        // Extract array structures for the sendMessage action
-        const attachments = stagedFiles.map(sf => sf.preview).filter(Boolean); // Only non-empty previews (images)
-        const base64Files = stagedFiles.map(sf => sf.base64);
-
-        const finalMessage = textToSend || (hasFiles ? "Documentos adjuntos." : "");
-
-        sendMessage(finalMessage, attachments, base64Files);
-        setStagedFiles([]); // Clear stage
-    };
-
-    const renderContextPanel = () => (
-        <>
-            <div className="h-20 border-b border-gray-100 dark:border-white/5 px-6 flex items-center justify-between shrink-0">
-                <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 tracking-wider uppercase">Datos del Proyecto</h4>
-                {state === 'processing' || generationProgress.step !== 'idle' ? (
-                    <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 flex items-center gap-1.5 text-[10px] font-bold rounded-md uppercase animate-pulse border border-amber-200 dark:border-amber-800">
-                        <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></div>
-                        Analizando
-                    </span>
-                ) : Object.keys(requirements).length > 0 ? (
-                    <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-500 text-[10px] font-bold rounded-md uppercase border border-blue-100 dark:border-blue-900/50">
-                        Borrador
-                    </span>
-                ) : (
-                    <span className="px-2 py-1 bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 text-[10px] font-bold rounded-md uppercase">
-                        Esperando
-                    </span>
-                )}
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 custom-scrollbar">
-                <RequirementCard
-                    requirements={requirements}
-                    isProcessing={state === 'processing'}
-                    isPdfProcessing={isPdfProcessing}
-                    events={streamEvents}
-                    className="h-full border-none shadow-none bg-transparent"
-                />
-            </div>
-
-            <div className="shrink-0 p-6 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-white/5">
-                {!isPdfProcessing && (
-                    <div className="space-y-3 mb-4">
-                        <div className="flex justify-between text-xs font-medium text-gray-500 dark:text-gray-400">
-                            <span>Completado</span>
-                            <span className="text-gray-900 dark:text-white">{calculateProgress(requirements, state)}%</span>
-                        </div>
-                        <div className="h-1.5 w-full rounded-full bg-gray-100 dark:bg-white/5 overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-500"
-                                style={{ width: `${calculateProgress(requirements, state)}%` }}
-                            />
-                        </div>
-                    </div>
-                )}
-
-                <AnimatePresence>
-                    {generationProgress.step !== 'idle' && (
-                        <BudgetGenerationProgress
-                            progress={generationProgress}
-                            className="mb-4"
-                        />
-                    )}
-                </AnimatePresence>
-
-                {generationProgress.step === 'idle' && (
-                    <div className="mb-4 flex items-start gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20">
-                        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
-                            <Sparkles className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-xs font-bold text-amber-800 dark:text-amber-500 flex items-center gap-1">
-                                Generación Profunda Activada
-                                <Badge variant="outline" className="text-[9px] h-4 px-1 bg-white dark:bg-black/20 ml-1 text-amber-600 border-amber-200 dark:border-amber-800">Beta</Badge>
-                            </span>
-                            <span className="text-[10px] text-amber-700/70 dark:text-amber-500/70 leading-relaxed mt-0.5">
-                                La IA desglosará analíticamente todas las medidas en capítulos y buscará equivalencias exactas en la Base de Datos.
-                            </span>
-                        </div>
-                    </div>
-                )}
-
-                <AnimatePresence>
-                    {mode === 'private' && (requirements.isReadyForGeneration || calculateProgress(requirements, state) >= 90 || state === 'review') && generationProgress.step === 'idle' && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                        >
-                            <Button
-                                onClick={async () => {
-                                    if (!leadId) {
-                                        console.error("Lead ID missing");
-                                        return;
-                                    }
-
-                                    setGenerationProgress({ step: 'extracting' });
-                                    sendMessage("(Generando presupuesto detallado...)");
-
-                                    try {
-                                        // Detect if this is a PDF flow or an NLP flow
-                                        const isNlpFlow = !isPdfProcessing && !messages.some(m => m.attachments?.some(a => a.startsWith('JVBER')));
-
-                                        if (isNlpFlow) {
-                                            // ─── ROUTE A: NLP-TO-BUDGET (Aparejador) ───
-                                            const { orchestrateNlpToBudgetAction } = await import('@/actions/budget/orchestrate-nlp-budget.action');
-
-                                            setGenerationProgress({ step: 'extracting', currentItem: 'Estructurando capítulos...' });
-                                            await new Promise(r => setTimeout(r, 1000));
-
-                                            // The orchestrator takes the full conversation description 
-                                            // (we pass the original prompt or the accumulated specs)
-                                            const contextMessage = requirements.originalPrompt || messages.map(m => m.content).join('\n');
-
-                                            setGenerationProgress(prev => ({ ...prev, step: 'searching', currentItem: 'Buscando partidas en Base de Datos...' }));
-
-                                            const result = await orchestrateNlpToBudgetAction(leadId, contextMessage, requirements.specs as any);
-
-                                            setGenerationProgress(prev => ({ ...prev, step: 'calculating', currentItem: 'Calculando totales...' }));
-                                            await new Promise(r => setTimeout(r, 1000));
-
-                                            if (result.success && result.data) {
-                                                const totalItems = result.data.phases.reduce((sum, p) => sum + p.items.length, 0);
-                                                setGenerationProgress({
-                                                    step: 'complete',
-                                                    extractedItems: totalItems,
-                                                    matchedItems: totalItems
-                                                });
-                                                setBudgetResult({ id: result.data.projectId, total: result.data.totalEstimated, itemCount: totalItems });
-                                            } else {
-                                                setGenerationProgress({ step: 'error', error: 'No se pudo generar el presupuesto NLP' });
-                                            }
-                                        } else {
-                                            // ─── ROUTE B: PDF-TO-BUDGET (Existing) ───
-                                            if (!requirements || !requirements.specs) return;
-
-                                            await new Promise(r => setTimeout(r, 1500));
-                                            const detectedCount = requirements.detectedNeeds?.length || 15;
-                                            setGenerationProgress({ step: 'extracting', extractedItems: detectedCount });
-
-                                            await new Promise(r => setTimeout(r, 1000));
-                                            setGenerationProgress({ step: 'searching', extractedItems: detectedCount, currentItem: 'Buscando coincidencias...' });
-
-                                            const { generateBudgetFromSpecsAction } = await import('@/actions/budget/generate-budget-from-specs.action');
-
-                                            setTimeout(() => {
-                                                setGenerationProgress(prev => ({ ...prev, step: 'calculating', currentItem: 'Calculando totales...' }));
-                                            }, 3000);
-
-                                            const result = await generateBudgetFromSpecsAction(leadId, requirements.specs as any, deepGeneration);
-
-                                            if (result.success && result.budgetResult) {
-                                                const budgetId = result.budgetId || result.budgetResult.id;
-                                                const itemCount = result.budgetResult.lineItems?.length || 0;
-                                                const total = result.budgetResult.costBreakdown?.total || result.budgetResult.totalEstimated || 0;
-
-                                                setGenerationProgress({
-                                                    step: 'complete',
-                                                    extractedItems: itemCount,
-                                                    matchedItems: result.budgetResult.lineItems?.filter((i: any) => !i.isEstimate).length || 0
-                                                });
-
-                                                await new Promise(r => setTimeout(r, 1500));
-                                                setBudgetResult({ id: budgetId, total, itemCount });
-                                            } else {
-                                                setGenerationProgress({ step: 'error', error: 'No se pudo generar el presupuesto' });
-                                            }
-                                        }
-                                    } catch (e) {
-                                        console.error(e);
-                                        setGenerationProgress({ step: 'error', error: 'Error al procesar el presupuesto' });
-                                    }
-                                }}
-                                className="w-full bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black font-bold h-12 rounded-xl shadow-xl shadow-gray-200/50 dark:shadow-none transition-all hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                                <Sparkles className="mr-2 h-4 w-4 animate-pulse" />
-                                Generar Presupuesto
-                            </Button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                <AnimatePresence>
-                    {(budgetResult || requirements.completedBudgetId) && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="mt-4"
-                        >
-                            <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800/50 flex flex-col items-center text-center space-y-3 shadow-inner">
-                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-800 rounded-full flex items-center justify-center mb-1 shadow-sm">
-                                    <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                                </div>
-                                <div>
-                                    <h4 className="text-sm font-bold text-emerald-900 dark:text-emerald-100">Presupuesto Listo</h4>
-                                    <p className="text-xs text-emerald-700 dark:text-emerald-400/80 mt-1">El documento ha sido analizado y valorado con éxito.</p>
-                                </div>
-                                <Button
-                                    onClick={() => router.push(`/dashboard/admin/budgets/${(budgetResult as any)?.id || requirements.completedBudgetId}/edit`)}
-                                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 rounded-lg mt-2 shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                                >
-                                    Ver Presupuesto
-                                </Button>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
-        </>
-    );
 
     return (
         <div className="flex h-full w-full overflow-hidden md:rounded-3xl md:border md:border-white/20 bg-background md:bg-white/95 md:dark:bg-black/90 md:shadow-2xl md:backdrop-blur-2xl md:ring-1 md:ring-black/5 md:dark:ring-white/10 relative">
-            {/* Stream Listener for Sileo Notifications */}
-            <BudgetStreamListener />
-
-            {/* Left Panel: Chat Interface */}
-            <div className="flex w-full flex-col md:w-2/3 relative h-full min-h-0">
-                {/* Header */}
-                <header className="absolute top-0 left-0 right-0 z-10 flex h-16 md:h-20 items-center justify-between px-4 md:px-8 bg-gradient-to-b from-background via-background/95 to-transparent backdrop-blur-sm">
-                    <div className="flex items-center gap-3 md:gap-4">
-                        <div className="flex h-8 w-8 md:h-10 md:w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-400 to-orange-600 shadow-lg shadow-orange-500/20 ring-1 ring-white/20">
-                            <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-white" />
+            {/* Admin Left Sidebar: Chat History */}
+            {isAdmin && (
+                <div className={cn(
+                    "hidden md:flex flex-col border-r border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-zinc-900/50 h-full transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] overflow-hidden",
+                    isSidebarOpen ? "w-64" : "w-0 border-r-0 opacity-0"
+                )}>
+                    <div className="w-64 flex flex-col h-full">
+                        <div className="p-4 border-b border-gray-100 dark:border-white/5">
+                            <Button
+                                onClick={startNewConversation}
+                                disabled={isLoadingChats}
+                                className="w-full justify-start font-medium text-sm transition-all"
+                                variant="outline"
+                            >
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Nuevo Chat
+                            </Button>
                         </div>
-                        <div>
-                            <h3 className="font-display text-base md:text-lg font-bold text-foreground tracking-tight">Arquitecto IA</h3>
-                            <p className="text-[10px] md:text-xs font-medium text-muted-foreground tracking-wide uppercase">Asistente Inteligente</p>
+                        <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1 custom-scrollbar">
+                            {isLoadingChats && conversations.length === 0 ? (
+                                <div className="flex justify-center p-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                            ) : (
+                                conversations.map(chat => (
+                                    <div key={chat.id} className="group flex items-center gap-2">
+                                        <button
+                                            onClick={() => switchConversation(chat.id)}
+                                            className={cn(
+                                                "flex-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-colors whitespace-nowrap overflow-hidden text-ellipsis",
+                                                conversationId === chat.id
+                                                    ? "bg-primary/10 text-primary font-medium dark:bg-primary/20"
+                                                    : "text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                            )}
+                                        >
+                                            <MessageSquare className="w-4 h-4 shrink-0" />
+                                            <span className="truncate">{chat.title || 'Conversación sin título'}</span>
+                                        </button>
+                                        <button
+                                            onClick={() => deleteConversation(chat.id)}
+                                            className={cn(
+                                                "p-2 text-muted-foreground hover:text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100",
+                                                conversationId === chat.id && "opacity-100 text-red-400"
+                                            )}
+                                            title="Eliminar Chat"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
+                </div>
+            )}
 
-                    <div className="flex items-center gap-1 md:gap-2">
-                        {mode === 'private' && (
-                            <Sheet>
-                                <SheetTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="md:hidden text-muted-foreground relative">
-                                        {(state === 'processing' || generationProgress.step !== 'idle') && (
-                                            <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                                            </span>
-                                        )}
-                                        <Activity className="h-5 w-5" />
-                                    </Button>
-                                </SheetTrigger>
-                                <SheetContent side="right" className="w-[85vw] sm:max-w-md p-0 flex flex-col bg-gray-50/95 dark:bg-zinc-900/95 backdrop-blur-xl">
-                                    <SheetHeader className="sr-only">
-                                        <SheetTitle>Estado del Proyecto</SheetTitle>
-                                    </SheetHeader>
-                                    {renderContextPanel()}
-                                </SheetContent>
-                            </Sheet>
+            {/* Middle Panel: Chat Interface */}
+            {/* Added overlay active state tracking */}
+            <div className={cn(
+                "flex w-full flex-col relative h-full min-h-0 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] will-change-transform",
+                "md:flex-1"
+            )}>
+                {/* Header */}
+                <header className="absolute top-0 left-0 right-0 z-10 flex h-16 md:h-20 items-center justify-between px-4 md:px-8 bg-gradient-to-b from-background via-background/95 to-transparent backdrop-blur-sm transition-all duration-300">
+                    <div className="flex items-center gap-3 md:gap-4">
+                        {isAdmin && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                                className="mr-0 md:mr-2 text-muted-foreground hover:text-primary transition-colors hidden md:flex"
+                            >
+                                {isSidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+                            </Button>
                         )}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleReset}
-                            className="text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                            title="Borrar conversación y empezar de nuevo"
-                        >
-                            <Trash2 className="h-5 w-5" />
-                        </Button>
+                        <Logo className="h-6 flex items-center" width={80} height={24} />
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                        {isAdmin && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={startNewConversation}
+                                className="mr-2 hidden md:flex text-muted-foreground hover:text-primary transition-colors"
+                            >
+                                <PlusCircle className="mr-1 h-4 w-4" />
+                                Nuevo Chat
+                            </Button>
+                        )}
                     </div>
                 </header>
 
                 {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-0 custom-scrollbar relative bg-background/50">
-                    <div className="max-w-4xl mx-auto pt-20 pb-40 px-4 md:px-0 space-y-6 md:space-y-8">
+                <div className="flex-1 overflow-y-auto p-0 custom-scrollbar relative bg-background/50 leading-relaxed px-4 md:px-6">
+                    <div className="max-w-3xl mx-auto pt-20 pb-40 space-y-6 md:space-y-8 flex flex-col items-center">
                         <AnimatePresence initial={false}>
-                            {messages.length === 0 ? (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4"
-                                >
-                                    <div className="p-4 rounded-full bg-amber-50 dark:bg-amber-900/10 mb-2">
-                                        <Bot className="w-12 h-12 text-amber-500/50" />
-                                    </div>
-                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">¿En qué puedo ayudarte hoy?</h2>
-                                    <p className="max-w-md text-gray-500 dark:text-gray-400">
-                                        Puedo ayudarte a estimar costos, definir materiales o planificar tu reforma integral.
-                                    </p>
-                                </motion.div>
-                            ) : (
+                            {messages.length > 0 && (
                                 messages.map((msg, index) => (
-                                    <ChatBubble key={msg.id} message={msg} />
+                                    <ChatBubble key={msg.id} message={msg} isGenerating={msg.content === w.progress.generatingMsg} />
                                 ))
+                            )}
+
+                            {/* In-Stream Terminal Component */}
+                            {generationProgress.step !== 'idle' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    className="flex w-full justify-start mt-6"
+                                >
+                                    <div className="w-full bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1">
+                                        <BudgetGenerationProgress
+                                            progress={generationProgress}
+                                            className="shadow-none border-none rounded-xl"
+                                            onComplete={(budgetId) => {
+                                                const viewLink = isAdmin
+                                                    ? `/dashboard/admin/budgets/${budgetId}/edit`
+                                                    : isPublicMode
+                                                        ? `/demo/viewer/${budgetId}` 
+                                                        : `/budget/${budgetId}`;
+                                                
+                                                setTimeout(() => {
+                                                    setGenerationProgress({ step: 'idle' });
+                                                    addSystemMessage(`¡Estado de Mediciones procesado y tasado con éxito!\n\n[Ver el resultado y Descargar](${viewLink})`);
+                                                    setState(isPublicMode ? 'generated' : 'idle');
+                                                }, 1500);
+                                            }}
+                                        />
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Proactive Co-Pilot Suggestions */}
+                        {state === 'idle' && messages.length > 0 && generationProgress.step === 'idle' && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex flex-wrap gap-2 pt-2 px-4 md:px-0"
+                            >
+                                {!requirements.specs?.qualityLevel && (
+                                    <button onClick={() => sendMessage("Quiero usar calidades altas/premium en los materiales.")} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/20 flex items-center gap-1.5">
+                                        <Sparkles className="w-3 h-3" /> Añadir calidades premium
+                                    </button>
+                                )}
+                                {(!requirements.detectedNeeds || requirements.detectedNeeds.length < 2) && (
+                                    <button onClick={() => sendMessage("Incluye también la reforma completa del baño principal y cocina.")} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors border border-blue-500/20">
+                                        Añadir baño y cocina
+                                    </button>
+                                )}
+                                {!requirements.specs?.totalArea && (
+                                    <button onClick={() => sendMessage("La superficie total aproximada es de 90m2.")} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-white/60 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors border border-black/5 dark:border-white/10">
+                                        Definir superficie (90m2)
+                                    </button>
+                                )}
+                            </motion.div>
+                        )}
+
+                        {state === 'uploading' && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="self-start max-w-[85%] md:max-w-[75%] rounded-2xl p-4 md:p-5 shadow-sm bg-zinc-100 dark:bg-[#2a2a2b] border border-black/5 dark:border-white/5 flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mt-2"
+                            >
+                                <Loader2 className="w-5 h-5 text-primary opacity-70 animate-spin" />
+                                <span className="font-medium">Subiendo archivos... por favor espera.</span>
+                            </motion.div>
+                        )}
+
+                        {state === 'processing' && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="self-start max-w-[85%] md:max-w-[75%] rounded-2xl p-4 md:p-5 shadow-sm bg-zinc-100 dark:bg-[#2a2a2b] border border-black/5 dark:border-white/5 flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mt-2"
+                            >
+                                <Bot className="w-5 h-5 text-primary opacity-70" />
+                                <div className="flex space-x-1">
+                                    <div className="w-1.5 h-1.5 bg-primary/70 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="w-1.5 h-1.5 bg-primary/70 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="w-1.5 h-1.5 bg-primary/70 rounded-full animate-bounce"></div>
+                                </div>
+                                <span className="font-medium">{w.input.analyzingText}</span>
+                            </motion.div>
+                        )}
+
+                        {state === 'processing_pdf' && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="self-start max-w-[85%] md:max-w-[85%] rounded-2xl p-5 shadow-sm bg-zinc-100 dark:bg-[#2a2a2b] border border-black/5 dark:border-white/5 flex flex-col gap-4 text-sm text-gray-500 dark:text-gray-400 mt-2 border-l-4 border-l-blue-500 dark:border-l-blue-400"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Paperclip className="w-5 h-5 text-blue-500 dark:text-blue-400 animate-pulse" />
+                                    <span className="font-semibold text-blue-600 dark:text-blue-400 text-base">Procesando Documento (Tool Activa)</span>
+                                </div>
+                                <div className="flex items-center gap-3 ml-1 bg-white dark:bg-black/20 p-3 rounded-lg border border-black/5 dark:border-white/5">
+                                    <div className="flex space-x-1 shrink-0">
+                                        <div className="w-2 h-2 bg-blue-500/70 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                        <div className="w-2 h-2 bg-blue-500/70 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                        <div className="w-2 h-2 bg-blue-500/70 rounded-full animate-bounce"></div>
+                                    </div>
+                                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                                        Extrayendo información espacial con IA y emparejando precios en base de datos. Esto puede tardar hasta 1 minuto...
+                                    </span>
+                                </div>
+                            </motion.div>
+                        )}
+                        
+                        {/* Inline Generation Button */}
+                        <AnimatePresence>
+                            {showGenerateButton && generationProgress.step === 'idle' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    className="w-full mt-6 pointer-events-auto max-w-sm mx-auto flex justify-center"
+                                >
+                                    <Button
+                                        onClick={handleGenerateBudget}
+                                        className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 md:h-14 md:text-base rounded-xl shadow-[0_8px_30px_rgba(var(--primary),0.3)] border border-primary/20 transition-transform active:scale-95"
+                                    >
+                                        <Sparkles className="mr-2 h-5 w-5 animate-pulse" />
+                                        GENERAR PRESUPUESTO AHORA
+                                    </Button>
+                                </motion.div>
                             )}
                         </AnimatePresence>
 
@@ -639,114 +672,275 @@ export function BudgetWizardChat({ mode = 'public' }: { mode?: 'public' | 'priva
                     </div>
                 </div>
 
-                {/* Floating Input Area */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 bg-gradient-to-t from-background via-background/90 to-transparent pointer-events-none flex justify-center z-20">
-                    <div className="pointer-events-auto w-full max-w-4xl relative">
-                        {/* Staged Files Preview Bar */}
+                {/* Floating Input Area (Animated Layout for Zero State) */}
+                <motion.div
+                    layout
+                    className={cn(
+                        "absolute left-0 right-0 p-2 md:p-6 pointer-events-none flex flex-col items-center z-20 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                        (messages.length === 0 && state === 'idle' && generationProgress.step === 'idle')
+                            ? "top-1/2 -translate-y-1/2 px-4"
+                            : "bottom-0 bg-gradient-to-t from-background via-background/90 to-transparent"
+                    )}
+                >
+                    <div className="pointer-events-auto w-full max-w-3xl relative flex flex-col items-center">
+
+                        {/* Greeting Header shown only when empty */}
                         <AnimatePresence>
-                            {stagedFiles.length > 0 && (
+                            {(messages.length === 0 && state === 'idle' && generationProgress.step === 'idle') && (
                                 <motion.div
-                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    className="flex flex-wrap gap-2 mb-3 bg-white/50 dark:bg-black/50 p-2 md:p-3 rounded-2xl border border-black/5 dark:border-white/5 backdrop-blur-md shadow-sm"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
+                                    transition={{ duration: 0.5 }}
+                                    className="w-full text-center space-y-2 mb-8 md:mb-12"
                                 >
-                                    {stagedFiles.map((sf, idx) => (
-                                        <div key={idx} className="relative group rounded-xl overflow-hidden bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center p-1.5 px-3 shrink-0 transition-all hover:pr-8">
-                                            {sf.isPdf ? (
-                                                <div className="bg-red-500/10 p-1.5 rounded-lg mr-2">
-                                                    <FileText className="h-4 w-4 text-red-600 dark:text-red-400" />
-                                                </div>
-                                            ) : (
-                                                <div className="bg-blue-500/10 p-1.5 rounded-lg mr-2">
-                                                    <FileImage className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                                </div>
-                                            )}
-                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 max-w-[150px] truncate">{sf.file.name}</span>
-                                            <button
-                                                onClick={(e) => { e.preventDefault(); removeStagedFile(idx); }}
-                                                className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 hover:bg-red-600"
-                                            >
-                                                <X className="h-3 w-3" />
-                                            </button>
-                                        </div>
-                                    ))}
+                                    <h2 className="text-3xl md:text-[40px] leading-tight font-display text-transparent bg-clip-text bg-gradient-to-r from-zinc-200 to-zinc-500">
+                                        Hola{isAdmin ? ' Admin' : (leadName ? ` ${leadName}` : '')}.
+                                    </h2>
+                                    <h2 className="text-3xl md:text-[40px] leading-tight font-display text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400">
+                                        ¿Por dónde empezamos?
+                                    </h2>
                                 </motion.div>
                             )}
                         </AnimatePresence>
 
-                        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="relative flex items-end gap-2 rounded-[2rem] border border-input bg-background/80 md:bg-white/80 md:dark:bg-zinc-900/80 p-1.5 md:p-2 shadow-2xl shadow-black/5 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/5 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all duration-300">
-                            <input
-                                type="file"
-                                multiple
-                                className="hidden"
-                                ref={fileInputRef}
-                                onChange={handleFileChange}
-                                accept="image/*,application/pdf"
-                            />
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={handleAttachmentClick}
-                                className="h-10 w-10 shrink-0 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-                            >
-                                <Paperclip className="h-5 w-5" />
-                            </Button>
-
-                            <Textarea
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="Describe tu proyecto..."
-                                className="min-h-[44px] max-h-32 w-full resize-none border-0 bg-transparent py-3 text-base placeholder:text-gray-400 dark:placeholder:text-gray-600 focus-visible:ring-0 text-gray-900 dark:text-gray-100 scrollbar-hide font-medium"
-                                rows={1}
-                            />
-
-                            {input.trim() || stagedFiles.length > 0 ? (
-                                <Button
-                                    onClick={(e) => { e.preventDefault(); handleSend(); }}
-                                    size="icon"
-                                    className="h-10 w-10 md:h-12 md:w-12 shrink-0 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/20 transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center"
+                        {/* Rendering RequirementCard compactly above the input when toggled */}
+                        <AnimatePresence>
+                            {(requirements.specs || requirements.detectedNeeds?.length) && showRequirements && generationProgress.step === 'idle' && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                                    transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                                    className="w-full mb-3 max-h-[40vh] overflow-y-auto custom-scrollbar rounded-2xl bg-[#1e1f20]/95 backdrop-blur-xl border border-white/10 shadow-2xl"
                                 >
-                                    <Send className="h-4 w-4 md:h-5 md:w-5 ml-0.5" />
-                                </Button>
-                            ) : (
-                                <Button
-                                    variant={isRecording ? "destructive" : "ghost"}
-                                    size="icon"
-                                    onClick={handleMicClick}
-                                    className={cn(
-                                        "h-10 w-10 shrink-0 rounded-xl transition-all duration-200",
-                                        isRecording
-                                            ? "bg-red-500 text-white hover:bg-red-600 animate-pulse ring-4 ring-red-500/20"
-                                            : "text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5"
-                                    )}
-                                >
-                                    {isRecording ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-5 w-5" />}
-                                </Button>
+                                    <RequirementCard requirements={requirements} className="bg-transparent border-none shadow-none" />
+                                </motion.div>
                             )}
-                        </form>
-                        <p className="mt-3 text-center text-xs font-medium text-gray-400 dark:text-gray-600">
-                            {isRecording ? `Grabando... ${formatTime(recordingTime)}` : "Presiona Enter para enviar. Shift + Enter para línea nueva."}
+                        </AnimatePresence>
+
+                        <motion.div layout 
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            className={cn(
+                            "w-full relative flex flex-col rounded-3xl md:rounded-[2rem] bg-[#1e1f20] p-2 md:p-2.5 shadow-2xl backdrop-blur-xl transition-all duration-300",
+                            isDragging && "ring-2 ring-primary bg-[#2a2b2e]",
+                            generationProgress.step !== 'idle' && generationProgress.step !== 'complete' && "opacity-50 pointer-events-none grayscale"
+                        )}>
+                            
+                            {/* Pending Files Preview Area */}
+                            {pendingFiles.length > 0 && (
+                                <div className="flex flex-wrap gap-2 px-3 pt-3 pb-1 animate-in fade-in slide-in-from-top-2 duration-300 ease-out">
+                                    {pendingFiles.map((file, i) => {
+                                        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                                        return (
+                                            <div key={i} className="relative group flex items-center gap-2.5 bg-[#2a2b2e] border border-white/5 shadow-[0_2px_10px_rgba(0,0,0,0.2)] rounded-xl py-1.5 pl-3 pr-1.5">
+                                                {isPdf ? (
+                                                    <FileText className="w-4 h-4 text-blue-400" />
+                                                ) : (
+                                                    <ImageIcon className="w-4 h-4 text-emerald-400" />
+                                                )}
+                                                <span className="text-[13px] font-medium text-white/90 max-w-[180px] truncate tracking-tight">{file.name}</span>
+                                                <button
+                                                    onClick={() => handleRemovePendingFile(i)}
+                                                    className="p-1.5 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors ml-1"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            <div className="flex items-end gap-2 w-full">
+
+
+                            {/* Variables Toggle Button */}
+                            {(requirements.specs || (requirements.detectedNeeds && requirements.detectedNeeds.length > 0)) && (
+                                <div className="relative mb-0.5">
+                                    {(!showRequirements && requirements.detectedNeeds && requirements.detectedNeeds.length > 0) && (
+                                        <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary),0.8)] z-10 animate-pulse pointer-events-none" />
+                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setShowRequirements(!showRequirements)}
+                                        className={cn(
+                                            "h-12 w-12 shrink-0 rounded-xl transition-all duration-300",
+                                            showRequirements
+                                                ? "bg-primary/20 text-primary hover:bg-primary/30 rotate-180"
+                                                : "text-gray-400 hover:text-white hover:bg-white/10"
+                                        )}
+                                        title="Variables del Entorno"
+                                    >
+                                        <Layers className="h-6 w-6" />
+                                    </Button>
+                                </div>
+                            )}
+
+                            {pdfAwaitingStrategy ? (
+                                <motion.div 
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="flex flex-col md:flex-row gap-3 w-full py-2 px-1 items-center"
+                                >
+                                    <div className="w-full">
+                                        <p className="text-sm font-semibold text-white/90 mb-1 px-1 flex items-center gap-2">
+                                            <Layers className="w-4 h-4 text-primary" /> ¿Cómo viene estructurado tu PDF de Mediciones?
+                                        </p>
+                                        <div className="flex flex-col md:flex-row gap-3 w-full mt-2">
+                                            <Button 
+                                                onClick={() => handleConfirmPdfStrategy('INLINE')}
+                                                className="flex-1 w-full h-auto py-4 px-4 justify-start text-left bg-zinc-800 hover:bg-zinc-700/80 border border-transparent hover:border-primary/50 transition-all whitespace-normal overflow-hidden group shadow-[0px_4px_20px_-10px_rgba(0,0,0,0.5)] active:scale-[0.98]"
+                                            >
+                                                <div className="flex flex-col w-full space-y-1">
+                                                    <span className="font-semibold text-white group-hover:text-primary transition-colors text-sm">1. Estándar (Recomendado)</span>
+                                                    <span className="text-xs text-white/50 font-normal leading-relaxed">Textos y mediciones en una sola línea (Documentos habituales).</span>
+                                                </div>
+                                            </Button>
+                                            <Button 
+                                                onClick={() => handleConfirmPdfStrategy('ANNEXED')}
+                                                className="flex-1 w-full h-auto py-4 px-4 justify-start text-left bg-zinc-800 hover:bg-zinc-700/80 border border-transparent hover:border-blue-500/50 transition-all whitespace-normal overflow-hidden group shadow-[0px_4px_20px_-10px_rgba(0,0,0,0.5)] active:scale-[0.98]"
+                                            >
+                                                <div className="flex flex-col w-full space-y-1">
+                                                    <span className="font-semibold text-white group-hover:text-blue-400 transition-colors text-sm">2. Cuadro Resumen (Anexado)</span>
+                                                    <span className="text-xs text-white/50 font-normal leading-relaxed">Literatura compacta al inicio y desglose de mediciones al final.</span>
+                                                </div>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ) : (state as string) === 'generated' ? (
+                                <div className="flex flex-col items-center justify-center w-full py-2">
+                                    <Sparkles className="h-6 w-6 text-primary mb-2 animate-pulse" />
+                                    <p className="text-sm font-semibold text-primary">¡Presupuesto Generado!</p>
+                                    <p className="text-xs text-gray-500 text-center mt-1">Haz clic en el enlace de arriba para verlo.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <Textarea
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={handleKeyDown}
+                                        placeholder="Pega aquí todo tu proyecto o escribe..."
+                                        className="min-h-[100px] max-h-48 w-full resize-none border-0 border-transparent bg-transparent py-4 text-base placeholder:text-gray-500 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none shadow-none text-gray-100 scrollbar-hide font-medium leading-relaxed"
+                                        rows={1}
+                                        disabled={(state as string) === 'generated' || isLimitReached || state === 'uploading'}
+                                    />
+
+                                    <div className="shrink-0 flex items-center gap-1 mb-0.5">
+                                        {/* Model Indicator Pill */}
+                                        <div className="hidden md:flex items-center gap-1.5 px-4 h-10 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary mr-1 hover:bg-primary/20 transition-colors cursor-pointer select-none">
+                                            <Sparkles className="w-3.5 h-3.5" />
+                                            Basis AI
+                                        </div>
+
+                                        <div className="relative">
+                                            <input
+                                                type="file"
+                                                id="file-upload"
+                                                multiple
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                                accept="image/*,application/pdf"
+                                            />
+                                            <label
+                                                htmlFor="file-upload"
+                                                className="h-10 w-10 shrink-0 text-gray-400 hover:text-white rounded-full hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer"
+                                                title="Adjuntar archivo"
+                                            >
+                                                <Paperclip className="h-5 w-5" />
+                                            </label>
+                                        </div>
+
+                                        {(input.trim() || pendingFiles.length > 0) ? (
+                                            <Button
+                                                onClick={handleSubmit}
+                                                size="icon"
+                                                disabled={isLimitReached}
+                                                className={cn(
+                                                    "h-10 w-10 md:h-12 md:w-12 rounded-full text-white shadow-[0_0_20px_rgba(var(--primary),0.3)] transition-all duration-200 flex items-center justify-center border border-white/20",
+                                                    isLimitReached ? "bg-slate-500 opacity-50 cursor-not-allowed" : "bg-primary hover:bg-primary/90 hover:scale-105 active:scale-95"
+                                                )}
+                                            >
+                                                <Send className="h-4 w-4 md:h-5 md:w-5 ml-1" />
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                variant={isRecording ? "destructive" : "ghost"}
+                                                size="icon"
+                                                onClick={handleMicClick}
+                                                disabled={isLimitReached}
+                                                className={cn(
+                                                    "h-10 w-10 md:h-12 md:w-12 rounded-full transition-all duration-200",
+                                                    isRecording
+                                                        ? "bg-red-500 text-white hover:bg-red-600 animate-pulse ring-4 ring-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.5)]"
+                                                        : "text-gray-400 hover:text-white hover:bg-white/10"
+                                                )}
+                                            >
+                                                {isRecording ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-5 w-5 md:h-[22px] md:w-[22px]" />}
+                                            </Button>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                            </div>
+                        </motion.div>
+
+                        {/* Suggestion Pills underneath */}
+                        <AnimatePresence>
+                            {messages.length === 0 && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 10 }}
+                                    transition={{ delay: 0.1, duration: 0.4 }}
+                                    className="flex flex-wrap items-center justify-center gap-2 md:gap-3 mt-4 md:mt-6 w-full"
+                                >
+                                    {w.emptyState.suggestions
+                                        .filter((s: any) => !(isPublicMode && s.title === 'Reforma integral'))
+                                        .map((suggestion: any, i: number) => {
+                                            const icons = [Home, Hammer, Layers, Sparkles];
+                                            const Icon = icons[i % icons.length];
+                                            return (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => {
+                                                        setInput(suggestion.text);
+                                                        // Focus is handled correctly by normal React flow if a ref was bound, but here updating state acts naturally
+                                                    }}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-[#1e1f20] hover:bg-white/10 border border-white/5 rounded-full text-[11px] md:text-xs font-medium text-white/80 transition-all hover:border-white/20 active:scale-95 shadow-sm text-left leading-tight max-w-[280px]"
+                                                >
+                                                    <Icon className="w-4 h-4 text-white/50" />
+                                                    {suggestion.title}
+                                                </button>
+                                            );
+                                        })}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Desktop & Mobile Generation Area Component (Moved to chat stream) */}
+
+                        <p className="mt-3 text-center text-xs font-medium text-gray-400 dark:text-gray-600 hidden md:block pointer-events-auto">
+                            {isRecording ? `${w.input.recordingInfo} ${formatTime(recordingTime)}` : w.input.keyboardHint}
                         </p>
                     </div>
-                </div>
+                </motion.div>
             </div>
 
-            {/* Right Panel: Context & Requirements (Visible on Desktop) */}
-            {
-                mode === 'private' && (
-                    <div className="hidden border-l border-gray-100 dark:border-white/5 md:flex md:w-1/3 flex-col bg-gray-50/50 dark:bg-zinc-900/50 backdrop-blur-sm h-full min-h-0">
-                        {renderContextPanel()}
-                    </div>
-                )
-            }
-            <SileoToaster position="bottom-right" />
+
+
+            {/* Onboarding Sidebar (Desktop) / Drawer (Mobile) */}
+            <BudgetWizardTips setInput={setInput} />
+
         </div >
     );
 }
 
-function ChatBubble({ message }: { message: Message }) {
+function ChatBubble({ message, isGenerating }: { message: Message, isGenerating?: boolean }) {
     const isUser = message.role === 'user';
 
     return (
@@ -756,7 +950,7 @@ function ChatBubble({ message }: { message: Message }) {
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
             className={cn(
-                "flex w-full min-w-0",
+                "flex w-full min-w-0 max-w-3xl mx-auto",
                 isUser ? "justify-end" : "justify-start"
             )}
         >
@@ -765,26 +959,97 @@ function ChatBubble({ message }: { message: Message }) {
                     "relative max-w-[85%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-sm overflow-hidden",
                     "break-words whitespace-pre-wrap",
                     isUser
-                        ? "bg-amber-500 text-white rounded-br-none shadow-amber-500/10"
-                        : "bg-white dark:bg-white/10 text-slate-800 dark:text-white/90 rounded-bl-none border border-slate-100 dark:border-white/5 shadow-sm dark:backdrop-blur-md"
+                        ? "bg-primary text-primary-foreground rounded-br-none shadow-primary/10"
+                        : isGenerating
+                            ? "bg-gradient-to-r from-primary/5 to-blue-500/5 dark:from-primary/10 dark:to-blue-500/10 text-primary dark:text-blue-400 rounded-bl-none border border-primary/20 dark:border-blue-500/30 shadow-md shadow-primary/5 dark:shadow-blue-500/10 backdrop-blur-md"
+                            : "bg-white dark:bg-white/10 text-slate-800 dark:text-white/90 rounded-bl-none border border-slate-100 dark:border-white/5 shadow-sm dark:backdrop-blur-md"
                 )}
             >
                 <div className="break-words overflow-hidden space-y-2">
                     {message.attachments && message.attachments.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-2">
-                            {message.attachments.map((url, i) => (
-                                <div key={i} className="relative group rounded-lg overflow-hidden border border-black/5 dark:border-white/10">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={url}
-                                        alt={`Adjunto ${i + 1}`}
-                                        className="max-w-[200px] max-h-[150px] object-cover bg-gray-100 dark:bg-gray-800"
-                                    />
+                            {message.attachments.map((url, i) => {
+                                const isPdf = url.startsWith('data:application/pdf') || url.toLowerCase().includes('.pdf');
+                                return (
+                                    <div key={i} className="relative group rounded-lg overflow-hidden border border-black/5 dark:border-white/10 bg-gray-100 dark:bg-gray-800 flex items-center justify-center p-2">
+                                        {isPdf ? (
+                                            <div className="flex flex-col items-center gap-2 p-4 min-w-[120px]">
+                                                <ExternalLink className="w-8 h-8 text-red-500" />
+                                                <span className="text-xs font-semibold">Documento PDF</span>
+                                            </div>
+                                        ) : (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
+                                                src={url}
+                                                alt={`Adjunto ${i + 1}`}
+                                                className="max-w-[200px] max-h-[150px] object-cover"
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {isGenerating ? (
+                        <div className="flex items-center gap-3 py-1">
+                            <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-primary/20 shrink-0">
+                                <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+                                <span className="absolute inset-0 rounded-xl animate-ping bg-primary/20 opacity-75 duration-1000"></span>
+                            </div>
+                            <span className="font-semibold text-primary/90 mt-0.5 animate-pulse">
+                                {message.content}
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="whitespace-pre-wrap">
+                            {(() => {
+                                const text = message.content;
+                                const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+                                const parts = [];
+                                let lastIndex = 0;
+                                let match;
+
+                                while ((match = linkRegex.exec(text)) !== null) {
+                                    if (match.index > lastIndex) {
+                                        parts.push(text.substring(lastIndex, match.index));
+                                    }
+                                    parts.push(
+                                        <div key={match.index} className="block mt-4 mb-2">
+                                            <a
+                                                href={match[2]}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-xl shadow-[0_4px_14px_rgba(var(--primary),0.3)] hover:scale-105 transition-all font-semibold"
+                                            >
+                                                <Sparkles className="w-4 h-4" />
+                                                {match[1]}
+                                            </a>
+                                        </div>
+                                    );
+                                    lastIndex = match.index + match[0].length;
+                                }
+
+                                if (lastIndex < text.length) {
+                                    parts.push(text.substring(lastIndex));
+                                }
+
+                                return parts.length > 0 ? parts : text;
+                            })()}
+                        </div>
+                    )}
+
+                    {/* Dynamic Context Pills (Extracted Info) */}
+                    {message.extractedInfo && message.extractedInfo.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-black/5 dark:border-white/5">
+                            {message.extractedInfo.map((info, idx) => (
+                                <div key={idx} className="flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide border border-primary/20 shadow-sm backdrop-blur-md">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    {info}
                                 </div>
                             ))}
                         </div>
                     )}
-                    <div className="whitespace-pre-wrap">{message.content}</div>
+
                 </div>
                 <span className={cn(
                     "absolute -bottom-5 text-[10px] whitespace-nowrap",
@@ -793,7 +1058,7 @@ function ChatBubble({ message }: { message: Message }) {
                     {message.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
             </div>
-        </motion.div>
+        </motion.div >
     );
 }
 

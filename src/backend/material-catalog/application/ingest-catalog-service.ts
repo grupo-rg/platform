@@ -1,7 +1,7 @@
 
 import { MaterialCatalogRepository } from '../domain/material-catalog-repository';
 import { MaterialItem, MaterialItemSchema } from '../domain/material-item';
-import { ai, gemini25Flash, embeddingModel } from '@/backend/ai/core/config/genkit.config';
+import { ai, gemini25Flash, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
 import { PDFDocument } from 'pdf-lib';
 import { z } from 'zod';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';

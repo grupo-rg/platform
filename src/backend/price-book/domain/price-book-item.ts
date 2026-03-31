@@ -28,6 +28,7 @@ export interface PriceBookComponent {
     description?: string;
     quantity: number;
     price: number;
+    is_variable?: boolean;
 }
 
 /**

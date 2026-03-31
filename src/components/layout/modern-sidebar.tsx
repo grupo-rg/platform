@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { Link, usePathname } from '@/i18n/navigation';
@@ -23,10 +23,15 @@ import {
     HardHat,
     PanelLeftClose,
     PanelLeftOpen,
+    Users,
+    CalendarDays,
+    TrendingUp,
+    Bot,
 } from 'lucide-react';
 import Image from 'next/image';
 import { ModeToggle } from '@/components/mode-toggle';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { Logo } from '@/components/logo';
 
 interface ModernSidebarProps {
     t: any;
@@ -53,8 +58,15 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
             label: 'Herramientas',
             items: [
                 { href: '/dashboard/wizard', label: 'AI Budget Wizard', icon: Sparkles },
-                { href: '/dashboard/measurements', label: 'Mediciones', icon: FileUp },
                 { href: '/dashboard/seo-generator', label: t.dashboard.nav.seoGenerator, icon: Search },
+            ]
+        },
+        {
+            label: 'CRM',
+            items: [
+                { href: '/dashboard/leads', label: 'Leads', icon: Users },
+                { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays },
+                { href: '/dashboard/marketing', label: 'Marketing', icon: TrendingUp },
             ]
         },
         {
@@ -62,7 +74,6 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
             items: [
                 { href: '/dashboard/admin/prices', label: t.dashboard.nav.priceBook, icon: Briefcase },
                 { href: '/dashboard/admin/prices?view=catalog', label: 'Catálogo', icon: Package },
-                { href: '/dashboard/settings/pricing', label: t.dashboard.nav.quickPricing, icon: DollarSign },
                 { href: '/dashboard/settings', label: t.dashboard.nav.settings, icon: Settings },
             ]
         }
@@ -114,15 +125,9 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -10 }}
                             transition={{ duration: 0.2 }}
-                            className="relative w-40 h-12"
+                            className="relative w-full h-12 flex items-center justify-start pl-1 shrink-0"
                         >
-                            {/*   <Image
-                                src="/images/logo.avif"
-                                alt="GRUPO RG Logo"
-                                fill
-                                className="object-contain object-left"
-                                priority
-                            /> */}
+                            <Logo className="h-8 md:h-9 object-contain" width={140} height={36} />
                         </motion.div>
                     )}
                 </AnimatePresence>

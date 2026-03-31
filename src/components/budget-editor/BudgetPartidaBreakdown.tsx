@@ -1,12 +1,11 @@
 import { BudgetBreakdownComponent } from "@/backend/budget/domain/budget";
-import { cn } from "@/lib/utils";
 import { AlertCircle, ArrowRight, Hammer, Package, Percent, Repeat } from "lucide-react";
 import { useState } from "react";
+import { cn, formatCurrency } from "@/lib/utils";
 import { MaterialPicker } from "./MaterialPicker";
 import { MaterialItem } from "@/backend/material-catalog/domain/material-item";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatMoneyEUR } from "@/lib/utils";
 
 interface BudgetPartidaBreakdownProps {
     breakdown: BudgetBreakdownComponent[];
@@ -21,16 +20,8 @@ export function BudgetPartidaBreakdown({ breakdown, isRealCost, note, onBreakdow
 
     if (!breakdown || breakdown.length === 0) return null;
 
-    const laborTotal = breakdown.filter(c => c.type === 'LABOR' || c.type === 'MACHINERY').reduce((acc, c) => {
-        const y = c.quantity ?? c.yield ?? 1;
-        const isPct = c.unit === '%' || c.code === '%';
-        return acc + (c.total ?? (isPct ? (c.price * (y / 100)) : (c.price * y)));
-    }, 0);
-    const materialTotal = breakdown.filter(c => c.type === 'MATERIAL').reduce((acc, c) => {
-        const y = c.quantity ?? c.yield ?? 1;
-        const isPct = c.unit === '%' || c.code === '%';
-        return acc + (c.total ?? (isPct ? (c.price * (y / 100)) : (c.price * y)));
-    }, 0);
+    const laborTotal = breakdown.filter(c => c.type === 'LABOR' || c.type === 'MACHINERY').reduce((acc, c) => acc + c.total, 0);
+    const materialTotal = breakdown.filter(c => c.type === 'MATERIAL').reduce((acc, c) => acc + c.total, 0);
     // const total = laborTotal + materialTotal; // Unused variable
 
     const handleSwapClick = (index: number) => {
@@ -47,7 +38,7 @@ export function BudgetPartidaBreakdown({ breakdown, isRealCost, note, onBreakdow
         // Calculate new total based on yield and waste
         // Total = Price * Yield * (1 + Waste)
         const waste = originalItem.waste || 0;
-        const yieldValue = originalItem.quantity ?? originalItem.yield ?? 1; // Default to 1 if undefined
+        const yieldValue = originalItem.yield || 1; // Default yield to 1 if undefined
         const newTotal = material.price * yieldValue * (1 + waste);
 
         updatedBreakdown[selectedIndex] = {
@@ -65,7 +56,7 @@ export function BudgetPartidaBreakdown({ breakdown, isRealCost, note, onBreakdow
     };
 
     // Find name for picker initial search
-    const currentMaterialName = selectedIndex !== null ? (breakdown[selectedIndex].description || breakdown[selectedIndex].concept) : undefined;
+    const currentMaterialName = selectedIndex !== null ? breakdown[selectedIndex].concept : undefined;
 
     return (
         <div className="mt-3 bg-slate-50 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden text-sm">
@@ -88,10 +79,10 @@ export function BudgetPartidaBreakdown({ breakdown, isRealCost, note, onBreakdow
                 </div>
                 <div className="flex items-center gap-4 text-xs">
                     <span className="flex items-center gap-1 text-slate-500">
-                        <Hammer className="w-3 h-3" /> Mano de obra: <b>{formatMoneyEUR(laborTotal)}</b>
+                        <Hammer className="w-3 h-3" /> Mano de obra: <b>{formatCurrency(laborTotal)}</b>
                     </span>
                     <span className="flex items-center gap-1 text-slate-500">
-                        <Package className="w-3 h-3" /> Materiales: <b>{formatMoneyEUR(materialTotal)}</b>
+                        <Package className="w-3 h-3" /> Materiales: <b>{formatCurrency(materialTotal)}</b>
                     </span>
                 </div>
             </div>
@@ -114,93 +105,87 @@ export function BudgetPartidaBreakdown({ breakdown, isRealCost, note, onBreakdow
 
             {/* List */}
             <div className="divide-y divide-slate-100 dark:divide-white/5">
-                {breakdown.map((comp, idx) => {
-                    const fallbackYield = comp.quantity ?? comp.yield ?? 1;
-                    const isPct = comp.unit === '%' || comp.code === '%';
-                    const computedTotal = comp.total ?? (isPct ? (comp.price * (fallbackYield / 100)) : (comp.price * fallbackYield));
-
-                    return (
-                        <div
-                            key={idx}
-                            className={cn(
-                                "grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-4 items-center px-3 py-2 hover:bg-white dark:hover:bg-white/5 transition-colors group/item",
-                                comp.isSubstituted && "bg-blue-50/50 dark:bg-blue-900/5"
+                {breakdown.map((comp, idx) => (
+                    <div
+                        key={idx}
+                        className={cn(
+                            "grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-4 items-center px-3 py-2 hover:bg-white dark:hover:bg-white/5 transition-colors group/item",
+                            comp.isSubstituted && "bg-blue-50/50 dark:bg-blue-900/5"
+                        )}
+                    >
+                        {/* Concept */}
+                        <div className="flex items-center gap-2 min-w-0">
+                            {comp.type === 'MATERIAL' ? (
+                                <Package className={cn("w-3 h-3 shrink-0", comp.isSubstituted ? "text-blue-500" : "text-slate-400")} />
+                            ) : (
+                                <Hammer className="w-3 h-3 shrink-0 text-slate-400" />
                             )}
-                        >
-                            {/* Concept */}
-                            <div className="flex items-center gap-2 min-w-0">
-                                {comp.type === 'MATERIAL' ? (
-                                    <Package className={cn("w-3 h-3 shrink-0", comp.isSubstituted ? "text-blue-500" : "text-slate-400")} />
-                                ) : (
-                                    <Hammer className="w-3 h-3 shrink-0 text-slate-400" />
-                                )}
-                                <div className="flex flex-col min-w-0">
-                                    <span className={cn("truncate font-medium", comp.isSubstituted ? "text-blue-700 dark:text-blue-300" : "text-slate-600 dark:text-white/70")}>
-                                        {comp.description || comp.concept}
+                            <div className="flex flex-col min-w-0">
+                                <span className={cn("truncate font-medium", comp.isSubstituted ? "text-blue-700 dark:text-blue-300" : "text-slate-600 dark:text-white/70")}>
+                                    {comp.concept}
+                                </span>
+                                {comp.isSubstituted && (
+                                    <span className="text-[10px] text-blue-500 flex items-center gap-1">
+                                        Sustitución Inteligente <ArrowRight className="w-3 h-3" /> Material Específico
                                     </span>
-                                    {comp.isSubstituted && (
-                                        <span className="text-[10px] text-blue-500 flex items-center gap-1">
-                                            Sustitución Inteligente <ArrowRight className="w-3 h-3" /> Material Específico
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="opacity-0 group-hover/item:opacity-100 transition-opacity flex justify-end">
-                                {comp.type === 'MATERIAL' && onBreakdownChange && (
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                                                    onClick={() => handleSwapClick(idx)}
-                                                >
-                                                    <Repeat className="w-3.5 h-3.5" />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Sustituir material por catálogo real</TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
                                 )}
-                            </div>
-
-                            {/* Price */}
-                            <div className="text-right w-20">
-                                <div className="text-[10px] text-slate-400 uppercase">Precio</div>
-                                <div className="font-mono">{formatMoneyEUR(comp.price)}</div>
-                            </div>
-
-                            {/* Rendimiento */}
-                            <div className="text-right w-16">
-                                <div className="text-[10px] text-slate-400 uppercase">Rend.</div>
-                                <div className="font-mono text-slate-500">x{fallbackYield}</div>
-                            </div>
-
-                            {/* Waste */}
-                            <div className="text-right w-16">
-                                <div className="text-[10px] text-slate-400 uppercase">Merma</div>
-                                {(comp.waste || 0) > 0 ? (
-                                    <div className="font-mono text-amber-600 flex items-center justify-end gap-0.5">
-                                        <Percent className="w-3 h-3" /> {((comp.waste || 0) * 100).toFixed(0)}%
-                                    </div>
-                                ) : (
-                                    <div className="font-mono text-slate-300">-</div>
-                                )}
-                            </div>
-
-                            {/* Total */}
-                            <div className="text-right w-20">
-                                <div className="text-[10px] text-slate-400 uppercase">Total</div>
-                                <div className="font-bold font-mono text-slate-700 dark:text-white">
-                                    {formatMoneyEUR(computedTotal)}
-                                </div>
                             </div>
                         </div>
-                    )
-                })}
+
+                        {/* Actions */}
+                        <div className="opacity-0 group-hover/item:opacity-100 transition-opacity flex justify-end">
+                            {comp.type === 'MATERIAL' && onBreakdownChange && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 w-6 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                                                onClick={() => handleSwapClick(idx)}
+                                            >
+                                                <Repeat className="w-3.5 h-3.5" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Sustituir material por catálogo real</TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
+                        </div>
+
+                        {/* Price */}
+                        <div className="text-right w-24">
+                            <div className="text-[10px] text-slate-400 uppercase">Precio</div>
+                            <div className="font-mono">{formatCurrency(comp.price)}</div>
+                        </div>
+
+                        {/* Rendimiento */}
+                        <div className="text-right w-16">
+                            <div className="text-[10px] text-slate-400 uppercase">Rend.</div>
+                            <div className="font-mono text-slate-500">x{comp.yield}</div>
+                        </div>
+
+                        {/* Waste */}
+                        <div className="text-right w-16">
+                            <div className="text-[10px] text-slate-400 uppercase">Merma</div>
+                            {(comp.waste || 0) > 0 ? (
+                                <div className="font-mono text-amber-600 flex items-center justify-end gap-0.5">
+                                    <Percent className="w-3 h-3" /> {((comp.waste || 0) * 100).toFixed(0)}%
+                                </div>
+                            ) : (
+                                <div className="font-mono text-slate-300">-</div>
+                            )}
+                        </div>
+
+                        {/* Total */}
+                        <div className="text-right w-24">
+                            <div className="text-[10px] text-slate-400 uppercase">Total</div>
+                            <div className="font-bold font-mono text-slate-700 dark:text-white">
+                                {formatCurrency(comp.total)}
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );

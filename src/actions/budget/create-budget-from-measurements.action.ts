@@ -2,7 +2,7 @@
 
 import { BudgetService } from '@/backend/budget/application/budget-service';
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
-import { PricingOutput } from '@/backend/ai/private/flows/measurements/measurement-pricing.flow';
+import { PricingOutput } from '@/backend/ai/private-core/flows/measurements/measurement-pricing.flow';
 import { BudgetLineItem, BudgetCostBreakdown } from '@/backend/budget/domain/budget';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'crypto';

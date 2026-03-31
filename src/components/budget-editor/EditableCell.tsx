@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
-import { cn, formatMoneyEUR } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface EditableCellProps {
     value: string | number;
@@ -51,7 +51,7 @@ export const EditableCell = ({
         return (
             <div className={cn("px-2 py-1 min-h-[2rem] flex items-center", className)}>
                 {type === 'currency'
-                    ? formatMoneyEUR(Number(value))
+                    ? formatCurrency(Number(value))
                     : value
                 }
             </div>
@@ -75,34 +75,27 @@ export const EditableCell = ({
         );
     }
 
-    // Helper to format currency/numbers elegantly when not focused.
-    const displayValue = () => {
-        if (!isFocused && (type === 'currency' || type === 'number')) {
-            const num = Number(localValue) || 0;
-            return new Intl.NumberFormat('es-ES', {
-                minimumFractionDigits: type === 'currency' ? 2 : 0,
-                maximumFractionDigits: type === 'currency' ? 2 : 4
-            }).format(num);
-        }
-        return localValue;
-    };
-
     return (
-        <Input
-            ref={inputRef as any}
-            type={(type === 'currency' || type === 'number') && !isFocused ? 'text' : (type === 'currency' ? 'number' : type)}
-            value={displayValue()}
-            onChange={(e) => setLocalValue(e.target.value)}
-            onBlur={handleBlur}
-            onFocus={() => setIsFocused(true)}
-            onKeyDown={handleKeyDown}
-            className={cn(
-                "h-8 border-transparent hover:border-input focus:border-primary bg-transparent py-1 px-2 shadow-none transition-all",
-                isFocused && "bg-white",
-                className
+        <div className="relative flex items-center justify-end w-full">
+            <Input
+                ref={inputRef as any}
+                type={type === 'currency' ? 'number' : type}
+                value={Number.isNaN(localValue) ? '' : localValue}
+                onChange={(e) => setLocalValue(e.target.value)}
+                onBlur={handleBlur}
+                onFocus={() => setIsFocused(true)}
+                onKeyDown={handleKeyDown}
+                className={cn(
+                    "flex-1 min-w-0 h-8 border-transparent hover:border-input focus:border-primary bg-transparent py-1 px-2 shadow-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                    isFocused && "bg-white dark:bg-zinc-900",
+                    className
+                )}
+                placeholder={placeholder}
+                step={type === 'currency' ? "0.01" : "1"}
+            />
+            {type === 'currency' && (
+                <span className="shrink-0 text-xs text-slate-500 font-medium pl-1 pointer-events-none mt-[1px]">€</span>
             )}
-            placeholder={placeholder}
-            step={type === 'currency' ? "0.01" : "1"}
-        />
+        </div>
     );
 };

@@ -1,42 +1,32 @@
 ﻿
 import { Link } from '@/i18n/navigation';
 import Image from 'next/image';
+import { Logo } from '@/components/logo';
 
 export function Footer({ t }: { t?: any }) {
   const currentYear = new Date().getFullYear();
   return (
-    <footer className="w-full bg-[#2D2D2D] text-[#FDFBF7]">
+    <footer className="w-full bg-[#0a0a0a] text-foreground border-t border-border">
       <div className="container mx-auto px-4 md:px-6 py-16">
         <div className="grid md:grid-cols-3 gap-8 items-center text-center md:text-left">
+          {/* Logo & Hook */}
           <div className="flex flex-col items-center md:items-start gap-4">
-            <div className="bg-white/5 p-3 rounded-lg w-fit mb-2">
-              <div className="relative h-10 w-32 mb-2">
-                <Image
-                  src="/images/logo.avif"
-                  alt="Grupo RG Logo"
-                  fill
-                  className="object-contain brightness-0 invert opacity-90"
-                />
-              </div>
-            </div>
-            <p className="text-sm text-gray-400 max-w-xs">
-              Exclusividad y detalle en cada proyecto. Construimos sueños.
+            <Logo variant="light" className="mb-2" width={120} height={40} />
+            <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+              Software Core A Medida para Constructoras. Automatiza presupuestos y protege tu rentabilidad en tiempo real.
             </p>
           </div>
 
+          {/* Legal Links */}
           <div className="flex flex-col gap-2 items-center">
-            <h4 className="font-headline font-semibold text-primary mb-2">Enlaces Legales</h4>
-            <Link href="/privacy" className="text-sm text-gray-400 hover:text-primary transition-colors">Política de Privacidad</Link>
-            <Link href="/terms" className="text-sm text-gray-400 hover:text-primary transition-colors">Términos de Servicio</Link>
+            <h4 className="font-headline font-semibold text-primary mb-2">Legal</h4>
+            <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">Política de Privacidad</Link>
+            <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary transition-colors">Términos de Servicio</Link>
           </div>
 
+          {/* Copyright */}
           <div className="flex flex-col items-center md:items-end gap-4">
-            {t && (
-              <a href="#" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary hover:text-white transition-colors border border-primary px-4 py-2 rounded-md hover:bg-primary/10">
-                {t.reviewLink || "Déjanos una reseña"}
-              </a>
-            )}
-            <p className="text-xs text-gray-500">&copy; {currentYear} Grupo RG.</p>
+            <p className="text-sm text-muted-foreground">&copy; {currentYear} Basis Tech.</p>
           </div>
         </div>
       </div>

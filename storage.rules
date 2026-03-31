@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      // General safety measure: Nothing completely public by default
+      allow read, write: if false;
+    }
+
+    // Public Assets: Next.js or Browser viewing images
+    match /dream-renovator/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // AI Generated Renders and Originals
+    match /renders/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 20 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Budget Multimedia: allow user to upload PDF / Jpegs (< 10 MB)
+    match /budget-multimedia/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('application/pdf'));
+    }
+
+    // Simple Uploads
+    match /uploads/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // Admin Base rules (allows specific CSVs)
+    match /admin/price-books/{allPaths=**} {
+       allow read, write: if request.resource.size < 10 * 1024 * 1024;
+    }
+  }
+}

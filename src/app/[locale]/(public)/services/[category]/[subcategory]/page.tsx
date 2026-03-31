@@ -13,6 +13,7 @@ import { ServiceCTA } from '@/components/services/service-cta';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import i18nConfig from '@/../i18nConfig';
+import { getOriginalCategoryId, getOriginalSubcategoryId, getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
 
 export async function generateStaticParams() {
     const params: { locale: string; category: string; subcategory: string }[] = [];
@@ -26,8 +27,8 @@ export async function generateStaticParams() {
                 locales.forEach(locale => {
                     params.push({
                         locale,
-                        category: service.id,
-                        subcategory: sub.id
+                        category: getTranslatedCategorySlug(service.id, locale),
+                        subcategory: getTranslatedSubcategorySlug(sub.id, locale)
                     });
                 });
             });
@@ -39,13 +40,18 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Promise<{ category: string, subcategory: string, locale: string }> }): Promise<Metadata> {
     const { category, subcategory, locale } = await params;
-    const service = services.find((s) => s.id === category);
+    
+    // Reverse translate slugs to original IDs
+    const categoryId = getOriginalCategoryId(category, locale);
+    const subcategoryId = getOriginalSubcategoryId(subcategory, locale);
+
+    const service = services.find((s) => s.id === categoryId);
     const dict = await getDictionary(locale as any);
 
     if (!service) return {};
 
-    const categoryTranslation = dict.services?.[category];
-    const subserviceTranslation = categoryTranslation?.subservices?.[subcategory];
+    const categoryTranslation = dict.services?.[categoryId];
+    const subserviceTranslation = categoryTranslation?.subservices?.[subcategoryId];
 
     if (!subserviceTranslation) return {};
 
@@ -61,13 +67,18 @@ export async function generateMetadata({ params }: { params: Promise<{ category:
 
 export default async function SubServicePage({ params }: { params: Promise<{ category: string, subcategory: string, locale: string }> }) {
     const { category, subcategory, locale } = await params;
-    const service = services.find((s) => s.id === category);
+    
+    // Reverse translate slugs to original IDs
+    const categoryId = getOriginalCategoryId(category, locale);
+    const subcategoryId = getOriginalSubcategoryId(subcategory, locale);
+
+    const service = services.find((s) => s.id === categoryId);
     const dict = await getDictionary(locale as any);
 
     if (!service) notFound();
 
-    const categoryTranslation = dict.services?.[category];
-    const subserviceTranslation = categoryTranslation?.subservices?.[subcategory];
+    const categoryTranslation = dict.services?.[categoryId];
+    const subserviceTranslation = categoryTranslation?.subservices?.[subcategoryId];
 
     if (!subserviceTranslation) {
         notFound();
@@ -200,12 +211,12 @@ export default async function SubServicePage({ params }: { params: Promise<{ cat
                                                 Más en {categoryTranslation.title}
                                             </h3>
                                             <nav className="space-y-1">
-                                                {service.subservices.filter(s => s.id !== subcategory).map(sibling => (
+                                                {service.subservices.filter(s => s.id !== subcategoryId).map(sibling => (
                                                     <Link
                                                         key={sibling.id}
                                                         href={{
                                                             pathname: '/services/[category]/[subcategory]',
-                                                            params: { category, subcategory: sibling.id }
+                                                            params: { category, subcategory: getTranslatedSubcategorySlug(sibling.id, locale) }
                                                         }}
                                                         className="group flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 transition-colors"
                                                     >

@@ -16,7 +16,7 @@ dotenv.config();
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { z } from 'zod';
-import { ai } from '@/backend/ai/core/config/genkit.config';
+import { ai } from '@/backend/ai/shared/config/genkit.config';
 import { PDFDocument } from 'pdf-lib';
 
 // ============================================

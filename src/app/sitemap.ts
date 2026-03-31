@@ -1,8 +1,9 @@
-﻿import { MetadataRoute } from 'next';
+import { MetadataRoute } from 'next';
 import { routing } from '@/i18n/routing';
 import { services } from '@/lib/services';
 import { blogPosts } from '@/lib/blog-posts';
 import { locations } from '@/lib/locations';
+import { getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
 
 export default function sitemap(): MetadataRoute.Sitemap {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://Grupo RG.es';
@@ -61,8 +62,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
             service.subservices.forEach(sub => {
                 routing.locales.forEach(locale => {
                     const path = getLocalizedPath('/services/[category]/[subcategory]', locale, {
-                        category: service.id,
-                        subcategory: sub.id
+                        category: getTranslatedCategorySlug(service.id, locale),
+                        subcategory: getTranslatedSubcategorySlug(sub.id, locale)
                     });
                     entries.push({
                         url: `${baseUrl}${path}`,

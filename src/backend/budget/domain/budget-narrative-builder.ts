@@ -4,6 +4,11 @@ export class BudgetNarrativeBuilder {
     static build(specs: ProjectSpecs): string {
         const lines: string[] = [];
 
+        if ((specs as any).originalRequest) {
+            lines.push(`Petición Original del Cliente:\n"${(specs as any).originalRequest}"\n`);
+        }
+
+
         lines.push(`Proyecto de tipo: ${specs.interventionType === 'new_build' ? 'Obra Nueva' : specs.interventionType === 'total' ? 'Reforma Integral' : 'Reforma Parcial'}`);
         lines.push(`Superficie total: ${specs.totalArea} m²`);
         lines.push(`Calidad deseada: ${specs.qualityLevel}`);

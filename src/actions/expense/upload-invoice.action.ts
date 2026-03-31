@@ -4,7 +4,7 @@ import { FirestoreExpenseRepository } from '@/backend/expense/infrastructure/fir
 import { FirestoreProviderRepository } from '@/backend/expense/infrastructure/firestore-provider-repository';
 import { FirestoreProjectRepository } from '@/backend/project/infrastructure/firestore-project-repository';
 import { ExpenseService } from '@/backend/expense/application/expense-service';
-import { extractInvoiceFlow } from '@/backend/ai/public/flows/extract-invoice.flow';
+import { extractInvoiceFlow } from '@/backend/ai/private-core/flows/extract-invoice.flow';
 import { revalidatePath } from 'next/cache';
 
 const expenseRepository = new FirestoreExpenseRepository();

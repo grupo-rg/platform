@@ -1,6 +1,6 @@
 
 import 'dotenv/config';
-import { measurementExtractionFlow } from '../ai/private/flows/measurements/measurement-extraction.flow';
+import { measurementExtractionFlow } from '../ai/private-core/flows/measurements/measurement-extraction.flow';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 

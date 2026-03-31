@@ -18,35 +18,27 @@ export class CatalogSearchService {
         this.vectorizer = new RestApiVectorizerAdapter();
     }
 
-    async search(query: string, limitPerSource: number = 5, context?: string, domain: 'ALL' | 'LABOR' | 'MATERIAL' = 'ALL'): Promise<UnifiedCatalogItem[]> {
+    async search(query: string, limitPerSource: number = 5): Promise<UnifiedCatalogItem[]> {
         if (!query.trim()) return [];
 
         try {
             // 1. Vectorize query once
             const embedding = await this.vectorizer.embedText(query);
 
-            // 2. Conditional Parallel Search
-            const searchPromises: Promise<any>[] = [];
-            let priceBookIndex = -1;
-            let materialIndex = -1;
+            // 2. Parallel Search (Resilient)
+            const results = await Promise.allSettled([
+                this.priceBookRepo.searchByVector(embedding, limitPerSource),
+                this.materialRepo.searchByVector(embedding, limitPerSource)
+            ]);
 
-            if (domain === 'ALL' || domain === 'LABOR') {
-                priceBookIndex = searchPromises.length;
-                searchPromises.push(this.priceBookRepo.searchByVector(embedding, limitPerSource, 2024, context, query));
-            }
+            const priceBookResults = results[0].status === 'fulfilled' ? results[0].value : [];
+            const materialResults = results[1].status === 'fulfilled' ? results[1].value : [];
 
-            if (domain === 'ALL' || domain === 'MATERIAL') {
-                materialIndex = searchPromises.length;
-                searchPromises.push(this.materialRepo.searchByVector(embedding, limitPerSource));
-            }
-
-            const results = await Promise.all(searchPromises);
-
-            const priceBookResults = priceBookIndex >= 0 ? results[priceBookIndex] : [];
-            const materialResults = materialIndex >= 0 ? results[materialIndex] : [];
+            if (results[0].status === 'rejected') console.error('[CatalogSearchService] PriceBook Search Error:', results[0].reason);
+            if (results[1].status === 'rejected') console.error('[CatalogSearchService] Material Search Error:', results[1].reason);
 
             // 3. Normalize & Merge
-            const unifiedPriceBook: UnifiedCatalogItem[] = priceBookResults.map((item: any) => ({
+            const unifiedPriceBook: UnifiedCatalogItem[] = priceBookResults.map(item => ({
                 id: item.code, // Code is the ID for PriceBook
                 type: 'LABOR',
                 code: item.code,
@@ -55,10 +47,10 @@ export class CatalogSearchService {
                 price: item.priceTotal,
                 unit: item.unit,
                 originalItem: item,
-                score: item.matchScore || 0
+                score: 0 // Vector search wrapper might not return score yet, or we need to type it
             }));
 
-            const unifiedMaterials: UnifiedCatalogItem[] = materialResults.map((item: any) => ({
+            const unifiedMaterials: UnifiedCatalogItem[] = materialResults.map(item => ({
                 id: item.sku,
                 type: 'MATERIAL',
                 code: item.sku,
@@ -67,11 +59,11 @@ export class CatalogSearchService {
                 price: item.price,
                 unit: item.unit,
                 originalItem: item,
-                score: item.matchScore || 0
+                score: 0
             }));
 
             // 4. Return combined (could be interleaved by score if available, for now just concatenated)
-            return [...unifiedPriceBook, ...unifiedMaterials].sort((a, b) => (b.score || 0) - (a.score || 0));
+            return [...unifiedPriceBook, ...unifiedMaterials];
 
         } catch (error) {
             console.error('[CatalogSearchService] Error searching:', error);

@@ -18,151 +18,115 @@ export class BudgetRepositoryFirestore implements BudgetRepository {
     return this.db.collection('budgets');
   }
 
-  private sanitizeMatchedItem(matchedItem: any): any {
-    if (!matchedItem) return undefined;
-    try {
-      if (matchedItem.embedding) delete matchedItem.embedding;
-
-      const safeItem = {
-        ...matchedItem,
-        createdAt: matchedItem.createdAt?.toDate ? matchedItem.createdAt.toDate().toISOString() : matchedItem.createdAt,
-        updatedAt: matchedItem.updatedAt?.toDate ? matchedItem.updatedAt.toDate().toISOString() : matchedItem.updatedAt,
-      };
-
-      return JSON.parse(JSON.stringify(safeItem));
-    } catch (e) {
-      console.error("[BudgetRepository] Safely stripped matchedItem due to parsing exception:", e);
-      return undefined;
-    }
-  }
-
-  private cleanItemOnRead(item: any): any {
-    // Sanitize both root level (legacy) and inner item level (UI standard)
-    const rootMatchedItem = this.sanitizeMatchedItem(item.matchedItem);
-
-    let innerItem = item.item;
-    if (innerItem) {
-      innerItem = {
-        ...innerItem,
-        matchedItem: this.sanitizeMatchedItem(innerItem.matchedItem),
-        candidates: innerItem.candidates || []
-      };
-    }
-
-    return {
-      ...item,
-      matchedItem: rootMatchedItem,
-      candidates: item.candidates || [],
-      ...(innerItem ? { item: innerItem } : {})
-    };
-  }
-
   async findById(id: string): Promise<Budget | null> {
     const doc = await this.collection.doc(id).get();
     if (!doc.exists) return null;
-
-    const budget = this.mapDocToBudget(doc);
-
-    // Phase 15 Hybrid Read Strategy: Fetch items subcollection if it exists
-    const itemsSnap = await this.collection.doc(id).collection('items').get();
-
-    if (!itemsSnap.empty) {
-      // Reassemble from subcollection
-      const extractedItems = itemsSnap.docs.map(d => this.cleanItemOnRead(d.data()));
-
-      budget.chapters = budget.chapters.map(chapter => {
-        const relItems = extractedItems
-          .filter(i => i._chapterId === chapter.id)
-          .sort((a, b) => (a.order || 0) - (b.order || 0));
-        return {
-          ...chapter,
-          items: relItems
-        };
-      });
+    
+    // Hydrate chapters from subcollection
+    const chaptersSnap = await this.collection.doc(id).collection('chapters').orderBy('order', 'asc').get();
+    const rawChapters = chaptersSnap.docs.map(cDoc => cDoc.data());
+    
+    // --- AUTO-HEALING: Deduplicate chapters explicitly by name and order ---
+    // Because of a previous bug, some budgets may have accumulated hundreds of ghost chapters.
+    // This cleans it up strictly before sending it to the client, preventing the 1MB payload crush upon Save.
+    const uniqueChapters = new Map<string, any>();
+    
+    for (const chap of rawChapters) {
+        // Use normalized name+order as a unique logical key for a chapter
+        const logicalKey = `${chap.order}-${(chap.name || '').toLowerCase().trim()}`;
+        
+        if (!uniqueChapters.has(logicalKey)) {
+            // Further deduplicate items inside the chapter based on item.id
+            const uniqueItems = new Map<string, any>();
+            for (const item of (chap.items || [])) {
+                if (!uniqueItems.has(item.id)) {
+                    uniqueItems.set(item.id, item);
+                }
+            }
+            chap.items = Array.from(uniqueItems.values());
+            uniqueChapters.set(logicalKey, chap);
+        }
     }
-
-    return budget;
+    const chapters = Array.from(uniqueChapters.values());
+    // ------------------------------------------------------------------------
+    
+    return this.mapDocToBudget(doc, chapters);
   }
 
   async findByLeadId(leadId: string): Promise<Budget[]> {
     const snapshot = await this.collection.where('leadId', '==', leadId).get();
-    // For lists, we don't necessarily need to eagerly load all 500 items per budget.
-    // mapDocToBudget will give us the root metadata, and if it's an old monolithic budget it'll give the items too.
-    return snapshot.docs.map(doc => this.mapDocToBudget(doc));
+    // For listing, we leave chapters empty to vastly improve bandwidth/speed.
+    return snapshot.docs.map(doc => this.mapDocToBudget(doc, []));
   }
 
   async findAll(): Promise<Budget[]> {
     const snapshot = await this.collection.orderBy('createdAt', 'desc').get();
-    return snapshot.docs.map(doc => this.mapDocToBudget(doc));
+    // For list views, we do not fetch chapters.
+    return snapshot.docs.map(doc => this.mapDocToBudget(doc, []));
   }
 
   async save(budget: Budget): Promise<void> {
-    console.log(`[Infrastructure] Saving budget to Firestore: ${budget.id}`);
+    console.log(`[Infrastructure] Saving budget to Firestore (Subcollections): ${budget.id}`);
+    
+    const batch = this.db.batch();
+    const docRef = this.collection.doc(budget.id);
+    
+    const { chapters, ...budgetMeta } = budget;
 
-    const rootBudget = { ...budget };
-    const allItemsToSave: any[] = [];
+    batch.set(docRef, {
+      ...budgetMeta,
+      createdAt: budget.createdAt, // Ensure dates are handled
+      updatedAt: budget.updatedAt || new Date(),
+    }, { merge: true });
 
-    // 1. Separate items from chapters and tag them with their parent chapter ID
-    rootBudget.chapters = rootBudget.chapters.map(chapter => {
-      const chapterItems = chapter.items || [];
-      chapterItems.forEach(item => {
-        allItemsToSave.push({
-          ...item,
-          _chapterId: chapter.id // hidden foreign key for reconstruction
-        });
+    // Wipe existing chapters? For simplicity in this architectural rewrite, we just overwrite them.
+    if (chapters && chapters.length > 0) {
+      for (const [index, chapter] of chapters.entries()) {
+        const chapId = String(chapter.id || `chapter_${index}`);
+        const chapRef = docRef.collection('chapters').doc(chapId);
+        batch.set(chapRef, chapter);
+      }
+    }
+
+    await batch.commit();
+  }
+
+  async updatePartial(id: string, updates: Partial<Budget>): Promise<void> {
+    const batch = this.db.batch();
+    const docRef = this.collection.doc(id);
+    
+    // Safety check just in case the doc doesn't exist, though typically handled via Action
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      throw new Error(`Budget ${id} not found in Firestore.`);
+    }
+
+    const { chapters, ...budgetMeta } = updates;
+
+    if (Object.keys(budgetMeta).length > 0) {
+      batch.update(docRef, {
+        ...budgetMeta,
+        updatedAt: new Date()
       });
+    }
 
-      return {
-        ...chapter,
-        items: [] // wipe items from the root memory to prevent 1MB overflow
-      };
-    });
-
-    (rootBudget as any).totalItems = allItemsToSave.length;
-    rootBudget.createdAt = budget.createdAt;
-    rootBudget.updatedAt = budget.updatedAt || new Date();
-
-    const rootRef = this.collection.doc(budget.id);
-    const itemsRef = rootRef.collection('items');
-
-    // 2. Diff check to delete items that were removed in the UI
-    const existingItemsSnap = await itemsRef.get();
-    const existingItemIds = new Set(existingItemsSnap.docs.map(d => d.id));
-    const incomingItemIds = new Set(allItemsToSave.map(i => i.id));
-
-    const idsToDelete = [...existingItemIds].filter(id => !incomingItemIds.has(id));
-
-    // 3. Batched Execution (Firestore limit 500 ops/batch)
-    const MAX_BATCH_SIZE = 490;
-    let batch = this.db.batch();
-    let opCount = 0;
-
-    batch.set(rootRef, rootBudget, { merge: true });
-    opCount++;
-
-    for (const id of idsToDelete) {
-      if (opCount >= MAX_BATCH_SIZE) {
-        await batch.commit();
-        batch = this.db.batch();
-        opCount = 0;
+    if (chapters && chapters.length > 0) {
+      // Purgar capítulos antiguos para evitar fantasmas por arrastre histórico
+      const oldChaptersSnap = await docRef.collection('chapters').get();
+      for (const oldDoc of oldChaptersSnap.docs) {
+        batch.delete(oldDoc.ref);
       }
-      batch.delete(itemsRef.doc(id));
-      opCount++;
-    }
 
-    for (const item of allItemsToSave) {
-      if (opCount >= MAX_BATCH_SIZE) {
-        await batch.commit();
-        batch = this.db.batch();
-        opCount = 0;
+      for (const [index, chapter] of chapters.entries()) {
+        const chapId = String(chapter.id || `chap_${index}`);
+        const chapRef = docRef.collection('chapters').doc(chapId);
+        // Sobreescribir el capítulo exactamente como viene
+        batch.set(chapRef, chapter);
       }
-      batch.set(itemsRef.doc(item.id), item, { merge: true });
-      opCount++;
     }
 
-    if (opCount > 0) {
-      await batch.commit();
-    }
+    console.log(`[Infrastructure] Partial budget update (Delta sync) in Firestore: ${id}`);
+    await batch.commit();
   }
 
   async delete(id: string): Promise<void> {
@@ -170,7 +134,7 @@ export class BudgetRepositoryFirestore implements BudgetRepository {
     await this.collection.doc(id).delete();
   }
 
-  private mapDocToBudget(doc: any): Budget {
+  private mapDocToBudget(doc: any, injectedChapters?: any[]): Budget {
     const data = doc.data();
 
     // Map nested collections/arrays if they contain Timestamps
@@ -179,10 +143,17 @@ export class BudgetRepositoryFirestore implements BudgetRepository {
       createdAt: r.createdAt?.toDate ? r.createdAt.toDate() : (new Date(r.createdAt) || new Date())
     })) || [];
 
-    const chapters = data.chapters?.map((chapter: any) => ({
-      ...chapter,
-      items: chapter.items?.map((item: any) => this.cleanItemOnRead(item)) || []
-    })) || [];
+    // Map nested telemetry executionLog timestamps if they exist
+    let mappedTelemetry = data.telemetry;
+    if (mappedTelemetry?.executionLog) {
+      mappedTelemetry = {
+        ...mappedTelemetry,
+        executionLog: mappedTelemetry.executionLog.map((log: any) => ({
+          ...log,
+          timestamp: log.timestamp?.toDate ? log.timestamp.toDate() : (log.timestamp ? new Date(log.timestamp) : new Date())
+        }))
+      };
+    }
 
     return {
       ...data,
@@ -190,7 +161,9 @@ export class BudgetRepositoryFirestore implements BudgetRepository {
       renders: renders,
       createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (new Date(data.createdAt) || new Date()),
       updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (new Date(data.updatedAt) || new Date()),
-      chapters: chapters,
+      // Prioritize injected subcollections, fallback to existing for legacy data
+      chapters: injectedChapters || data.chapters || [],
+      telemetry: mappedTelemetry,
     } as Budget;
   }
 }

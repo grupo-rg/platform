@@ -1,17 +1,17 @@
 {
     "nav": {
-        "services": "Services",
-        "budgetRequest": "Instant Quote",
+        "services": "Diensten",
+        "budgetRequest": "Direct Offerte",
         "blog": "Blog",
         "contact": "Contact",
-        "login": "Log In",
-        "signup": "Sign Up"
+        "login": "Inloggen",
+        "signup": "Registreren"
     },
     "userNav": {
         "dashboard": "Dashboard",
-        "newBudget": "New Budget",
-        "settings": "Settings",
-        "logout": "Log Out"
+        "newBudget": "Nieuwe Offerte",
+        "settings": "Instellingen",
+        "logout": "Uitloggen"
     },
     "megaMenu": {
         "title": "Grupo RG Ervaring",

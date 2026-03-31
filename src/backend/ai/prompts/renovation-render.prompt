@@ -1,0 +1,28 @@
+---
+model: googleai/gemini-2.5-flash-image
+input:
+  schema:
+    style: string
+    roomType: string
+    additionalRequirements?: string
+    styleDefinition: string
+output:
+  format: media
+---
+Transform the attached photograph of a {{roomType}} into a {{style}} style renovation.
+
+Instructions:
+1. Preserve the architectural structure, windows, ceiling height, and perspective of the original room (ControlNet-like structural integrity).
+2. Update the materials (flooring, walls, ceiling) to match the {{style}} aesthetic.
+3. Replace or update the furniture to fit the {{style}} design language.
+4. Adjust lighting to be natural and photorealistic.
+
+{{#if additionalRequirements}}
+Additional Client Requirements:
+{{additionalRequirements}}
+{{/if}}
+
+Style Definition:
+{{styleDefinition}}
+
+Output: A high-quality, photorealistic architectural rendering.

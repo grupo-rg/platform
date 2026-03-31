@@ -17,3 +17,24 @@ export const getGeminiClient = () => {
     }
     return geminiClient;
 };
+
+/**
+ * Vertex AI client for features with geo-restrictions (e.g. image generation).
+ * Uses Application Default Credentials via the service account.
+ */
+let vertexClient: GoogleGenAI | null = null;
+
+export const getVertexAIClient = () => {
+    if (!vertexClient) {
+        const project = process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID;
+        if (!project) {
+            throw new Error("Missing GCLOUD_PROJECT or FIREBASE_PROJECT_ID for Vertex AI");
+        }
+        vertexClient = new GoogleGenAI({
+            vertexai: true,
+            project,
+            location: 'europe-west1',
+        });
+    }
+    return vertexClient;
+};

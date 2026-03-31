@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Search, Loader2, Package } from 'lucide-react';
 import { MaterialItem } from '@/backend/material-catalog/domain/material-item';
 import { searchMaterialsAction } from '@/backend/material-catalog/actions/search-materials.action';
-import { formatMoneyEUR } from '@/lib/utils';
 
 interface MaterialPickerProps {
     open: boolean;
@@ -87,7 +86,7 @@ export function MaterialPicker({ open, onOpenChange, onSelect, currentMaterialNa
                                         handleSearch(currentMaterialName);
                                     }}
                                 >
-                                    Buscar "{currentMaterialName}"
+                                    Buscar &quot;{currentMaterialName}&quot;
                                 </Button>
                             )}
                         </div>
@@ -114,7 +113,7 @@ export function MaterialPicker({ open, onOpenChange, onSelect, currentMaterialNa
                                         {item.name}
                                     </h4>
                                     <span className="font-bold font-mono text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded text-sm ml-2 whitespace-nowrap">
-                                        {formatMoneyEUR(item.price)} / {item.unit}
+                                        {item.price.toFixed(2)}€ / {item.unit}
                                     </span>
                                 </div>
 

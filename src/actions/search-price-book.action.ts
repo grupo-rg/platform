@@ -6,7 +6,7 @@ import { RestApiVectorizerAdapter } from '@/backend/price-book/infrastructure/ai
 import { FirestorePriceBookRepository } from '@/backend/price-book/infrastructure/firestore/firestore-price-book.repository';
 import { PriceBookItem } from '@/backend/price-book/domain/price-book-item'; // Ensure this is exported
 
-export async function searchPriceBookAction(query: string): Promise<PriceBookItem[]> {
+export async function searchPriceBookAction(query: string, year: number = 2025): Promise<PriceBookItem[]> {
     if (!query || query.trim().length === 0) {
         return [];
     }
@@ -16,7 +16,8 @@ export async function searchPriceBookAction(query: string): Promise<PriceBookIte
 
         // Dependency Injection (Manual for now)
         // In a larger app, we might use a container or singleton instance
-        const repository = new FirestorePriceBookRepository();
+        const collectionName = year === 2025 ? 'price_book_2025' : 'price_book_2025';
+        const repository = new FirestorePriceBookRepository(collectionName);
         const vectorizer = new RestApiVectorizerAdapter();
         const useCase = new SemanticSearchUseCase(repository, vectorizer);
 

@@ -38,7 +38,29 @@ yarn-error.log*
 next-env.d.ts
 
 .genkit/*
-.env*
+
+# Env files (NextJS & Python AI-Core)
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+env.yaml
+*.env.yaml
+
+# Credentials and Keys
+*service-account*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
+credentials.json
+*.pem
+*.key
+
+# White-listed templates
+!.env.example
+!.env.template
 
 # firebase
 firebase-debug.log
@@ -49,3 +71,34 @@ firestore-debug.log
 .agents/
 scripts/
 src/backend/**/scripts/
+
+# Documentos PDF de cliente (NO subir al repo)
+/docs/
+/tmp-lab/
+*.pdf
+
+# Large Vector Indexes & Catalog Data
+/prices/*.json
+/src/lib/pdf_index_*.json
+
+# Archivos de análisis generados y Testing Local
+budget_analysis_*.md
+analysis_debug.json
+debug_output.txt
+debug-*.js
+models_list.txt
+
+# Directorios de Logs Operativos (Frontend y Backend)
+/logs/
+*.log
+
+# Entornos Virtuales y Caché Pura (Python/AI-Core)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+/services/ai-core/venv/
+/services/ai-core/.venv/
+
+# Archivos de Sistema Operativo
+logs/

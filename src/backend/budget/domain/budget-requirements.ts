@@ -20,11 +20,6 @@ export interface BudgetRequirement {
     targetBudget?: string;
     urgency?: string;
 
-    // Phase 7: Aparejador Validation Logic
-    projectScale?: 'minor' | 'major' | 'unknown';
-    phaseChecklist?: Record<string, 'pending' | 'addressed' | 'not_applicable'>;
-    isReadyForGeneration?: boolean;
-
     // Raw Context
     originalPrompt?: string;
     transcriptions: string[];
@@ -34,13 +29,8 @@ export interface BudgetRequirement {
     detectedNeeds: {
         category: string;
         description: string;
+        requestedMaterial?: string;
         estimatedQuantity?: number;
         unit?: string;
     }[];
-
-    // Extraction Results
-    activeBatchJobId?: string;
-    completedBudgetId?: string;
-    completedBudgetTotal?: number;
-    completedBudgetItems?: number;
 }

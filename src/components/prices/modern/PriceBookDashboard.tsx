@@ -14,12 +14,13 @@ import { PriceList } from './PriceList';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 
 export function PriceBookDashboard() {
-    // React Query for Caching
-    const { data: items = [], isLoading, refetch, isRefetching } = usePriceBook();
-
     // UI State
+    const [year, setYear] = useState<number>(2025);
     const [selectedChapter, setSelectedChapter] = useState<string>('All');
     const [searchQuery, setSearchQuery] = useState('');
+
+    // React Query for Caching
+    const { data: items = [], isLoading, refetch, isRefetching } = usePriceBook(year);
 
     // Semantic Search State (AI)
     const [semanticResults, setSemanticResults] = useState<PriceBookItem[] | null>(null);
@@ -30,7 +31,7 @@ export function PriceBookDashboard() {
         if (!searchQuery.trim()) return;
         setIsAiSearching(true);
         try {
-            const results = await searchPriceBookAction(searchQuery);
+            const results = await searchPriceBookAction(searchQuery, year);
             setSemanticResults(results);
         } catch (error) {
             console.error("AI Search failed", error);
@@ -65,10 +66,14 @@ export function PriceBookDashboard() {
         return filtered;
     }, [items, selectedChapter, searchQuery, semanticResults]);
 
-    // Clear AI results when user clears search or types new local search
+    // Clear AI results when user clears search, types new local search, or changes year
     useEffect(() => {
         if (searchQuery === '') setSemanticResults(null);
     }, [searchQuery]);
+
+    useEffect(() => {
+        setSemanticResults(null);
+    }, [year]);
 
     const chapters = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -91,7 +96,7 @@ export function PriceBookDashboard() {
                         </div>
                         <div>
                             <div className="text-xl font-bold tracking-tight font-headline text-foreground">
-                                PriceCloud
+                                Basis
                             </div>
                             <p className="text-xs text-muted-foreground font-medium">Base de Datos</p>
                         </div>
@@ -106,6 +111,16 @@ export function PriceBookDashboard() {
                             {selectedChapter === 'All' ? 'Biblioteca Completa' : selectedChapter}
                             <Badge variant="secondary" className="text-[10px] h-4 px-1">{filteredItems.length}</Badge>
                         </span>
+                    </div>
+
+                    <div className="h-8 w-px bg-border/60 mx-2 hidden md:block" />
+
+                    {/* Active Year */}
+                    <div className="flex bg-muted p-1 rounded-xl">
+                        <div className="px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 bg-background shadow text-foreground">
+                            <Sparkles className="w-3 h-3 text-purple-500" />
+                            Catálogo 2025
+                        </div>
                     </div>
                 </div>
 

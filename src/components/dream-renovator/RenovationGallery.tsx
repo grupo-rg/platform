@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -21,9 +21,10 @@ import { ImageComparisonSlider } from '@/components/ui/image-comparison';
 interface RenovationGalleryProps {
     budgetId: string;
     renders?: BudgetRender[];
+    items?: any[]; // To get context for prompt
 }
 
-export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryProps) {
+export function RenovationGallery({ budgetId, renders = [], items = [] }: RenovationGalleryProps) {
     const { toast } = useToast();
     const router = useRouter();
     const [isGenerating, setIsGenerating] = useState(false);
@@ -31,10 +32,17 @@ export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryP
     const [generatedImages, setGeneratedImages] = useState<string[]>([]);
     const [viewingImage, setViewingImage] = useState<{ url: string, beforeUrls?: string[], originalUrl?: string, title: string } | null>(null);
 
-    // Form States
     const [roomType, setRoomType] = useState('Salón');
     const [style, setStyle] = useState('Moderno');
+    const [aspectRatio, setAspectRatio] = useState('16:9');
     const [requirements, setRequirements] = useState('');
+    
+    // Sync external renders to local state for optimistic UI updates
+    const [localRenders, setLocalRenders] = useState<BudgetRender[]>(renders);
+    
+    useEffect(() => {
+        setLocalRenders(renders);
+    }, [renders]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -55,14 +63,14 @@ export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryP
         setIsGenerating(true);
         try {
             // 1. Generate Image (Server Action returns Base64)
-            // Send all images. Remove 'data:image/x;base64,' prefix for action
             const base64DataArray = selectedImages.map(img => img.split(',')[1]);
             const result = await generateRenovationAction({
-                imageBuffers: base64DataArray,
+                imageBuffer: base64DataArray[0], // MVP: Using only the first image
                 roomType,
                 style,
                 additionalRequirements: requirements,
-                budgetId
+                budgetId,
+                aspectRatio
             });
 
             if (!result.success || !result.base64) {
@@ -102,9 +110,9 @@ export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryP
                 budgetId,
                 render: {
                     id: `${timestamp}`,
-                    afterUrls: [generatedUrl],
-                    beforeUrls: originalUrls,
-                    prompt: requirements || `Renovación estilo ${style}`,
+                    url: generatedUrl,
+                    originalUrl: originalUrls[0],
+                    prompt: result.appliedPrompt || requirements || `Renovación estilo ${style}`,
                     style,
                     roomType
                 }
@@ -155,33 +163,33 @@ export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryP
                         <div className="space-y-4">
                             <div className="space-y-2">
                                 <Label>1. Sube la foto actual (&quot;Antes&quot;)</Label>
-                                <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 transition-colors relative">
-                                    <Input
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                        onChange={handleImageUpload}
-                                    />
-                                    {selectedImages.length > 0 ? (
+                                {selectedImages.length > 0 ? (
+                                    <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center relative">
                                         <div className="w-full flex gap-2 overflow-x-auto pb-2 relative z-20">
                                             {selectedImages.map((img, idx) => (
                                                 <div key={idx} className="relative w-24 h-24 shrink-0 rounded-md overflow-hidden border">
                                                     <Image src={img} alt={`Original ${idx}`} fill className="object-cover" />
                                                 </div>
                                             ))}
-                                            <div className="w-24 h-24 shrink-0 rounded-md border-2 border-dashed flex flex-col items-center justify-center relative hover:bg-slate-100 cursor-pointer">
-                                                <Input type="file" accept="image/*" multiple className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleImageUpload} />
+                                            <label className="w-24 h-24 shrink-0 rounded-md border-2 border-dashed flex flex-col items-center justify-center relative hover:bg-slate-100 cursor-pointer">
+                                                <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
                                                 <Plus className="h-6 w-6 text-slate-400" />
-                                            </div>
+                                            </label>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <Upload className="h-8 w-8 text-slate-400 mb-2 pointer-events-none" />
-                                            <span className="text-sm text-slate-500 pointer-events-none">Sube una o varias fotos de la estancia</span>
-                                        </>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <label className="border-2 border-dashed rounded-lg py-10 px-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 transition-colors cursor-pointer w-full">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            className="hidden"
+                                            onChange={handleImageUpload}
+                                        />
+                                        <Upload className="h-8 w-8 text-slate-400 mb-2 pointer-events-none" />
+                                        <span className="text-sm text-slate-500 pointer-events-none">Haz click para subir una o varias fotos de la estancia</span>
+                                    </label>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -197,6 +205,7 @@ export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryP
                                             <SelectItem value="Baño">Baño</SelectItem>
                                             <SelectItem value="Dormitorio">Dormitorio</SelectItem>
                                             <SelectItem value="Terraza">Terraza</SelectItem>
+                                            <SelectItem value="Fachada">Fachada</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -212,6 +221,20 @@ export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryP
                                             <SelectItem value="Industrial">Industrial</SelectItem>
                                             <SelectItem value="Escandinavo">Escandinavo</SelectItem>
                                             <SelectItem value="Clásico">Clásico</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Formato</Label>
+                                    <Select value={aspectRatio} onValueChange={setAspectRatio}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="16:9">Apaisado (16:9)</SelectItem>
+                                            <SelectItem value="1:1">Cuadrado (1:1)</SelectItem>
+                                            <SelectItem value="9:16">Vertical (9:16)</SelectItem>
+                                            <SelectItem value="4:3">Foto Clásica (4:3)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -279,15 +302,15 @@ export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryP
             </Card>
 
             {/* History Gallery */}
-            {renders.length > 0 && (
+            {localRenders.length > 0 && (
                 <div className="space-y-4">
-                    <h3 className="text-xl font-semibold text-slate-800">Galería de Transformaciones ({renders.length})</h3>
+                    <h3 className="text-xl font-semibold text-slate-800">Galería de Transformaciones ({localRenders.length})</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {renders.map((render) => (
+                        {localRenders.map((render) => (
                             <Card key={render.id} className="overflow-hidden group hover:shadow-lg transition-shadow">
                                 <div className="relative aspect-video">
                                     <Image
-                                        src={render.afterUrls[0]}
+                                        src={render.url}
                                         alt={render.prompt}
                                         fill
                                         className="object-cover transition-transform duration-700 group-hover:scale-105"
@@ -306,19 +329,56 @@ export function RenovationGallery({ budgetId, renders = [] }: RenovationGalleryP
                                             variant="secondary"
                                             size="sm"
                                             onClick={() => setViewingImage({
-                                                url: render.afterUrls[0],
-                                                beforeUrls: render.beforeUrls,
+                                                url: render.url,
+                                                beforeUrls: render.originalUrl ? [render.originalUrl] : [],
                                                 title: `Resultado: ${render.style} - ${render.roomType}`
                                             })}
                                         >
                                             Ver Comparativa
                                         </Button>
                                     </div>
+                                    <div className="absolute bottom-2 right-2">
+                                        <Button
+                                            variant={render.includeInPdf ? "default" : "secondary"}
+                                            size="icon"
+                                            className="h-8 w-8 rounded-full shadow-md z-10"
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                
+                                                // Optimistic update
+                                                const newValue = !render.includeInPdf;
+                                                setLocalRenders(prev => prev.map(r => r.id === render.id ? { ...r, includeInPdf: newValue } : r));
+
+                                                const { toggleRenderPdfAction } = await import('@/actions/budget/toggle-render-pdf.action');
+                                                const res = await toggleRenderPdfAction({
+                                                    budgetId,
+                                                    renderId: render.id,
+                                                    includeInPdf: newValue
+                                                });
+                                                
+                                                if (!res.success) {
+                                                    // Revert on failure
+                                                    setLocalRenders(prev => prev.map(r => r.id === render.id ? { ...r, includeInPdf: !newValue } : r));
+                                                    toast({
+                                                        title: "Error",
+                                                        description: "Fallo de conexión. No pudimos guardar la preferencia.",
+                                                        variant: "destructive"
+                                                    });
+                                                }
+                                            }}
+                                            title={render.includeInPdf ? "En el PDF" : "Añadir a PDF"}
+                                        >
+                                            <span className="text-lg leading-none">{render.includeInPdf ? '⭐' : '☆'}</span>
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="p-3">
-                                    <p className="text-xs text-slate-500 line-clamp-2" title={render.prompt}>
-                                        {render.prompt}
-                                    </p>
+                                <div className={`p-3 border-t ${render.includeInPdf ? 'bg-yellow-50/50' : ''}`}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                         {render.includeInPdf && <span className="text-[10px] font-bold text-yellow-600 uppercase bg-yellow-100 px-2 py-0.5 rounded flex-shrink-0">PDF</span>}
+                                         <p className="text-xs text-slate-500 line-clamp-2 leading-tight flex-1" title={render.prompt}>
+                                            {render.prompt}
+                                         </p>
+                                    </div>
                                     <p className="text-[10px] text-slate-400 mt-2 text-right">
                                         {new Date(render.createdAt).toLocaleDateString()}
                                     </p>

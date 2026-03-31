@@ -13,8 +13,8 @@ export class RestApiVectorizerAdapter implements VectorizerPort {
     private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent';
 
     constructor() {
-        const key = process.env.GOOGLE_GENAI_API_KEY;
-        if (!key) throw new Error("GOOGLE_GENAI_API_KEY is not set");
+        const key = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
+        if (!key) throw new Error("GOOGLE_GENAI_API_KEY or GEMINI_API_KEY is not set");
         this.apiKey = key;
     }
 

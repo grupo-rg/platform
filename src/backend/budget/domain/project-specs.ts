@@ -40,6 +40,10 @@ export interface ProjectSpecs {
     elevator?: boolean;
     parking?: boolean;
 
+    // DAG Triggers (Obra Nueva / Mayor)
+    terrainType?: 'flat' | 'sloped' | 'rocky'; // 'llano', 'pendiente', 'roca'
+    machineryAccess?: 'good' | 'poor' | 'restricted';
+
     // User provided context
     description?: string;
     files?: string[];

@@ -10,7 +10,25 @@
       "Reformes completes d'habitatges i locals comercials.",
       "Ampliacions i redistribució d'espais.",
       "Assessorament en materials i solucions constructives."
-    ]
+    ],
+    "subservices": {
+      "gestion-integral-obra-nueva": {
+        "title": "Gestió Integral d'Obra Nova",
+        "description": "Coordinem i executem el teu projecte d'edificació des del moviment de terres fins a l'entrega de claus. Control total de terminis i costos."
+      },
+      "reformas-integrales-viviendas-locales": {
+        "title": "Reformes Integrals d'Habitatges i Locals",
+        "description": "Renovació completa d'espais interiors i exteriors, adaptant la teva propietat a les necessitats modernes."
+      },
+      "ampliaciones-redistribucion": {
+        "title": "Ampliacions i Redistribució",
+        "description": "Maximitzem el potencial de la teva propietat afegint metres quadrats o reconfigurant la distribució per a espais més diàfans."
+      },
+      "asesoramiento-materiales-construccion": {
+        "title": "Assessorament en Materials",
+        "description": "Assessorament expert per escollir materials sostenibles, resistents i que s'adaptin a la teva visió."
+      }
+    }
   },
   "piscinas": {
     "title": "Construcció de Piscines",
@@ -22,7 +40,25 @@
       "Construcció amb formigó projectat (gunitat).",
       "Instal·lació de sistemes de cloració salina i climatització.",
       "Servei de manteniment i reparació."
-    ]
+    ],
+    "subservices": {
+      "diseno-personalizado": {
+        "title": "Disseny Personalitzat de Piscines",
+        "description": "Creem piscines úniques que s'integren a la perfecció amb l'arquitectura de la teva llar i l'entorn natural."
+      },
+      "construccion-gunitado": {
+        "title": "Construcció amb Gunitat",
+        "description": "Utilitzem la tècnica del gunitat (formigó projectat) per garantir la màxima estanqueïtat i durabilitat geomètrica."
+      },
+      "sistemas-cloracion-salina": {
+        "title": "Sistemes de Cloració Salina i Climatització",
+        "description": "Gaudeix d'una aigua més sana amb cloració salina i allarga la temporada de bany amb l'ús de bombes de calor."
+      },
+      "mantenimiento-reparacion": {
+        "title": "Servei de Manteniment i Reparació",
+        "description": "Ens cuidem de la posta a punt, neteja i detecció de fuites per a que la teva piscina estigui sempre perfecta."
+      }
+    }
   },
   "reformas-de-interiores": {
     "title": "Reformes d'Interiors",
@@ -34,7 +70,25 @@
       "Instal·lació de lampisteria i electricitat noves.",
       "Muntatge de mobiliari de cuina i bany a mida.",
       "Instal·lació de plats de dutxa, mampares i sanitaris."
-    ]
+    ],
+    "subservices": {
+      "alicatados-pavimentos": {
+        "title": "Renovació d'Enrajolats i Paviments",
+        "description": "Substitució de revestiments ceràmics, microciment i terres de fusta per modernitzar l'estètica."
+      },
+      "instalaciones-fontaneria-electricidad": {
+        "title": "Instal·lacions Tècniques",
+        "description": "Renovació completa de les xarxes de subministrament d'aigua i electricitat sota normatives d'alta seguretat."
+      },
+      "mobiliario-medida": {
+        "title": "Mobiliari a Mida",
+        "description": "Disseny i muntatge de mobiliari a mida per a cuines i banys dissenyat per aprofitar cada centímetre."
+      },
+      "banos-sanitarios": {
+        "title": "Equipaments del Bany",
+        "description": "Instal·lació de plats de dutxa plans, mampares de disseny i tots els sanitaris necessaris."
+      }
+    }
   },
   "paramentos-verticales": {
     "title": "Paraments Verticals",
@@ -46,7 +100,25 @@
       "Sistemes d'Aïllament Tèrmic per l'Exterior (SATE).",
       "Reparació i rehabilitació de façanes.",
       "Pintura exterior i impermeabilització."
-    ]
+    ],
+    "subservices": {
+      "revestimientos-continuos": {
+        "title": "Revestiments Continus",
+        "description": "Aplicació de morters tècnics i decoratius per afavorir l'embelliment i resistència de les parets."
+      },
+      "aislamiento-sate": {
+        "title": "Aïllament SATE",
+        "description": "Sistema d'aïllament tèrmic a la part exterior per tal de reduir considerablement el consum energètic."
+      },
+      "rehabilitacion-fachadas": {
+        "title": "Rehabilitació de Façanes",
+        "description": "Millora de l'estètica exterior de l'edificació solucionant desperfectes importants per evitar patologies estructurals."
+      },
+      "pintura-impermeabilizacion-exterior": {
+        "title": "Pintura i Impermeabilització Exterior",
+        "description": "Aplicació de tractaments impermeabilitzants i pintures de primera línia per evitar filtracions d'aigua i humitats exteriors."
+      }
+    }
   },
   "electricidad": {
     "title": "Electricitat",
@@ -58,7 +130,25 @@
       "Actualització i reforma d'instal·lacions antigues.",
       "Butlletins elèctrics i certificacions.",
       "Instal·lació d'il·luminació LED de baix consum."
-    ]
+    ],
+    "subservices": {
+      "instalaciones-obra-nueva": {
+        "title": "Instal·lacions d'Obra Nova",
+        "description": "Disseny i execució de projectes elèctrics des de zero per cobrir tota la infraestructura necessària."
+      },
+      "actualizacion-reforma-electrica": {
+        "title": "Actualització i Reforma Elèctrica",
+        "description": "Substitució de tot el sistema elèctric antic per optimitzar la demanda d'energia adaptada a les normatives de seguretat vigents."
+      },
+      "boletines-certificaciones": {
+        "title": "Butlletins i Certificacions",
+        "description": "Emissió de butlletins i certificats elèctrics homologats complint amb les rigoroses garanties legals."
+      },
+      "iluminacion-led": {
+        "title": "Il·luminació Eficient LED",
+        "description": "Projectes basats en lluminària LED d'alt rendiment que milloren la sostenibilitat i disseny lumínic intern."
+      }
+    }
   },
   "carpinteria": {
     "title": "Fusteria de Fusta i Alumini",
@@ -70,7 +160,25 @@
       "Disseny i muntatge de tancaments, pèrgoles i estructures d'alumini.",
       "Instal·lació de portes de pas i d'entrada de fusta.",
       "Disseny i fabricació d'armaris, vestidors i mobiliari a mida de fusta."
-    ]
+    ],
+    "subservices": {
+      "ventanas-puertas-aluminio-pvc": {
+        "title": "Finestres i Portes d'Alumini / PVC",
+        "description": "Aïllament eficient i alta rendibilitat tèrmica amb portes i finestres de PVC i Alumini amb trencament de pont tèrmic."
+      },
+      "cerramientos-pergolas": {
+        "title": "Tancaments i Pèrgoles",
+        "description": "Estructures dissenyades per espaiar a l'exterior el teu habitatge de manera integrada a l'ambient que t'envolta."
+      },
+      "puertas-paso-entrada": {
+        "title": "Portes de Pas i Entrada",
+        "description": "Elecció, muntatge i canvi de portes fabricades amb qualitat suprema per l'accés a habitacions així com portes de seguretat."
+      },
+      "armarios-vestidores-medida": {
+        "title": "Armaris i Vestidors fets a Mida",
+        "description": "Personalització al detall de portes, prestatges, caixons, vestidors interiors segons preferències organitzatives."
+      }
+    }
   },
   "fontaneria": {
     "title": "Lampisteria Especialitzada",
@@ -82,7 +190,25 @@
       "Reparació de fuites i avaries.",
       "Instal·lació d'aixetes i sanitaris.",
       "Sistemes d'aigua calenta sanitària (termos, calderes)."
-    ]
+    ],
+    "subservices": {
+      "redes-fontaneria-desagues": {
+        "title": "Xarxes de Lampisteria i Desaigües",
+        "description": "Instal·lació i canalització de canonades de desaigües seguint la normativa sanitària requerida oficial."
+      },
+      "reparacion-fugas": {
+        "title": "Reparacions urgents i Fuites",
+        "description": "Ràpida reparació i intervenció respecte qualsevol trencament greu o petita fuita inoportuna que impedeixi un funcionament correcte."
+      },
+      "griferia-sanitarios": {
+        "title": "Instal·lació d'Aixetes i Sanitaris",
+        "description": "Realitzem el bon ajust de l'aixeta de disseny o model estàndard en conjunció amb sanitari preferit."
+      },
+      "agua-caliente-sanitaria": {
+        "title": "Aigua Calenta Sanitària (ACS)",
+        "description": "Disseny del subministrament tèrmic incloent bombes de calor i tot tipus d'aparells innovadors."
+      }
+    }
   },
   "pintura": {
     "title": "Pintura Professional",
@@ -94,7 +220,25 @@
       "Revestiments i pintures especials per a façanes exteriors.",
       "Allisat de parets i eliminació de gotelé.",
       "Tractament d'humitats i preparació de superfícies."
-    ]
+    ],
+    "subservices": {
+      "pintura-interior-decorativa": {
+        "title": "Pintura Interior i Decorativa",
+        "description": "Enfocament visual excel·lent des d'efectes senzills sense textures fins a autèntiques decoracions exclusives."
+      },
+      "pintura-fachadas": {
+        "title": "Pintura de Façanes",
+        "description": "Pintem parets exteriors atents a qualsevol canvi climàtic emprant revestiments capaços de contrarestar qualsevol condició meteorològica."
+      },
+      "alisado-paredes": {
+        "title": "Allisat de Parets",
+        "description": "Extracció del gotelé o qualsevol altre rugositat que ja va patir l'obsolescència d'algun cicle interiorístic previ."
+      },
+      "tratamiento-humedades": {
+        "title": "Tractament Anti-humitat",
+        "description": "Processaments per evitar conseqüències pitjors que provoqui un impacte negatiu tant en parets estructurals com estètic."
+      }
+    }
   },
   "impermeabilizacion": {
     "title": "Impermeabilització i Cobertes",
@@ -106,7 +250,25 @@
       "Reparació i manteniment de teulades.",
       "Aplicació de làmines asfàltiques, PVC, EPDM i membranes líquides.",
       "Aïllament tèrmic per a cobertes, millorant l'eficiència energètica."
-    ]
+    ],
+    "subservices": {
+      "cubiertas-planas-terrazas": {
+        "title": "Cobertes Planes i Terrasses",
+        "description": "Dissenyat per a resistir tot tipus d'elements que en transiti damunt gràcies a membranes altament especialitzades."
+      },
+      "reparacion-tejados": {
+        "title": "Reparació de Teulades",
+        "description": "Control de teules soltes, substitució i sanejament minuciós sobre l'estat danyat extern."
+      },
+      "laminas-membranas": {
+        "title": "Làmines i Membranes Especials",
+        "description": "Instal·lació de materials exclusius com el EPDM dissenyats expressament contra fortes humitats continuades."
+      },
+      "aislamiento-cubiertas": {
+        "title": "Aïllament per les Cobertes",
+        "description": "Integració de factors contrarestant fugues calorífiques mitjançant un reforçament constant de seguretat integral aïllant."
+      }
+    }
   },
   "cta": {
     "title": "A punt per començar el teu projecte de {serviceName}?",

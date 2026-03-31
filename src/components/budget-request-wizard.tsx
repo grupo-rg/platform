@@ -424,18 +424,6 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
     )
   }
 
-  if (isSubmitted && submissionResult?.budgetResult) {
-    return (
-      <ProvisionalBudgetView
-        data={getValues()}
-        lineItems={submissionResult.budgetResult.lineItems}
-        totalEstimated={submissionResult.budgetResult.totalEstimated}
-        costBreakdown={submissionResult.budgetResult.costBreakdown}
-        onRestart={handleRestart}
-      />
-    )
-  }
-
   if (isSubmitted) {
     return (
       <div className="text-center max-w-2xl mx-auto space-y-6">
@@ -448,9 +436,7 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
             <CardDescription className="text-lg">{t.budgetRequest.confirmation.description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <p className="text-muted-foreground">{t.budgetRequest.confirmation.noCostMessage}</p>
-
-            {/* AI Result section removed as we now use ProvisionalBudgetView */}
+            <p className="text-muted-foreground text-lg">He recopilado tus datos. Nuestro equipo generará el presupuesto y te contactará en breve.</p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
               <Button asChild>

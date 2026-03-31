@@ -13,8 +13,6 @@ const mockUser = {
   email: 'user@example.com'
 }
 
-export const dynamic = 'force-dynamic';
-
 export default async function DashboardPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const dict = await getDictionary(locale as any);

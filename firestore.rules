@@ -8,6 +8,11 @@ service cloud.firestore {
       allow create: if true;
     }
 
+    // Allow frontend client to write tracking analytics
+    match /analytics/{docId} {
+      allow write: if true;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

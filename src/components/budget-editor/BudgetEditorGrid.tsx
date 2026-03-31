@@ -19,7 +19,7 @@ import {
     Package,
     Hammer
 } from 'lucide-react';
-import { cn, formatMoneyEUR } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useState } from 'react';
 import {
     DropdownMenu,
@@ -151,7 +151,7 @@ const DraggableRow = ({ item, onUpdate, onRemove, onDuplicate, showGhostMode }: 
                 <div className="flex items-center gap-4">
                     {showGhostMode && item.originalState && (
                         <span className="text-xs text-slate-400 line-through font-mono">
-                            {formatMoneyEUR(item.originalState.quantity * item.originalState.unitPrice)}
+                            {formatCurrency(item.originalState.quantity * item.originalState.unitPrice)}
                         </span>
                     )}
 
@@ -196,6 +196,20 @@ const DraggableRow = ({ item, onUpdate, onRemove, onDuplicate, showGhostMode }: 
                                     <div className="absolute -top-3 -right-2 text-red-500 bg-red-100 rounded-full p-0.5" title="Precio no definido">
                                         <AlertTriangle className="w-3 h-3" />
                                     </div>
+                                )}
+                                {item.type === 'MATERIAL' && (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <div className="w-8 h-8 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center cursor-help">
+                                                    <Package className="w-4 h-4" />
+                                                </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Este es un material. Puedes buscarlo en el catálogo.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
                                 )}
                             </div>
                         </div>
@@ -389,7 +403,7 @@ const DraggableRow = ({ item, onUpdate, onRemove, onDuplicate, showGhostMode }: 
                         isRealCost={item.item.isRealCost}
                         note={item.item.note}
                         onBreakdownChange={(newBreakdown) => {
-                            const newUnitPrice = newBreakdown.reduce((acc, c) => acc + (c.total || 0), 0);
+                            const newUnitPrice = newBreakdown.reduce((acc, c) => acc + c.total, 0);
                             const quantity = item.item?.quantity || 1;
                             onUpdate(item.id, {
                                 item: {
@@ -494,7 +508,7 @@ const ChapterGroup = ({
 
                 <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-slate-500 mr-4">
-                        {formatMoneyEUR(items.reduce((acc, i) => acc + (i.item?.totalPrice || 0), 0))}
+                        {formatCurrency(items.reduce((acc, i) => acc + (i.item?.totalPrice || 0), 0))}
                     </span>
 
                     <DropdownMenu>

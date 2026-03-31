@@ -12,7 +12,8 @@ export async function getBudgetAction(id: string): Promise<Budget | null> {
             console.warn(`Budget not found: ${id}`);
             return null;
         }
-        return budget;
+        // Serialize deeply to remove Firestore Timestamps classes that crash Next.js Client Boundaries
+        return JSON.parse(JSON.stringify(budget));
     } catch (error) {
         console.error(`Error fetching budget ${id}:`, error);
         return null;

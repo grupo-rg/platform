@@ -2,7 +2,7 @@
 import 'dotenv/config';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
-import { ai, embeddingModel } from '@/backend/ai/core/config/genkit.config';
+import { ai, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
 
 const BATCH_SIZE = 50;
 const COLLECTION_NAME = 'price_book_items';

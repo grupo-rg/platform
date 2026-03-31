@@ -11,14 +11,26 @@ import {
     ScanEye,
     MoreVertical,
     Plus,
-    History
+    History,
+    Layers,
+    Wrench,
+    BookOpen,
+    Download,
+    Trash,
+    Settings2
 } from 'lucide-react';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
-// BudgetPDFDocument and pdf() are imported dynamically inside handleGeneratePdf to avoid SSR hydration errors
+import { Logo } from '@/components/logo';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import { BudgetDocument } from '@/components/pdf/BudgetDocument';
 import { EditableBudgetLineItem } from '@/types/budget-editor';
 import { BudgetCostBreakdown } from '@/backend/budget/domain/budget';
-import React from 'react';
-import { MaterialCatalogSearch } from './material-catalog-search';
+import React, { useState } from 'react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -27,11 +39,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { BookOpen } from "lucide-react";
-import { SemanticCatalogSidebar } from './SemanticCatalogSidebar';
-import { AssignLeadDialog } from './AssignLeadDialog';
-import { PersonalInfo } from '@/backend/lead/domain/lead';
 
 interface BudgetEditorToolbarProps {
     hasUnsavedChanges: boolean;
@@ -47,17 +54,32 @@ interface BudgetEditorToolbarProps {
     showGhostMode: boolean;
     onToggleGhostMode: () => void;
 
+    // Execution Mode
+    isExecutionOnly: boolean;
+    onToggleExecutionMode: () => void;
+
     // For PDF Generation
     clientName: string;
     items: EditableBudgetLineItem[];
     costBreakdown: BudgetCostBreakdown;
     budgetNumber: string;
     onAddItem: (item: any) => void;
-
-    // Lead assignment
-    currentLeadId?: string;
-    currentClientName?: string;
-    onAssignLead?: (leadId: string, clientSnapshot: PersonalInfo) => Promise<void>;
+    onPdfDownloaded?: () => void;
+    // New optional props for PDF config persistence
+    initialPdfMeta?: {
+        companyName?: string;
+        companyLogo?: string;
+        clientName?: string;
+        clientAddress?: string;
+        notes?: string;
+    };
+    onSavePdfSettings?: (meta: any) => Promise<void>;
+    isStandaloneMode?: boolean;
+    budgetConfig?: { marginGG: number; marginBI: number; tax: number; };
+    onUpdateConfig?: (config: { marginGG?: number; marginBI?: number; tax?: number; }) => void;
+    applyMarkup?: (scope: 'global' | 'chapter' | 'item', percentage: number, targetId?: string) => void;
+    isReadOnly?: boolean;
+    onOpenSummary?: () => void;
 }
 
 export const BudgetEditorToolbar = ({
@@ -71,16 +93,28 @@ export const BudgetEditorToolbar = ({
     lastSavedAt,
     showGhostMode,
     onToggleGhostMode,
+    isExecutionOnly,
+    onToggleExecutionMode,
     clientName,
     items,
     costBreakdown,
     budgetNumber,
     onAddItem,
-    currentLeadId,
-    currentClientName,
-    onAssignLead
+    isStandaloneMode = false,
+    budgetConfig,
+    onUpdateConfig,
+    applyMarkup,
+    isReadOnly,
+    onOpenSummary
 }: BudgetEditorToolbarProps) => {
     // Determine status text
+    const [isTracing, setIsTracing] = useState(false); // Added isTracing state
+
+    // RAG Validation: Check if there are any variable materials in the budget
+    const hasVariableCosts = React.useMemo(() => {
+        return items.some(item => (item as any).breakdown?.some((b: any) => b.is_variable === true));
+    }, [items]);
+
     const statusText = isSaving ? 'Guardando...' :
         hasUnsavedChanges ? 'Cambios sin guardar' :
             lastSavedAt ? `Guardado ${lastSavedAt.toLocaleTimeString()}` : 'Listo';
@@ -96,195 +130,95 @@ export const BudgetEditorToolbar = ({
         </span>
     );
 
-    const [isPdfModalOpen, setIsPdfModalOpen] = React.useState(false);
-    const [isGeneratingPdf, setIsGeneratingPdf] = React.useState(false);
-    const [pdfGenerationStep, setPdfGenerationStep] = React.useState<string | null>(null);
-
-    const handleGeneratePdf = async () => {
-        setIsGeneratingPdf(true);
-        setPdfGenerationStep("Preparando modelo de datos matemáticos...");
-        try {
-            // Give React a tick to update the UI "Generating..." state before freezing the main thread
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            setPdfGenerationStep("Montando el renderizador de páginas vectoriales...");
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Dynamic import to avoid SSR hydration errors
-            const { pdf } = await import('@react-pdf/renderer');
-            const { BudgetPDFDocument } = await import('./pdf/BudgetPDFDocument');
-
-            const docElement = (
-                <BudgetPDFDocument
-                    data={{
-                        projectName: `Presupuesto ${budgetNumber}`,
-                        clientName: clientName || currentClientName || 'Cliente No Asignado',
-                        date: new Date().toLocaleDateString('es-ES'),
-                        items: items,
-                        chapters: Array.from(new Set(items.map(i => i.chapter).filter(Boolean) as string[])),
-                        costBreakdown: costBreakdown
-                    }}
-                />
-            );
-
-            setPdfGenerationStep("Compilando arquitectura del archivo PDF (este paso toma unos segundos)...");
-            const asPdf = pdf();
-            asPdf.updateContainer(docElement);
-            // .toBlob() is the heaviest calculation and will occupy the thread
-            const blob = await asPdf.toBlob();
-
-            setPdfGenerationStep("¡Completado! Lanzando la descarga segura...");
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // Create a fake URL and click it
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Presupuesto-${budgetNumber}.pdf`;
-            a.click();
-            URL.revokeObjectURL(url);
-
-            setIsPdfModalOpen(false);
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-            // Optionally add a toast here if configured
-        } finally {
-            setIsGeneratingPdf(false);
-            setPdfGenerationStep(null);
-        }
-    };
-
     return (
         <>
             {/* TOP TOOLBAR (Adaptive) */}
             <div className="sticky top-0 z-50 bg-white dark:bg-zinc-950 border-b border-border px-4 py-3 flex justify-between items-center shadow-sm">
 
-                {/* LEFT: Status Indicator "Listo" */}
+                {/* LEFT: Branding (Demo Mode) & Status Indicator */}
                 <div className="flex items-center gap-4">
+                    {/* Only show logo in Demo mode (where we don't have the global Header) */}
+                    {isStandaloneMode && (
+                        <div className="flex items-center gap-2 pr-4 border-r border-slate-200 dark:border-white/10">
+                            <Logo className="h-6" width={78} height={24} />
+                        </div>
+                    )}
                     <StatusBadge />
                 </div>
 
                 {/* RIGHT: Actions */}
                 <div className="flex items-center gap-2">
-                    {/* Assign Lead Button */}
-                    {onAssignLead && (
-                        <AssignLeadDialog
-                            currentLeadId={currentLeadId}
-                            currentClientName={currentClientName}
-                            onAssignLead={onAssignLead}
-                        />
+
+                    {/* Execution Mode Toggle */}
+                    <Button
+                        disabled={!hasVariableCosts}
+                        variant={isExecutionOnly ? "secondary" : "outline"}
+                        size="sm"
+                        onClick={onToggleExecutionMode}
+                        className={cn(
+                            "hidden md:flex transition-colors shrink-0",
+                            !hasVariableCosts && "opacity-50 cursor-not-allowed",
+                            isExecutionOnly
+                                ? "bg-amber-100/50 hover:bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-900/30 dark:text-amber-500 dark:border-amber-800"
+                                : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
+                        )}
+                        title={!hasVariableCosts ? "Presupuesto extraído sin desgloses variables" : (isExecutionOnly ? "Mostrando: Sólo Ejecución (Sin materiales variables)" : "Mostrando: Presupuesto Completo")}
+                    >
+                        {isExecutionOnly ? <Wrench className="w-4 h-4 mr-2 text-amber-600" /> : <Layers className="w-4 h-4 mr-2 text-indigo-500" />}
+                        {isExecutionOnly ? 'Sólo Ejecución' : 'Completo'}
+                    </Button>
+
+                    {/* Mobile Menu */}
+                    {!isReadOnly && (
+                        <div className="md:hidden">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="icon" className="h-9 w-9 bg-white hover:bg-slate-50 border-slate-200 text-slate-700">
+                                        <MoreVertical className="w-4 h-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuLabel>Opciones</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onSelect={onToggleExecutionMode}>
+                                        {isExecutionOnly ? <Layers className="w-4 h-4 mr-2" /> : <Wrench className="w-4 h-4 mr-2" />} 
+                                        {isExecutionOnly ? 'Vista Completa' : 'Sólo Ejecución'}
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     )}
 
-                    {/* Library Button (Dialog) */}
-                    <Dialog>
-                        <DialogTrigger asChild>
-                            <Button variant="outline" className="hidden md:flex bg-white hover:bg-slate-50 border-slate-200 text-slate-700 gap-2">
-                                <BookOpen className="w-4 h-4" />
-                                Biblioteca
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 gap-0">
-                            <DialogHeader className="p-4 border-b pb-4">
-                                <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-                                    <BookOpen className="w-5 h-5" />
-                                    Biblioteca de Precios
-                                </DialogTitle>
-                            </DialogHeader>
-                            <div className="flex-1 overflow-hidden p-4 bg-slate-50/50">
-                                <SemanticCatalogSidebar onAddItem={(item) => {
-                                    onAddItem(item);
-                                    // Optional: Close dialog or show toast
-                                }} />
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-
-
-
-                    {/* Compare Button */}
-                    <Button
-                        variant={showGhostMode ? "secondary" : "outline"}
-                        size="sm"
-                        onClick={onToggleGhostMode}
-                        className={cn(
-                            "hidden md:flex bg-white hover:bg-slate-50 border-slate-200 text-slate-700",
-                            showGhostMode && "bg-indigo-50 text-indigo-700 border-indigo-200"
-                        )}
-                    >
-                        <ScanEye className="w-4 h-4 mr-2" />
-                        Comparar
-                    </Button>
-
-                    {/* PDF Export (Lazy Modal) */}
-                    <Dialog open={isPdfModalOpen} onOpenChange={setIsPdfModalOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="hidden md:flex bg-white hover:bg-slate-50 border-slate-200 text-slate-700">
-                                <FileDown className="w-4 h-4 mr-2" />
-                                Exportar PDF
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-md">
-                            <DialogHeader>
-                                <DialogTitle>Generando Documento PDF</DialogTitle>
-                                <DialogDescription>
-                                    Este proceso puede tardar unos segundos dependiendo del tamaño del presupuesto.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="flex flex-col gap-4 p-6 bg-slate-50 rounded-lg border border-slate-100 mt-2 text-center">
-                                <FileDown className="w-12 h-12 text-slate-300 mx-auto" />
-                                <Button
-                                    onClick={handleGeneratePdf}
-                                    disabled={isGeneratingPdf}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                >
-                                    {isGeneratingPdf ? (
-                                        <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Procesando Presupuesto...</>
-                                    ) : (
-                                        <><FileDown className="w-4 h-4 mr-2" /> Descargar Presupuesto Ahora</>
-                                    )}
-                                </Button>
-                                {isGeneratingPdf && pdfGenerationStep && (
-                                    <div className="text-xs font-mono text-slate-500 animate-pulse mt-2 p-2 bg-slate-100 rounded text-center">
-                                        &gt;_ {pdfGenerationStep}
-                                    </div>
-                                )}
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-
                     {/* Save Button (Primary Action) */}
-                    <Button
-                        onClick={onSave}
-                        disabled={isSaving}
-                        size="sm"
-                        className={cn(
-                            "min-w-[100px] shadow-sm transition-all font-medium",
-                            hasUnsavedChanges
-                                ? "bg-amber-500 hover:bg-amber-600 text-white"
-                                : "bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900"
-                        )}
-                    >
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : (hasUnsavedChanges ? <Save className="w-4 h-4 mr-2" /> : <Check className="w-4 h-4 mr-2" />)}
-                        {isSaving ? 'Guardando' : 'Guardar'}
-                    </Button>
+                    {!isReadOnly && (
+                        <Button
+                            onClick={onSave}
+                            disabled={isSaving}
+                            size="sm"
+                            className={cn(
+                                "min-w-[100px] shadow-sm transition-all font-medium",
+                                hasUnsavedChanges
+                                    ? "bg-amber-500 hover:bg-amber-600 text-white"
+                                    : "bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900"
+                            )}
+                        >
+                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : (hasUnsavedChanges ? <Save className="w-4 h-4 mr-2" /> : <Check className="w-4 h-4 mr-2" />)}
+                            {isSaving ? 'Guardando' : 'Guardar'}
+                        </Button>
+                    )}
                 </div>
             </div>
 
             {/* MOBILE STICKY BOTTOM BAR */}
             <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-zinc-950 border-t border-border z-50 flex gap-3 safe-area-pb">
                 <Button
-                    onClick={onSave}
-                    disabled={isSaving}
+                    onClick={onOpenSummary}
                     size="lg"
-                    className={cn(
-                        "flex-1 shadow-lg transition-all font-semibold",
-                        hasUnsavedChanges
-                            ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white"
-                            : "bg-primary text-primary-foreground"
-                    )}
+                    variant="outline"
+                    className="flex-1 shadow-lg transition-all font-semibold bg-zinc-900 border-transparent text-white dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
                 >
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : (hasUnsavedChanges ? <Save className="w-5 h-5 mr-2" /> : <Check className="w-5 h-5 mr-2" />)}
-                    {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+                    <Layers className="w-5 h-5 mr-2 opacity-80" />
+                    Resumen y Partidas
                 </Button>
             </div>
         </>

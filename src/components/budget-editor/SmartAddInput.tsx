@@ -13,19 +13,25 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface SmartAddInputProps {
     onAddItems: (items: EditableBudgetLineItem[]) => void;
     className?: string;
+    leadId?: string;
+    isReadOnly?: boolean;
 }
 
-export const SmartAddInput = ({ onAddItems, className }: SmartAddInputProps) => {
+export const SmartAddInput = ({ onAddItems, className, leadId, isReadOnly = false }: SmartAddInputProps) => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
 
+    if (isReadOnly) {
+        return null; // The user wants to hide them completely when read-only
+    }
+
     const handleSubmit = async () => {
-        if (!input.trim()) return;
+        if (!input.trim() || isReadOnly) return;
 
         setIsLoading(true);
         try {
-            const result = await smartAddAction(input);
+            const result = await smartAddAction(input, leadId);
 
             if (result.success && result.items) {
                 onAddItems(result.items);

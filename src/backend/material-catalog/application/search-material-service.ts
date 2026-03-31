@@ -1,7 +1,7 @@
 
 import { MaterialCatalogRepository } from '../domain/material-catalog-repository';
 import { MaterialItem } from '../domain/material-item';
-import { ai, embeddingModel } from '@/backend/ai/core/config/genkit.config';
+import { ai, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
 
 export class SearchMaterialService {
     constructor(

@@ -20,10 +20,14 @@ import { MaterialItem } from '@/backend/material-catalog/domain/material-item';
 interface MaterialCatalogSearchProps {
     onSelect: (item: MaterialItem) => void;
     trigger?: React.ReactNode;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
-export function MaterialCatalogSearch({ onSelect, trigger }: MaterialCatalogSearchProps) {
-    const [open, setOpen] = React.useState(false);
+export function MaterialCatalogSearch({ onSelect, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: MaterialCatalogSearchProps) {
+    const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+    const open = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
+    const setOpen = setControlledOpen || setUncontrolledOpen;
     const [query, setQuery] = React.useState('');
     const [loading, setLoading] = React.useState(false);
     const [results, setResults] = React.useState<MaterialItem[]>([]);
@@ -47,14 +51,16 @@ export function MaterialCatalogSearch({ onSelect, trigger }: MaterialCatalogSear
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                {trigger || (
-                    <Button variant="outline">
-                        <Package className="mr-2 h-4 w-4" />
-                        Buscar Material
-                    </Button>
-                )}
-            </DialogTrigger>
+            {controlledOpen === undefined && (
+                <DialogTrigger asChild>
+                    {trigger || (
+                        <Button variant="outline">
+                            <Package className="mr-2 h-4 w-4" />
+                            Buscar Material
+                        </Button>
+                    )}
+                </DialogTrigger>
+            )}
             <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Catálogo de Materiales (Obramat)</DialogTitle>

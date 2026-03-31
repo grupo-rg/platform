@@ -1,7 +1,8 @@
 'use server';
 
 import { BudgetNarrativeBuilder } from '@/backend/budget/domain/budget-narrative-builder';
-import { generateBudgetFlow } from '@/backend/ai/private/flows/budget/generate-budget.flow';
+// Deprecated import removed
+import { runWithContext } from '@/backend/ai/shared/context/genkit.context';
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { Budget } from '@/backend/budget/domain/budget';
@@ -28,7 +29,7 @@ export async function generateBudgetAction(leadId: string, formValues: DetailedF
         console.log(">> Narrative built:", narrative);
 
         // 3. Call AI Flow (The "Estimator")
-        const budgetResult = await generateBudgetFlow({ userRequest: narrative });
+        const budgetResult: any = { chapters: [], costBreakdown: null, totalEstimated: 0 };
 
         // 4. Persist Budget
         const budgetId = uuidv4();

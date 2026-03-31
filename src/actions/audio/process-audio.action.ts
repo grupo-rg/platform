@@ -1,6 +1,6 @@
 'use server';
 
-import { transcribeAudioFlow } from '@/backend/ai/public/flows/transcribe-audio.flow';
+import { transcribeAudioFlow } from '@/backend/ai/private-core/flows/transcribe-audio.flow';
 
 export async function processAudioAction(formData: FormData) {
     try {

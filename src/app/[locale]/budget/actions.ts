@@ -77,28 +77,7 @@ export async function submitBudgetRequest(data: DetailedFormValues): Promise<Sub
         console.log(narrative);
         console.log('----------------------------------');
 
-        // 4. Call AI Flow
-        // Calls the orchestrator: Extraction -> Search -> Pricing
-        // Wrap with Genkit Context to propagate Auth/Session
-        const budgetResult = await runWithContext({
-            userId,
-            role: userRole,
-            sessionId: 'session-' + Date.now(),
-            traceId: randomUUID()
-        }, async () => {
-            // Audit Start
-            await auditLogger.log({
-                action: 'generate_budget_start',
-                userId,
-                details: { narrativeShort: narrative.substring(0, 100) },
-                status: 'success'
-            });
-
-            const result = await generateBudgetFlow({ userRequest: narrative });
-            return result;
-        });
-
-        // 5. Persist Budget
+        // 4. Persist Budget (Skipping AI generation as per new workflow)
         const budgetId = generateId();
 
         // Create Client Snapshot
@@ -111,40 +90,29 @@ export async function submitBudgetRequest(data: DetailedFormValues): Promise<Sub
 
         const newBudget: Budget = {
             id: budgetId,
-            leadId: generateId(), // TODO: Properly create/link Lead entity in a separate step or here
+            leadId: generateId(),
             clientSnapshot,
-            status: 'draft', // Initial status
+            status: 'draft', // Initial status, ready for admin to trigger AI
             createdAt: new Date(),
             updatedAt: new Date(),
             version: 1,
-            specs, // Use the mapped specs
-            chapters: (budgetResult as any).chapters?.map((c: any) => ({
-                id: c.id || generateId(),
-                name: c.name || "Partidas",
-                order: c.order || 0,
-                items: c.items.map((i: any) => ({ ...i, id: generateId(), type: 'PARTIDA' })),
-                totalPrice: c.totalPrice || 0
-            })) || [{
+            specs,
+            chapters: [{
                 id: generateId(),
-                name: "Presupuesto Base",
+                name: "Presupuesto Base (A generar por IA)",
                 order: 0,
-                items: (budgetResult as any).lineItems?.map((item: any) => ({
-                    ...item,
-                    type: 'PARTIDA',
-                    id: generateId(),
-                    isEditing: false
-                })) || [],
-                totalPrice: budgetResult.totalEstimated
+                items: [],
+                totalPrice: 0
             }],
-            costBreakdown: budgetResult.costBreakdown || {
+            costBreakdown: {
                 materialExecutionPrice: 0,
                 overheadExpenses: 0,
                 industrialBenefit: 0,
                 tax: 0,
                 globalAdjustment: 0,
-                total: budgetResult.totalEstimated
+                total: 0
             },
-            totalEstimated: budgetResult.totalEstimated
+            totalEstimated: 0
         };
 
         await budgetRepository.save(newBudget);

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import * as React from 'react';
 import { Link } from '@/i18n/navigation';
@@ -6,8 +6,11 @@ import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { services } from '@/lib/services';
 import { ChevronDown, ArrowRight } from 'lucide-react';
+import { useLocale } from 'next-intl';
+import { getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
 
 export function MegaMenu({ t }: { t: any }) {
+    const locale = useLocale();
     const [isOpen, setIsOpen] = React.useState(false);
     const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -64,8 +67,8 @@ export function MegaMenu({ t }: { t: any }) {
                                                     href={{
                                                         pathname: '/services/[category]/[subcategory]',
                                                         params: {
-                                                            category: service.id,
-                                                            subcategory: service.subservices?.[0]?.id || 'general'
+                                                            category: getTranslatedCategorySlug(service.id, locale),
+                                                            subcategory: getTranslatedSubcategorySlug(service.subservices?.[0]?.id || 'general', locale)
                                                         }
                                                     }}
                                                     onClick={() => setIsOpen(false)}

@@ -1,6 +1,6 @@
 'use server';
 
-import { ai, embeddingModel } from '@/backend/ai/core/config/genkit.config';
+import { ai, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
 import { FirestorePriceBookRepository } from '@/backend/price-book/infrastructure/firestore-price-book-repository';
 import { FirestorePendingPriceItemRepository } from '@/backend/budget/infrastructure/firestore-pending-item.repository';
 import { PendingPriceItem } from '@/backend/budget/domain/pending-price-item';
@@ -41,7 +41,7 @@ export async function approvePendingItemAction(input: ApproveItemInput) {
             priceTotal: input.finalPrice,
             priceLabor: 0, // Default breakdown
             priceMaterial: input.finalPrice,
-            year: 2024,
+            year: 2025,
             embedding: embedding,
             searchKeywords: input.finalDescription.toLowerCase().split(' '),
             createdAt: new Date()

@@ -263,5 +263,350 @@
         "sidebarStep2Title": "Propuesta Personalizada",
         "sidebarStep2Desc": "Diseño y presupuesto a tu medida.",
         "cta": "Ver más proyectos"
+    },
+    "basis": {
+        "hero": {
+            "eyebrow": "AI-First Custom Software",
+            "titlePart1": "Reduce tus horas de presupuesto a",
+            "titlePart2": "15 minutos exactos.",
+            "description": "El generador AI-First que automatiza cotizaciones complejas, certificaciones y contratos a tu medida. Deja de perder rentabilidad por gestionar obras a ciegas.",
+            "ctaPrimary": "Probar Generador Gratis",
+            "ctaSecondary": "Agendar Evaluación Técnica"
+        },
+        "wizard": {
+            "title": "Tu próximo presupuesto, en piloto automático.",
+            "description": "Dile a Basis qué necesitas presupuestar. Nuestra IA estructura partidas detalladas y cruza precios de mercado en segundos.",
+            "examples": {
+                "kitchen": "Reforma Integral de Cocina",
+                "roof": "Impermeabilización de Cubierta"
+            },
+            "placeholder": "Ej: Tengo que presupuestar un baño en Palma centro, calidades medias, plato de ducha de resina, fontanería multicapa nueva...",
+            "analyze": "Analizador semántico activado",
+            "generateBtn": "Generar Presupuesto",
+            "loadingTitle": "Extrayendo partidas...",
+            "loadingDesc": "Cruzando mermas, rendimientos y bases de precios.",
+            "proposalTitle": "Resumen de Propuesta",
+            "proposalDesc": "Estimación automática de IA",
+            "estimatedBudget": "Presupuesto Estimado",
+            "readyTitle": "¡Tu desglose técnico está listo!",
+            "readyDesc": "Hemos redactado 14 partidas detalladas completas. ¿A qué correo te enviamos el PDF profesional listo para enseñar a tu cliente?",
+            "emailPlaceholder": "Tu email...",
+            "sendBtn": "Enviarme PDF",
+            "successTitle": "PDF enviado con éxito.",
+            "successDesc": "Este generador usa medias. ¿Te imaginas hacer esto con tus tarifas y tu margen real?",
+            "upsellTitle": "Con Basis Core A Medida:",
+            "upsellFeatures": [
+                "Integración de tus propios Excels o tarifas en PDF.",
+                "Paneles de desviación de costes en tiempo real.",
+                "Facturas y certificaciones auto-generadas."
+            ],
+            "demoBtn": "Agendar Demo A Medida"
+        },
+        "painPoints": {
+            "titlePart1": "Gestionar a ciegas te cuesta ",
+            "titleHighlight": "decenas de miles",
+            "titlePart3": " de euros al año.",
+            "description": "La factura más cara no es el material básico. Es el tiempo perdido en tareas manuales y la falta de visibilidad.",
+            "items": [
+                {
+                    "title": "Desvíos de Presupuesto Ocultos",
+                    "description": "Descubres que has perdido dinero en la obra en la última certificación, cuando la pérdida ya es irremediable."
+                },
+                {
+                    "title": "Pérdida del Fin de Semana",
+                    "description": "Pasar el domingo cruzando Excels, facturas de almacén y partes de horas del equipo."
+                },
+                {
+                    "title": "Caos en la Comunicación",
+                    "description": "Archivos PDF por WhatsApp, correos perdidos de subcontratas y llamadas comerciales sin presupuesto."
+                },
+                {
+                    "title": "Riesgos en Certificaciones",
+                    "description": "Facturar por debajo del avance real por miedo a equivocarse, afectando a tu flujo de caja."
+                }
+            ]
+        },
+        "benefits": {
+            "title": "El fin del papeleo.<br />El control absoluto sobre tus obras.",
+            "description": "Basis es el motor central que unifica ventas, control económico y ejecución a medida de tu rentabilidad.",
+            "items": [
+                {
+                    "title": "Tu software A Medida. En 4 semanas.",
+                    "description": "Adaptamos la IA de Basis a tus procesos, integrando tus propios Excels históricos y flujos de trabajo.",
+                    "features": [
+                        "Desarrollo Core + Capas Personalizadas",
+                        "Sin curvas de aprendizaje imposibles para tu equipo",
+                        "Conexión con tus bancos y almacenes habituales"
+                    ],
+                    "cta": "Quiero evaluar mi desarrollo a medida"
+                },
+                {
+                    "title": "Cierra obras 10x más rápido asegurando tu margen.",
+                    "description": "Nuestra IA lee tus PDFs de tarifas, entiende el lenguaje coloquial del sector y redacta presupuestos en minutos.",
+                    "features": [
+                        "Búsqueda semántica instantánea de partidas",
+                        "Autocompletado de rendimientos y horas",
+                        "Exportación a PDF con un solo clic"
+                    ],
+                    "cta": "Automatizar mis presupuestos con IA"
+                },
+                {
+                    "title": "Gobierna tu ejecución: Detecta desvíos el día 1.",
+                    "description": "El sistema cruza cada albarán y hora imputada contra el presupuesto original, restando saldo de su partida al instante.",
+                    "features": [
+                        "Alertas semafóricas de rentabilidad en tiempo real",
+                        "Generación automática de Certificaciones a Origen",
+                        "Control documental de subcontratas integrado"
+                    ],
+                    "cta": "Quiero ver el panel de control de obras"
+                }
+            ]
+        },
+        "testimonials": {
+            "title": "No te fíes de nuestro algoritmo.",
+            "description": "Pregúntale a los que ya han recuperado su margen de beneficio comercial.",
+            "quote": "Antes pasábamos el fin de semana haciendo certificaciones a ojo. Ahora el encargado sube las horas desde el móvil y el lunes la factura está generada sin perder rentabilidad.",
+            "authorName": "Javier Martínez",
+            "authorRole": "Socio Director, VM Plus",
+            "stats": [
+                {
+                    "value": "98%",
+                    "label": "Precisión en Presupuestos"
+                },
+                {
+                    "value": "-12h",
+                    "label": "Admin a la semana"
+                },
+                {
+                    "value": "+14%",
+                    "label": "Control de Margen"
+                },
+                {
+                    "value": "0",
+                    "label": "Excels Perdidos"
+                }
+            ]
+        },
+        "cta": {
+            "title": "Encuentra la fuga de dinero <br /> en tus obras.",
+            "description": "Agenda una Evaluación Técnica de 30 minutos. Sin PowerPoints de venta. Subimos una tarifa tuya a la plataforma y automatizamos un presupuesto real durante la llamada.",
+            "btnPrimary": "Agendar Evaluación Técnica Gratuita",
+            "features": [
+                "Sin compromisos vinculantes",
+                "Desarrollos para Pymes, no multinacionales",
+                "Demo 100% práctica"
+            ],
+            "note": "⏳ Nota: Solo trabajamos con el onboarding de **3 nuevas constructoras al mes** para garantizar excelencia."
+        },
+        "agenda": {
+            "badge": "Demo Personalizada",
+            "titleHighlight": "Gratuita",
+            "title": "Reserva Tu Consulta ",
+            "description": "30 minutos con un especialista en construcción digital. Te enseñamos cómo Basis se integra en tu flujo de trabajo real.",
+            "calendar": {
+                "months": [
+                    "Enero",
+                    "Febrero",
+                    "Marzo",
+                    "Abril",
+                    "Mayo",
+                    "Junio",
+                    "Julio",
+                    "Agosto",
+                    "Septiembre",
+                    "Octubre",
+                    "Noviembre",
+                    "Diciembre"
+                ],
+                "days": [
+                    "Lun",
+                    "Mar",
+                    "Mié",
+                    "Jue",
+                    "Vie",
+                    "Sáb",
+                    "Dom"
+                ],
+                "availableTime": "Horarios Disponibles"
+            },
+            "form": {
+                "title": "Tus Datos",
+                "name": "Nombre Completo",
+                "namePlaceholder": "Juan Pérez",
+                "email": "Email",
+                "emailPlaceholder": "juan@empresa.com",
+                "phone": "Teléfono",
+                "phoneOptional": "(opcional)",
+                "phonePlaceholder": "+34 600 000 000",
+                "submit": "Continuar",
+                "loading": "Cargando...",
+                "privacy": " Sin compromiso. Cancelable en cualquier momento.",
+                "summaryText": "30 min · Videollamada"
+            },
+            "verification": {
+                "title": "Verificación",
+                "subtitle": "Hemos enviado un código a ",
+                "verifying": "Verificando..."
+            },
+            "success": {
+                "title": "¡Reunión Confirmada!",
+                "message": "Te enviaremos un email de confirmación con el enlace de la videollamada a "
+            },
+            "errors": {
+                "process": "Error al procesar la solicitud.",
+                "invalidCode": "Código incorrecto.",
+                "confirmation": "Error al confirmar la reserva."
+            }
+        },
+        "floatingTrigger": {
+            "desktopTitle": "¿Hablar con Basis AI?",
+            "desktopSubtitle": "Automatiza tu presupuesto en segundos.",
+            "mobileTitle": "¿Hablar con Basis AI?",
+            "mobileSubtitle": "Cotiza tu obra en segundos."
+        },
+        "profiling": {
+            "step1": {
+                "title": "¿Qué proceso te quita más tiempo a la semana?",
+                "subtitle": "Ayudanos a personalizar tu experiencia enfocándonos en lo importante.",
+                "options": {
+                    "budgeting": "Presupuestar y buscar precios",
+                    "costControl": "Control de desviaciones y márgenes",
+                    "certifications": "Cuadrar horas y certificaciones"
+                }
+            },
+            "step2": {
+                "title1": "¿Cuántas obras gestionáis a la vez?",
+                "options1": {
+                    "1-3": {
+                        "label": "1 – 3 obras",
+                        "desc": "Autónomo / Micro"
+                    },
+                    "4-10": {
+                        "label": "4 – 10 obras",
+                        "desc": "Pyme"
+                    },
+                    "10+": {
+                        "label": "+10 obras",
+                        "desc": "Constructora"
+                    }
+                },
+                "title2": "¿Cuál es tu rol?",
+                "options2": {
+                    "owner": "Gerente",
+                    "projectManager": "Dir. de Obra",
+                    "admin": "Administración",
+                    "surveyor": "Aparejador"
+                }
+            },
+            "step3": {
+                "title1": "¿Cuánto gastas al año en aparejadores o gestión técnica?",
+                "options1": {
+                    "<5k": "Menos de 5k €",
+                    "<10k": "Menos de 10k €",
+                    "10-30k": "De 10k a 30k €",
+                    "30-60k": "De 30k a 60k €",
+                    "60k+": "Más de 60k €"
+                },
+                "title2": "¿Cuántas horas semanales dedicas a trabajo manual (Excel, papel, WhatsApp)?",
+                "options2": {
+                    "<5h": "Menos de 5h",
+                    "5-15h": "5 - 15 horas",
+                    "15-30h": "15 - 30 horas",
+                    "30h+": "+30 horas"
+                }
+            },
+            "step4": {
+                "title": "Último paso",
+                "subtitle": "Datos básicos de tu empresa.",
+                "companyNameLabel": "¿Cómo se llama tu empresa?",
+                "companyNamePlaceholder": "Escribe el nombre de tu empresa...",
+                "companySizeLabel": "Tamaño de empresa (Número de empleados)",
+                "companySizeOptions": {
+                    "solo": "Solo 1",
+                    "2-5": "2-5",
+                    "6-15": "6-15",
+                    "16-50": "16-50",
+                    "50+": "50+"
+                },
+                "stackLabel": "¿Desde qué herramientas planeas migrar?",
+                "stackOptions": {
+                    "excel": "Excel / Word",
+                    "presto": "Presto / Arquímedes",
+                    "otherErp": "Otro ERP (Procore, Holded...)"
+                },
+                "webLabel": "Pagina Web (Opcional)",
+                "webPlaceholder": "Ej: www.tuempresa.com",
+                "noWebLabel": "No tengo web por ahora"
+            },
+            "common": {
+                "stepIndicator": "Paso",
+                "of": "de",
+                "next": "Siguiente",
+                "errorCompleting": "Por favor, completa todos los campos.",
+                "unknownError": "Error desconocido"
+            }
+        },
+        "wizardChat": {
+            "header": {
+                "title": "Arquitecto IA",
+                "subtitle": "Asistente Inteligente",
+                "clearTooltip": "Borrar conversación y empezar de nuevo"
+            },
+            "emptyState": {
+                "title": "¿En qué puedo ayudarte hoy?",
+                "subtitle": "Puedo ayudarte a estimar costos, definir materiales o planificar tu reforma integral.",
+                "suggestions": [
+                    {
+                        "title": "Reforma de cocina",
+                        "text": "Quiero reformar la cocina completa, con cambio de muebles y electrodomésticos."
+                    },
+                    {
+                        "title": "Baño completo",
+                        "text": "Cambio de bañera por plato de ducha, alicatado y sanitarios nuevos."
+                    },
+                    {
+                        "title": "Reforma integral",
+                        "text": "Presupuesto para reformar un piso completo de 90m2."
+                    },
+                    {
+                        "title": "Suelos y pintura",
+                        "text": "Necesito cambiar el suelo a tarima flotante y pintar todo el piso liso."
+                    }
+                ]
+            },
+            "input": {
+                "placeholder": "Describe tu proyecto...",
+                "analyzingDocs": "Analizando documentos... esto puede tardar unos segundos 🧠",
+                "transcribing": "Transcribiendo audio...",
+                "recordingInfo": "Grabando...",
+                "keyboardHint": "Presiona Enter para enviar. Shift + Enter para línea nueva.",
+                "analyzingText": "Analizando..."
+            },
+            "panel": {
+                "title": "Datos del Proyecto",
+                "status": "En curso",
+                "completed": "Completado",
+                "deepGenTitle": "Generación Profunda",
+                "deepGenDesc": "Desglosan por capítulos y partidas (más lento)."
+            },
+            "progress": {
+                "generatingMsg": "(Generando presupuesto detallado...)",
+                "extracting": "Extrayendo partidas...",
+                "searching": "Buscando coincidencias...",
+                "calculating": "Calculando totales...",
+                "generateBtn": "Generar Presupuesto"
+            },
+            "pdfDownloadCard": {
+                "title": "Presupuesto Creado",
+                "subtitle": "Tu presupuesto se ha generado y descargado correctamente.",
+                "nextStep": "¿Quieres automatizar esto o tener el asistente integrado?",
+                "benefits": "Nuestra plataforma te permite invitar a subcontratistas, firmar digitalmente y conectar tu obra con precios reales.",
+                "button": "Planifica Tu Obra"
+            },
+            "errors": {
+                "resetConfirm": "¿Estás seguro de que quieres borrar la conversación? Esto no se puede deshacer.",
+                "generateError": "No se pudo generar el presupuesto. "
+            }
+        }
     }
 }

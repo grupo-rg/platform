@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { sendQuickQuoteAction } from "@/actions/budget/send-quick-quote.action";
 import { convertToFullBudgetAction } from "@/actions/budget/convert-to-full.action";
 import { Loader2, Send, FileCode, CheckCircle2 } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 interface BudgetRequestViewerProps {
     budget: Budget;
@@ -301,7 +302,7 @@ export function BudgetRequestViewer({ budget, isAdmin = false }: BudgetRequestVi
                                             Presupuesto Enviado
                                         </div>
                                         <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                                            {budget.quickQuote.price.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                            {formatCurrency(budget.quickQuote.price)}
                                         </div>
                                         <div className="text-sm text-slate-600 dark:text-slate-300 bg-white dark:bg-black/20 p-2 rounded border border-green-200/50">
                                             &quot;{budget.quickQuote.message}&quot;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import { useWidgetContext } from '@/context/budget-widget-context';
 
@@ -8,64 +8,171 @@ export type Message = {
     content: string;
     createdAt: Date;
     attachments?: string[];
+    extractedInfo?: string[];
 };
 
-export type WizardState = 'idle' | 'listening' | 'processing' | 'generating' | 'review';
+export type ConversationThread = {
+    id: string;
+    title: string;
+    updatedAt: string;
+    status: string;
+};
 
-export const useBudgetWizard = (mode: 'public' | 'private' = 'public') => {
+export type WizardState = 'idle' | 'listening' | 'uploading' | 'processing' | 'processing_pdf' | 'generating' | 'review' | 'generated';
+
+export const useBudgetWizard = (isAdmin: boolean = false) => {
     const { leadId } = useWidgetContext();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [state, setState] = useState<WizardState>('idle');
     const [requirements, setRequirements] = useState<Partial<BudgetRequirement>>({});
+
+    // Multi-chat State
+    const [conversations, setConversations] = useState<ConversationThread[]>([]);
     const [conversationId, setConversationId] = useState<string | null>(null);
-    const hasLoadedRef = useRef(false);
+    const [isLoadingChats, setIsLoadingChats] = useState(false);
 
-    // Load Conversation History
+    // We use a generic 'admin-user' ID for now, as auth is out of scope for the wizard component itself.
+    const effectiveUserId = isAdmin ? 'admin-user' : (leadId || 'unknown-lead');
+
+    // 1. Initial Load
     useEffect(() => {
-        if (!leadId || hasLoadedRef.current) return;
+        if (!isAdmin && effectiveUserId === 'unknown-lead') return;
 
-        const loadHistory = async () => {
-            try {
+        loadConversations();
+    }, [isAdmin, effectiveUserId]);
+
+    const loadConversations = async () => {
+        setIsLoadingChats(true);
+        try {
+            if (isAdmin) {
+                // Admin Mode: Load all thread history
+                const { getAdminConversationsAction } = await import('@/actions/chat/get-admin-conversations.action');
+                const result = await getAdminConversationsAction(effectiveUserId);
+
+                if (result.success && result.conversations && result.conversations.length > 0) {
+                    setConversations(result.conversations);
+                    switchConversation(result.conversations[0].id);
+                }
+            } else {
+                // Lead Mode: Just load the default conversation for this lead
                 const { getConversationAction } = await import('@/actions/chat/get-conversation.action');
-                const result = await getConversationAction(leadId);
+                const result = await getConversationAction(effectiveUserId);
 
                 if (result.success && result.messages) {
                     setConversationId(result.conversationId || null);
-
                     if (result.messages.length > 0) {
-                        const history = result.messages.map((m: any) => ({
+                        setMessages(result.messages.map((m: any) => ({
                             id: m.id,
                             role: m.role,
                             content: m.content,
                             createdAt: new Date(m.createdAt),
-                            attachments: m.attachments
-                        }));
-                        setMessages(history);
-                    } else {
-                        // Set default welcome message if no history
-                        setMessages([{
-                            id: 'welcome',
-                            role: 'assistant',
-                            content: "Hola, soy tu arquitecto virtual. Cuéntame, ¿qué proyecto de reforma tienes en mente? Puedes enviarme audios, fotos o planos.",
-                            createdAt: new Date(),
-                        }]);
+                            attachments: (m.attachments || []).map((a: any) => typeof a === 'string' ? a : a.url)
+                        })));
                     }
                 }
-            } catch (error) {
-                console.error("Failed to load conversation:", error);
-            } finally {
-                hasLoadedRef.current = true;
             }
-        };
+        } catch (error) {
+            console.error("Failed to load conversations:", error);
+        } finally {
+            setIsLoadingChats(false);
+        }
+    };
 
-        loadHistory();
-    }, [leadId]);
+    const switchConversation = async (id: string | null) => {
+        setConversationId(id);
+        setMessages([]);
+        setRequirements({});
+        setState('idle');
 
-    const sendMessage = async (text: string, attachments: string[] = [], base64Files?: string[], llmTextOverride?: string) => {
-        if ((!text.trim() && attachments.length === 0 && (!base64Files || base64Files.length === 0)) || !conversationId || !leadId) return;
+        if (!id) return;
 
-        // Optimistic Update
+        try {
+            // Re-use the existing action to get messages by conversationId, but 
+            // since getConversationAction expects leadId, we have an architecture mismatch.
+            // Wait, getConversationAction expects leadId, but internally it uses GetOrCreateConversationUseCase.
+            // We need an action to get specifically the messages for a known conversationId.
+            // Let's import the specific usecase logic inline or via action later. 
+            // For now, let's load it from getConversationHistory action if it exists.
+            const { getConversationHistoryAction } = await import('@/actions/chat/get-conversation-history.action');
+            const result = await getConversationHistoryAction(id);
+
+            if (result.success && result.messages) {
+                setMessages(result.messages.map((m: any) => ({
+                    id: m.id,
+                    role: m.role,
+                    content: m.content,
+                    createdAt: new Date(m.createdAt),
+                    attachments: (m.attachments || []).map((a: any) => typeof a === 'string' ? a : a.url)
+                })));
+            }
+        } catch (error) {
+            console.error("Error switching conversation:", error);
+        }
+    };
+
+    const startNewConversation = async () => {
+        if (!isAdmin) return;
+        setIsLoadingChats(true);
+        try {
+            const { createAdminConversationAction } = await import('@/actions/chat/create-admin-conversation.action');
+            const result = await createAdminConversationAction(effectiveUserId);
+            if (result.success && result.conversationId) {
+                // Refresh list and switch to new
+                await loadConversations();
+                switchConversation(result.conversationId);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsLoadingChats(false);
+        }
+    };
+
+    const deleteConversation = async (id: string) => {
+        if (!isAdmin) return;
+        try {
+            const { deleteAdminConversationAction } = await import('@/actions/chat/delete-admin-conversation.action');
+            await deleteAdminConversationAction(id);
+            if (conversationId === id) {
+                setConversationId(null);
+                setMessages([]);
+                setRequirements({});
+            }
+            // remove from state
+            setConversations(prev => prev.filter(c => c.id !== id));
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const resetConversation = async () => {
+        if (!conversationId) {
+            setMessages([]);
+            setRequirements({});
+            setState('idle');
+            return;
+        }
+        
+        try {
+            const { archiveConversationAction } = await import('@/actions/chat/archive-conversation.action');
+            await archiveConversationAction(conversationId);
+            setConversationId(null);
+            setMessages([]);
+            setRequirements({});
+            setState('idle');
+            
+            // Re-fetch to initialize a completely clean new chat
+            await loadConversations();
+        } catch (e) {
+            console.error("Failed to reset conversation", e);
+        }
+    };
+
+
+    const sendMessage = async (text: string, attachments: string[] = [], llmTextOverride?: string) => {
+        if ((!text.trim() && attachments.length === 0) || !conversationId || state === 'generated') return;
+
         const tempId = Date.now().toString();
         const userMsg: Message = {
             id: tempId,
@@ -77,34 +184,35 @@ export const useBudgetWizard = (mode: 'public' | 'private' = 'public') => {
 
         setMessages(prev => [...prev, userMsg]);
         setInput('');
-        setState('processing');
+        setState(attachments.length > 0 ? 'processing_pdf' : 'processing');
 
         try {
             // 1. Persist User Message
             const { sendMessageAction } = await import('@/actions/chat/send-message.action');
-            await sendMessageAction(conversationId, text, 'lead', leadId, attachments);
+            await sendMessageAction(
+                conversationId,
+                text,
+                isAdmin ? 'admin' : 'lead',
+                effectiveUserId,
+                attachments
+            );
 
             // 2. Process AI Response
-            await processAIResponse(llmTextOverride || text, base64Files);
+            await processAIResponse(llmTextOverride || text, attachments);
 
         } catch (error) {
             console.error("Failed to send message:", error);
             setState('idle');
-            // Revert optimistic update? Or show error state on message
         }
     };
 
     const processHiddenMessage = async (context: string) => {
-        if (!conversationId || !leadId) return;
+        if (!conversationId) return;
         setState('processing');
-        // Hidden messages are system events or context injections, 
-        // strictly speaking they might not need to be 'user' messages in the chat history visible to user,
-        // but for the AI context they are valid.
-        // For persistence, we might want to save them as 'system' messages or just pass them to AI flow.
         await processAIResponse(context, [], true);
     };
 
-    const processAIResponse = async (text: string, base64Files?: string[], isHidden: boolean = false) => {
+    const processAIResponse = async (text: string, attachments: string[] = [], isHidden: boolean = false) => {
         if (!conversationId) return;
 
         try {
@@ -114,36 +222,54 @@ export const useBudgetWizard = (mode: 'public' | 'private' = 'public') => {
             }));
 
             let result;
-
-            if (mode === 'public') {
-                const { processPublicChatAction } = await import('@/actions/chat/process-public-chat.action');
-                result = await processPublicChatAction(text, history, base64Files, leadId ?? undefined);
+            if (isAdmin) {
+                const { processAdminMessageAction } = await import('@/actions/budget/process-admin-message.action');
+                result = await processAdminMessageAction(conversationId, text, history, requirements, attachments);
             } else {
-                const { processPrivateChatAction } = await import('@/actions/chat/process-private-chat.action');
-                result = await processPrivateChatAction(text, history, base64Files, leadId ?? undefined);
+                const { processClientMessageAction } = await import('@/actions/budget/process-client-message.action');
+                result = await processClientMessageAction(effectiveUserId, text, history, requirements, attachments);
             }
 
-            if (result.success) {
-                const replyText = result.response || "Entendido. Estoy procesando tu solicitud.";
+            if (result.success && result.data) {
+                // Compute differences for Dynamic Context Pills
+                const prevNeedsCount = requirements.detectedNeeds?.length || 0;
+                const currentNeeds = result.data.updatedRequirements?.detectedNeeds || [];
+                const newNeeds = currentNeeds.slice(prevNeedsCount);
+                const extractedInfo = newNeeds.map((n: any) => `${n.category}: ${n.description}`);
+                
+                const extractedSpecs = [];
+                if (!requirements.specs?.totalArea && result.data.updatedRequirements?.specs?.totalArea) {
+                    extractedSpecs.push(`Área: ${result.data.updatedRequirements.specs.totalArea}m²`);
+                }
+                if (!requirements.specs?.propertyType && result.data.updatedRequirements?.specs?.propertyType) {
+                    extractedSpecs.push(`Propiedad: ${result.data.updatedRequirements.specs.propertyType}`);
+                }
+                if (!requirements.specs?.qualityLevel && result.data.updatedRequirements?.specs?.qualityLevel) {
+                    extractedSpecs.push(`Calidad: ${result.data.updatedRequirements.specs.qualityLevel}`);
+                }
+                
+                const allExtractedInfo = [...extractedInfo, ...extractedSpecs];
+
                 const aiMsg: Message = {
                     id: (Date.now() + 1).toString(),
                     role: 'assistant',
-                    content: replyText,
+                    content: result.data.response,
                     createdAt: new Date(),
+                    extractedInfo: allExtractedInfo.length > 0 ? allExtractedInfo : undefined
                 };
 
                 setMessages(prev => [...prev, aiMsg]);
-
-                // Track requirements state (primarily for private mode, public handles it generically)
-                if (result.updatedRequirements) {
-                    setRequirements(result.updatedRequirements);
-                }
+                setRequirements(result.data.updatedRequirements);
 
                 // Persist AI Message
                 const { sendMessageAction } = await import('@/actions/chat/send-message.action');
-                await sendMessageAction(conversationId, replyText, 'assistant', 'system');
+                await sendMessageAction(conversationId, result.data.response, 'assistant', 'system');
 
-                if (result.isComplete && mode === 'private') {
+                const data = result.data as any;
+
+                if (data.isLimitReached) {
+                    setState('idle');
+                } else if (data.isComplete) {
                     setState('review');
                 } else {
                     setState('idle');
@@ -158,13 +284,43 @@ export const useBudgetWizard = (mode: 'public' | 'private' = 'public') => {
         }
     };
 
+    const addSystemMessage = async (text: string) => {
+        if (!conversationId) return;
+
+        const aiMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant', // Rendered as secondary/dark bubble
+            content: text,
+            createdAt: new Date(),
+        };
+
+        setMessages(prev => [...prev, aiMsg]);
+
+        try {
+            const { sendMessageAction } = await import('@/actions/chat/send-message.action');
+            await sendMessageAction(conversationId, text, 'assistant', 'system');
+        } catch (error) {
+            console.error("Failed to persist system msg", error);
+        }
+    };
+
     return {
         messages,
         input,
         setInput,
         sendMessage,
+        addSystemMessage,
         processHiddenMessage,
         state,
-        requirements
+        setState,
+        requirements,
+        // New exports for multi-chat UI
+        conversations,
+        conversationId,
+        isLoadingChats,
+        startNewConversation,
+        switchConversation,
+        deleteConversation,
+        resetConversation
     };
 };

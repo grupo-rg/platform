@@ -8,19 +8,7 @@ const budgetRepository = new BudgetRepositoryFirestore();
 
 export async function updateBudgetAction(id: string, updates: Partial<Budget>): Promise<{ success: boolean; error?: string }> {
     try {
-        const existingBudget = await budgetRepository.findById(id);
-
-        if (!existingBudget) {
-            return { success: false, error: 'Presupuesto no encontrado' };
-        }
-
-        const updatedBudget: Budget = {
-            ...existingBudget,
-            ...updates,
-            updatedAt: new Date()
-        };
-
-        await budgetRepository.save(updatedBudget);
+        await budgetRepository.updatePartial(id, updates);
 
         revalidatePath(`/dashboard/admin/budgets/${id}/edit`);
         revalidatePath('/dashboard/admin/budgets');

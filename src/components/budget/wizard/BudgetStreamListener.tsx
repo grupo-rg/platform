@@ -105,58 +105,8 @@ function handleGenerationEvent(event: GenerationEvent) {
             break;
 
         case 'item_resolved':
-            const item = event.data.item;
-            const isMaterial = event.data.type === 'MATERIAL';
-
-            // Custom "Airline Ticket" style card for Sileo
-            const CustomCard = (
-                <div className="flex flex-col gap-2 min-w-[280px]">
-                    <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                            {isMaterial ? 'MATERIAL' : 'PARTIDA'}
-                        </span>
-                        <span className="text-xs font-mono text-emerald-500">
-                            {item.code || item.sku || 'N/A'}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-3 my-1">
-                        <div className={cn("p-2 rounded-lg", isMaterial ? "bg-amber-100 dark:bg-amber-900/30" : "bg-blue-100 dark:bg-blue-900/30")}>
-                            {isMaterial ? <Package className="h-5 w-5 text-amber-600" /> : <Hammer className="h-5 w-5 text-blue-600" />}
-                        </div>
-                        <div className="flex-1 leading-tight">
-                            <p className="font-semibold text-sm line-clamp-2 md:text-base">
-                                {item.description || item.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                                {item.quantity} {item.unit} • {formatCurrency(item.unitPrice)}/{item.unit}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-2 border-t border-dashed border-gray-200 dark:border-white/10 mt-1">
-                        <div className="flex items-center gap-1.5">
-                            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-[10px] font-medium text-green-600 dark:text-green-400">
-                                {isMaterial ? 'En Stock' : 'Disponible'}
-                            </span>
-                        </div>
-                        <div className="bg-foreground text-background text-xs font-bold px-2 py-1 rounded-md">
-                            {formatCurrency(item.totalPrice)}
-                        </div>
-                    </div>
-                </div>
-            );
-
-            sileo.show({
-                description: CustomCard,
-                duration: 5000,
-                position: 'bottom-right',
-                styles: {
-                    // Start of Selection
-                    // Override default styles if needed, mainly relying on the custom component
-                }
-            });
+            // Inline items are now handled natively inside BudgetGenerationProgress.tsx
+            // We no longer trigger Sileo popups for every single item to prevent clutter.
             break;
 
         case 'complete':

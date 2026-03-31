@@ -23,10 +23,11 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
   }, [pathname]);
 
   // Determine if the current page should be full-width/app-like (no default padding)
+  const isBudgetsEditView = pathname.includes('/budgets/') && pathname.includes('/edit');
   const isAppPage = pathname.includes('/admin/messages') ||
     pathname.includes('/wizard') ||
     pathname.includes('/projects') ||
-    (pathname.includes('/budgets') && pathname.includes('/edit')) ||
+    isBudgetsEditView ||
     pathname.includes('/presupuesto');
 
   const [mounted, setMounted] = React.useState(false);
@@ -89,7 +90,7 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
                 <Menu className="h-6 w-6" />
               </Button>
             )}
-            <span className="font-semibold text-lg">GRUPO RG</span>
+            <span className="font-semibold text-lg">Basis</span>
           </div>
           {/* We could add user menu or other actions here for mobile */}
         </div>

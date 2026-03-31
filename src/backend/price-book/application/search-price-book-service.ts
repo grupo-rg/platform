@@ -1,6 +1,6 @@
 
 import { PriceBookRepository } from "../domain/price-book-repository";
-import { ai, embeddingModel } from '@/backend/ai/core/config/genkit.config';
+import { ai, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
 import { PriceBookItem } from "../domain/price-book-item";
 
 export class SearchPriceBookService {

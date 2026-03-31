@@ -15,11 +15,16 @@ export interface BudgetPartida {
   totalPrice: number;
   originalTask?: string; // The user intent that generated this
   note?: string;
+  ai_justification?: string; // Telemetry logic from the Judge Agent
+  sourceDatabase?: string; // e.g. '2025_catalog'
   isEstimate?: boolean;
   isRealCost?: boolean; // True if recalculated by Construction Analyst
   matchConfidence?: number; // 0-100 Score from Vector Search
+  alternativeCandidates?: any[]; // Unselected candidates from Vector Search
+  reasoning?: string; // AI Chain of Thought
+  needsHumanReview?: boolean; // Flag if AI failed to calculate properly
+  aiResolution?: any; // The raw AI decision payload
   breakdown?: BudgetBreakdownComponent[]; // Detailed cost structure
-  matchedItem?: any; // The original DB matched item (e.g., PriceBookItem) for HITL referenced
   relatedMaterial?: {
     sku: string;
     name: string;
@@ -31,16 +36,18 @@ export interface BudgetPartida {
 
 export interface BudgetBreakdownComponent {
   code?: string;
-  concept?: string; // e.g. "Mano de obra", "Material: Keraben Forest"
-  description?: string; // Used by raw JSON PriceBook
-  type?: 'LABOR' | 'MATERIAL' | 'MACHINERY' | 'OTHER';
-  unit?: string;
+  concept: string; // e.g. "Mano de obra", "Material: Keraben Forest"
+  type: 'LABOR' | 'MATERIAL' | 'MACHINERY' | 'OTHER';
   price: number; // Unit price of this component
+  unitPrice?: number; // Alias for price used by AI occasionally
   yield?: number; // Rendimiento (e.g. 0.05 h/m2)
-  quantity?: number; // Used by raw JSON PriceBook
+  quantity?: number; // Alias for yield used by AI occasionally
   waste?: number; // Merma % (only for materials)
-  total?: number; // price * yield * (1+waste)
+  total: number; // price * yield * (1+waste)
+  totalPrice?: number; // Alias for total
+  is_variable?: boolean; // Flag para el modo Sólo Ejecución
   isSubstituted?: boolean; // True if this component was swapped by AI
+  alternativeComponents?: any[]; // Unselected semantic candidates to swap this ingredient manually
 }
 
 export interface BudgetMaterial {
@@ -78,6 +85,41 @@ export interface BudgetCostBreakdown {
   tax: number; // IVA
   globalAdjustment: number;
   total: number; // PEC + IVA
+  executionOnlyTotal?: number; // Total expícito SIN materiales variables
+  completeTotal?: number; // Total explícito CON materiales variables
+}
+
+export interface BudgetTelemetryMetrics {
+  generationTimeMs: number;
+  tokens: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  costs: {
+    fiatAmount: number; // EUR
+    fiatCurrency: string; // 'EUR'
+  };
+}
+
+export interface BudgetTelemetry {
+  blueprint?: {
+    originalRequest: string;
+    decomposedTasks: {
+      chapter: string;
+      task: string;
+      reasoning: string;
+      estimatedParametricQuantity: number;
+      estimatedParametricUnit?: string;
+    }[];
+  };
+  executionLog?: {
+    timestamp: Date;
+    agent: 'Architect' | 'Surveyor' | 'Judge' | 'System';
+    action: string;
+    details: string;
+  }[];
+  metrics?: BudgetTelemetryMetrics;
 }
 
 /**
@@ -108,6 +150,11 @@ export interface Budget {
 
   // Financials
   costBreakdown: BudgetCostBreakdown;
+  config?: {
+    marginGG: number;
+    marginBI: number;
+    tax: number;
+  };
   totalEstimated: number; // Deprecated, use costBreakdown.total
 
   // Origin & Metadata
@@ -127,16 +174,20 @@ export interface Budget {
 
   // AI Renders
   renders?: BudgetRender[];
+
+  // AI Telemetry & Traceability
+  telemetry?: BudgetTelemetry;
 }
 
 export interface BudgetRender {
   id: string;
-  afterUrls: string[]; // Generated render URLs (or Base64 strings temporarily)
-  beforeUrls: string[]; // Original photo URLs (or Base64 strings temporarily)
+  url: string;
+  originalUrl?: string;
   prompt: string;
   style: string;
   roomType: string;
   createdAt: Date;
+  includeInPdf?: boolean;
 }
 
 /**

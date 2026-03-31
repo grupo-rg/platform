@@ -7,11 +7,16 @@ import { AlertTriangle, CheckCircle2, AlertOctagon, HelpCircle } from 'lucide-re
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { HeartPulse } from 'lucide-react';
+
 interface BudgetHealthWidgetProps {
     items: EditableBudgetLineItem[];
+    variant?: 'card' | 'compact';
 }
 
-export const BudgetHealthWidget = ({ items }: BudgetHealthWidgetProps) => {
+export const BudgetHealthWidget = ({ items, variant = 'card' }: BudgetHealthWidgetProps) => {
     // Analysis
     const totalItems = items.length;
     if (totalItems === 0) return null;
@@ -29,8 +34,11 @@ export const BudgetHealthWidget = ({ items }: BudgetHealthWidgetProps) => {
     const healthColor = score > 80 ? 'text-emerald-600' : score > 50 ? 'text-amber-600' : 'text-red-600';
     const healthBg = score > 80 ? 'bg-emerald-50 dark:bg-emerald-500/10' : score > 50 ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-red-50 dark:bg-red-500/10';
 
-    return (
-        <Card className="border-0 shadow-none bg-transparent">
+    const cardContent = (
+        <Card className={cn(
+            "border-0 shadow-none bg-transparent", 
+            variant === 'compact' && "bg-white dark:bg-zinc-950 border border-slate-200 dark:border-white/10 shadow-sm"
+        )}>
             <CardHeader className="px-0 pb-2">
                 <CardTitle className="text-sm font-semibold text-slate-500 dark:text-white/60 uppercase tracking-wider flex items-center justify-between">
                     <span>Salud del Presupuesto</span>
@@ -89,4 +97,23 @@ export const BudgetHealthWidget = ({ items }: BudgetHealthWidgetProps) => {
             </CardContent>
         </Card>
     );
+
+    if (variant === 'compact') {
+        return (
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className={cn("gap-2 h-9", healthBg, healthColor, "border-opacity-20 hover:bg-opacity-80")}>
+                        <HeartPulse className="w-4 h-4" />
+                        <span className="hidden sm:inline font-semibold">Salud:</span>
+                        <span className="font-bold">{score}/100</span>
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-[340px] p-4 sm:p-5 border-0 shadow-lg" sideOffset={8}>
+                    {cardContent}
+                </PopoverContent>
+            </Popover>
+        );
+    }
+
+    return cardContent;
 };

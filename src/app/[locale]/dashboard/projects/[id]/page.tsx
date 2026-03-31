@@ -5,6 +5,8 @@ import { notFound } from 'next/navigation';
 
 import { Expense } from '@/backend/expense/domain/expense';
 
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
     params: Promise<{ id: string; locale: string }>;
     searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;

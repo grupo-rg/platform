@@ -53,7 +53,7 @@ async function main() {
         // Stress test: mimic the dashboard
         console.log("Fetching 2000 items (mimicking dashboard)...");
         const startTime = Date.now();
-        const largeSnapshot = await collectionRef.where('year', '==', 2024).limit(2000).get();
+        const largeSnapshot = await collectionRef.where('year', '==', 2025).limit(2000).get();
         const endTime = Date.now();
 
         console.log(`Query took ${endTime - startTime}ms. Found ${largeSnapshot.size} items.`);

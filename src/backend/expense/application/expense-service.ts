@@ -3,7 +3,7 @@ import { Expense, ExpenseRepository, ExpenseStatus, isValidExpenseTransition } f
 import { InvoiceLine } from '../domain/invoice-line';
 import { Provider, ProviderRepository } from '../domain/provider';
 import { Project, ProjectRepository } from '@/backend/project/domain/project';
-import { ExtractedInvoice } from '@/backend/ai/public/flows/extract-invoice.flow';
+import { ExtractedInvoice } from '@/backend/ai/private-core/flows/extract-invoice.flow';
 import { v4 as uuidv4 } from 'uuid';
 
 /**

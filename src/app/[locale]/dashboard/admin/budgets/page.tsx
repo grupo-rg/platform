@@ -29,8 +29,6 @@ import { Input } from '@/components/ui/input';
 import { BudgetApproveButton } from '@/components/budget/budget-approve-button';
 import { BudgetsTable } from '@/components/budget/admin/BudgetsTable';
 
-export const dynamic = 'force-dynamic';
-
 export default async function BudgetsListPage({ params }: { params: Promise<{ locale: string }> }) {
     const { locale } = await params;
     const budgets = await getAllBudgetsAction();

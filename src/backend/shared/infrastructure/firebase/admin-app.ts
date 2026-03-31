@@ -2,6 +2,7 @@
 import { getApps, initializeApp, cert, App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 export function initFirebaseAdminApp(): App {
     if (getApps().length === 0) {
@@ -14,7 +15,7 @@ export function initFirebaseAdminApp(): App {
                     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
                     privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'), // Handle newlines
                 }),
-                storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+                storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
             });
         }
 
@@ -22,7 +23,7 @@ export function initFirebaseAdminApp(): App {
         // Production (Vercel/Cloud Run) / Fallback (if using ADC)
         return initializeApp({
             projectId: process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID,
-            storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+            storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
         });
     }
     return getApps()[0];
@@ -31,10 +32,4 @@ export function initFirebaseAdminApp(): App {
 export const adminApp = initFirebaseAdminApp();
 export const adminAuth = getAuth(adminApp);
 export const adminFirestore = getFirestore(adminApp);
-
-// Configure Firestore to ignore undefined properties to prevent crashes on generic AI extractions
-try {
-    adminFirestore.settings({ ignoreUndefinedProperties: true });
-} catch (e) {
-    // Ignore if already configured
-}
+export const adminStorage = getStorage(adminApp);

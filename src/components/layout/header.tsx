@@ -3,10 +3,12 @@
 import Image from 'next/image';
 import { BudgetWidget } from '@/components/budget-widget';
 import { Link } from '@/i18n/navigation';
+import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
 import { UserNav } from '@/components/auth/user-nav';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 import { Menu } from 'lucide-react';
 import {
   Sheet,
@@ -34,9 +36,9 @@ export function Header({ t }: { t: any }) {
   }, []);
 
   const navLinks = [
-    { href: { pathname: '/', hash: 'services' }, label: t.header.nav.services },
-    { href: '/blog', label: t.header.nav.blog },
-    { href: '/contact', label: t.header.nav.contact },
+    { href: { pathname: '/', hash: 'wizard' }, label: "Asistente Costes" },
+    { href: '/', label: "Plataforma" },
+    { href: '/', label: "Casos de Uso" },
   ];
 
   const handleLinkClick = () => {
@@ -54,51 +56,42 @@ export function Header({ t }: { t: any }) {
     >
       <div className="w-[85vw] max-w-[1920px] mx-auto flex h-full items-center justify-between transition-all duration-300">
         <div className={cn("transition-transform duration-300 flex-shrink-0", isScrolled ? "scale-90" : "scale-100")}>
-          <Link href="/" className="block relative h-12 w-auto aspect-[3/1] md:h-16">
-            <Image
-              src="/images/logo.avif"
-              alt="Grupo RG Logo"
-              fill
-              className="object-contain"
-              priority
-            />
-          </Link>
+          <Logo className="h-8 flex items-center" width={110} height={32} />
         </div>
 
-        <div className="hidden md:block ml-10">
+        {/* Desktop Navigation */}
+        <div className="hidden lg:flex items-center justify-center flex-1 mx-8">
           <MegaMenu t={t} />
         </div>
+
         <div className="flex items-center gap-2">
+          <ThemeSwitcher />
           <LanguageSwitcher />
-          {user ? (
-            <UserNav t={t.header.userNav} />
-          ) : (
-            <div className="hidden md:flex items-center gap-2">
-              <BudgetWidget t={t} />
-            </div>
-          )}
-          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu />
-                <span className="sr-only">Open menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-screen sm:max-w-[100vw] h-full">
-              <SheetHeader>
-                <SheetTitle className="sr-only">Mobile Menu</SheetTitle>
-                <div className="py-4">
-                  <div className="w-[120px] h-[40px] bg-muted/30 rounded-md animate-pulse" />
+          
+          {/* Mobile Navigation */}
+          <div className="lg:hidden flex items-center">
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="hover:bg-primary/10 relative z-50">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[300px] p-0 border-l border-border/40 bg-background/95 backdrop-blur-lg">
+                <SheetHeader className="px-6 py-4 border-b border-border/40">
+                  <SheetTitle className="sr-only">Menú Móvil</SheetTitle>
+                  <Logo className="h-8" width={110} height={32} />
+                </SheetHeader>
+                <div className="overflow-y-auto max-h-[calc(100vh-80px)]">
+                  <MobileMenu
+                    t={t}
+                    navLinks={navLinks}
+                    onLinkClick={handleLinkClick}
+                    user={user}
+                  />
                 </div>
-              </SheetHeader>
-              <MobileMenu
-                t={t}
-                navLinks={navLinks}
-                onLinkClick={handleLinkClick}
-                user={user}
-              />
-            </SheetContent>
-          </Sheet>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </div>
     </header>

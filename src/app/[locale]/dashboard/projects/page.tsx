@@ -3,8 +3,6 @@ import { getAllBudgetsAction } from '@/actions/budget/get-all-budgets.action';
 import { getDictionary } from '@/lib/dictionaries';
 import { ProjectsPageClient } from './projects-page-client';
 
-export const dynamic = 'force-dynamic';
-
 export default async function ProjectsPage({ params }: { params: Promise<{ locale: string }> }) {
     const { locale } = await params;
     const dict = await getDictionary(locale as any);
