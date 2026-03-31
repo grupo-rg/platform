@@ -79,7 +79,6 @@ src/backend/**/scripts/
 
 # Large Vector Indexes & Catalog Data
 /prices/*.json
-/src/lib/pdf_index_*.json
 
 # Archivos de análisis generados y Testing Local
 budget_analysis_*.md
