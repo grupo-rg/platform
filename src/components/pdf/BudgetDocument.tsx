@@ -214,7 +214,7 @@ interface BudgetDocumentProps {
     logoUrl?: string;
     notes?: string;
     budgetConfig?: { tax: number; marginGG: number; marginBI: number };
-    isExecutionOnly?: boolean;
+    executionMode?: 'complete' | 'execution' | 'labor';
     renders?: any[];
 }
 
@@ -269,7 +269,7 @@ export const BudgetDocument = ({
     logoUrl,
     notes,
     budgetConfig,
-    isExecutionOnly,
+    executionMode = 'complete',
     renders = []
 }: BudgetDocumentProps) => {
 
@@ -312,13 +312,18 @@ export const BudgetDocument = ({
                             let bTotal = (item.item?.totalPrice || item.item?.price || 0);
                             const qTotal = (item.item?.quantity || 1);
                             
-                            // Adjust bTotal dynamically for PDF if Execution Only mode is active
+                            // Adjust bTotal dynamically for PDF based on execution mode
                             const activeBreakdown = item.item?.breakdown || [];
-                            if (isExecutionOnly && activeBreakdown.length > 0) {
+                            if (executionMode === 'execution' && activeBreakdown.length > 0) {
                                 const vCost = activeBreakdown
                                     .filter((c: any) => c.is_variable === true || c.is_variable === 'true' || c.isVariable === true)
                                     .reduce((acc: number, c: any) => acc + (c.totalPrice || c.total || ((c.unitPrice || c.price || 0) * (c.quantity || c.yield || 1))), 0);
                                 bTotal = Math.max(0, bTotal - (vCost * qTotal));
+                            } else if (executionMode === 'labor' && activeBreakdown.length > 0) {
+                                const laborCost = activeBreakdown
+                                    .filter((c: any) => c.code && String(c.code).toLowerCase().startsWith('mo'))
+                                    .reduce((acc: number, c: any) => acc + (c.totalPrice || c.total || ((c.unitPrice || c.price || 0) * (c.quantity || c.yield || 1))), 0);
+                                bTotal = Math.max(0, laborCost * qTotal);
                             }
 
                             // Prevent duplicating title into description if they are implicitly the same 
@@ -343,7 +348,8 @@ export const BudgetDocument = ({
                                     {activeBreakdown.length > 0 && (
                                         <View style={{ marginTop: 2 }}>
                                             {activeBreakdown.map((b: any, bIdx: number) => {
-                                                if (isExecutionOnly && (b.is_variable === true || b.is_variable === 'true' || b.isVariable === true)) return null; // Skip variable items
+                                                if (executionMode === 'execution' && (b.is_variable === true || b.is_variable === 'true' || b.isVariable === true)) return null;
+                                                if (executionMode === 'labor' && !(b.code && String(b.code).toLowerCase().startsWith('mo'))) return null;
                                                 const unitPrice = b.price || 0;
                                                 const qty = b.quantity || 1;
                                                 const lineTotal = unitPrice * qty;

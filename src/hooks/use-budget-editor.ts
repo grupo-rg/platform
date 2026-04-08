@@ -1,27 +1,43 @@
 import { useReducer, useCallback, useEffect, useState } from 'react';
 import { BudgetLineItem, BudgetCostBreakdown } from '@/backend/budget/domain/budget';
-import { BudgetEditorState, BudgetEditorAction, EditableBudgetLineItem, BudgetConfig } from '@/types/budget-editor';
+import { BudgetEditorState, BudgetEditorAction, EditableBudgetLineItem, BudgetConfig, ExecutionMode } from '@/types/budget-editor';
 
 // Simple ID generator
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-const calculateBreakdown = (items: EditableBudgetLineItem[], config: BudgetConfig, isExecutionOnly: boolean = false): BudgetCostBreakdown => {
+const calculateBreakdown = (items: EditableBudgetLineItem[], config: BudgetConfig, executionMode: ExecutionMode = 'complete'): BudgetCostBreakdown => {
     // 1. Calculate base execution price (Complete Mode)
     const rawMaterialExecutionPrice = items.reduce((sum, item) => sum + parseFloat(String(item.item?.totalPrice || 0)), 0);
 
-    // 2. Identify and sum variable materials explicitly
-    const variableCosts = items.reduce((sum, item) => {
-        if (!item.item?.breakdown) return sum;
-        const vCost = item.item.breakdown
-            .filter((comp: any) => comp.is_variable === true || comp.is_variable === 'true' || comp.isVariable === true)
-            .reduce((acc: number, comp: any) => {
-                const cPrice = comp.unitPrice || comp.price || 0;
-                const cQuantity = comp.quantity || comp.yield || 1;
-                return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
-            }, 0);
-        // Multiplicar por la cantidad de la partida padre (item.quantity) para que la suma sea precisa
-        return sum + (vCost * (item.item?.quantity || 1));
-    }, 0);
+    // 2. Calculate deductions based on executionMode
+    let variableCostsToDeduct = 0;
+    
+    if (executionMode === 'execution') {
+        variableCostsToDeduct = items.reduce((sum, item) => {
+            if (!item.item?.breakdown) return sum;
+            const vCost = item.item.breakdown
+                .filter((comp: any) => comp.is_variable === true || comp.is_variable === 'true' || comp.isVariable === true)
+                .reduce((acc: number, comp: any) => {
+                    const cPrice = comp.unitPrice || comp.price || 0;
+                    const cQuantity = comp.quantity || comp.yield || 1;
+                    return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
+                }, 0);
+            return sum + (vCost * (item.item?.quantity || 1));
+        }, 0);
+    } else if (executionMode === 'labor') {
+        const laborCosts = items.reduce((sum, item) => {
+            if (!item.item?.breakdown) return sum;
+            const moCost = item.item.breakdown
+                .filter((comp: any) => comp.code && String(comp.code).toLowerCase().startsWith('mo'))
+                .reduce((acc: number, comp: any) => {
+                    const cPrice = comp.unitPrice || comp.price || 0;
+                    const cQuantity = comp.quantity || comp.yield || 1;
+                    return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
+                }, 0);
+            return sum + (moCost * (item.item?.quantity || 1));
+        }, 0);
+        variableCostsToDeduct = rawMaterialExecutionPrice - laborCosts;
+    }
 
     // Calculation helper
     const calcSubtotal = (pem: number) => {
@@ -33,16 +49,15 @@ const calculateBreakdown = (items: EditableBudgetLineItem[], config: BudgetConfi
 
     // We must ensure the execution pem doesn't go below 0
     const pemComplete = isNaN(rawMaterialExecutionPrice) ? 0 : rawMaterialExecutionPrice;
-    const pemExecutionOnly = Math.max(0, pemComplete - variableCosts);
+    const activePem = Math.max(0, pemComplete - variableCostsToDeduct);
 
     // Selected Mode Values
-    const activePem = isExecutionOnly ? pemExecutionOnly : pemComplete;
     const activeSubtotal = calcSubtotal(activePem);
     const activeTax = activeSubtotal * (config.tax / 100);
     
     // Explicit tracking
     const completeTotal = calcSubtotal(pemComplete) * (1 + (config.tax / 100));
-    const executionOnlyTotal = calcSubtotal(pemExecutionOnly) * (1 + (config.tax / 100));
+    const executionOnlyTotal = calcSubtotal(Math.max(0, pemComplete - variableCostsToDeduct)) * (1 + (config.tax / 100)); // Still tracks the active total, not just "execution" strictly. We can leave it named this way or rename it in types.
 
     return {
         materialExecutionPrice: round(activePem),
@@ -71,12 +86,12 @@ const initialState: BudgetEditorState = {
     historyIndex: -1,
     hasUnsavedChanges: false,
     isSaving: false,
-    isExecutionOnly: false,
+    executionMode: 'complete',
     history: []
 };
 
 // Add new INIT_STATE action
-export type BudgetEditorInitAction = { type: 'INIT_STATE'; payload: { items: EditableBudgetLineItem[]; config?: BudgetConfig; isExecutionOnly?: boolean } };
+export type BudgetEditorInitAction = { type: 'INIT_STATE'; payload: { items: EditableBudgetLineItem[]; config?: BudgetConfig; executionMode?: ExecutionMode } };
 
 function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorAction | BudgetEditorInitAction): BudgetEditorState {
     switch (action.type) {
@@ -94,15 +109,15 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
             const derivedChapters = Array.from(new Set(newItems.map(i => i.chapter).filter(Boolean) as string[]));
             const chapters = derivedChapters.length > 0 ? derivedChapters : ['General'];
             const config = action.payload.config || state.config;
-            const isExecutionOnly = action.payload.isExecutionOnly ?? state.isExecutionOnly;
+            const executionMode = action.payload.executionMode ?? state.executionMode;
 
-            const breakdown = calculateBreakdown(newItems, config, isExecutionOnly);
+            const breakdown = calculateBreakdown(newItems, config, executionMode);
             return {
                 ...state,
                 items: newItems,
                 chapters: chapters,
                 config: config,
-                isExecutionOnly: isExecutionOnly,
+                executionMode: executionMode,
                 costBreakdown: breakdown,
                 history: [{ items: newItems, timestamp: Date.now() }],
                 historyIndex: 0,
@@ -130,7 +145,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
             const derivedChapters = Array.from(new Set(newItems.map(i => i.chapter).filter(Boolean) as string[]));
             const chapters = derivedChapters.length > 0 ? derivedChapters : ['General'];
 
-            const breakdown = calculateBreakdown(newItems, state.config, state.isExecutionOnly);
+            const breakdown = calculateBreakdown(newItems, state.config, state.executionMode);
             return {
                 ...state,
                 items: newItems,
@@ -141,12 +156,12 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
             };
         }
 
-        case 'TOGGLE_EXECUTION_MODE': {
-            const newExecutionMode = !state.isExecutionOnly;
+        case 'SET_EXECUTION_MODE': {
+            const newExecutionMode = action.payload;
             const newBreakdown = calculateBreakdown(state.items, state.config, newExecutionMode);
             return {
                 ...state,
-                isExecutionOnly: newExecutionMode,
+                executionMode: newExecutionMode,
                 costBreakdown: newBreakdown,
             };
         }
@@ -170,7 +185,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
                 newChapters.push('General');
             }
 
-            const breakdown = calculateBreakdown(newItems, state.config, state.isExecutionOnly);
+            const breakdown = calculateBreakdown(newItems, state.config, state.executionMode);
 
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push({ items: newItems, timestamp: Date.now() });
@@ -259,7 +274,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
                 return mergedItem;
             });
 
-            const breakdown = calculateBreakdown(updatedItems, state.config, state.isExecutionOnly);
+            const breakdown = calculateBreakdown(updatedItems, state.config, state.executionMode);
 
             // Add to history
             const newHistory = state.history.slice(0, state.historyIndex + 1);
@@ -352,7 +367,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
                 ? state.chapters
                 : [...state.chapters, newItem.chapter];
 
-            const breakdown = calculateBreakdown(newItems, state.config, state.isExecutionOnly);
+            const breakdown = calculateBreakdown(newItems, state.config, state.executionMode);
 
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push({ items: newItems, timestamp: Date.now() });
@@ -386,7 +401,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
             const newItems = [...state.items];
             newItems.splice(originalIndex + 1, 0, newItem);
 
-            const breakdown = calculateBreakdown(newItems, state.config, state.isExecutionOnly);
+            const breakdown = calculateBreakdown(newItems, state.config, state.executionMode);
 
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push({ items: newItems, timestamp: Date.now() });
@@ -403,7 +418,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
 
         case 'REMOVE_ITEM': {
             const newItems = state.items.filter(item => item.id !== action.payload);
-            const breakdown = calculateBreakdown(newItems, state.config, state.isExecutionOnly);
+            const breakdown = calculateBreakdown(newItems, state.config, state.executionMode);
 
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push({ items: newItems, timestamp: Date.now() });
@@ -424,7 +439,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
             return {
                 ...state,
                 items: prevVersion.items,
-                costBreakdown: calculateBreakdown(prevVersion.items, state.config, state.isExecutionOnly),
+                costBreakdown: calculateBreakdown(prevVersion.items, state.config, state.executionMode),
                 historyIndex: state.historyIndex - 1,
                 hasUnsavedChanges: true
             };
@@ -435,16 +450,16 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
             return {
                 ...state,
                 items: nextVersion.items,
-                costBreakdown: calculateBreakdown(nextVersion.items, state.config, state.isExecutionOnly),
+                costBreakdown: calculateBreakdown(nextVersion.items, state.config, state.executionMode),
                 historyIndex: state.historyIndex + 1,
                 hasUnsavedChanges: true
             };
 
-        case 'TOGGLE_EXECUTION_MODE': {
-            const newMode = !state.isExecutionOnly;
+        case 'SET_EXECUTION_MODE': {
+            const newMode = action.payload;
             return {
                 ...state,
-                isExecutionOnly: newMode,
+                executionMode: newMode,
                 costBreakdown: calculateBreakdown(state.items, state.config, newMode)
             };
         }
@@ -454,7 +469,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
             return {
                 ...state,
                 config: newConfig,
-                costBreakdown: calculateBreakdown(state.items, newConfig, state.isExecutionOnly),
+                costBreakdown: calculateBreakdown(state.items, newConfig, state.executionMode),
                 hasUnsavedChanges: true
             };
         }
@@ -505,7 +520,7 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
                 return item;
             });
 
-            const breakdown = calculateBreakdown(newItems, state.config, state.isExecutionOnly);
+            const breakdown = calculateBreakdown(newItems, state.config, state.executionMode);
 
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push({ items: newItems, timestamp: Date.now() });
@@ -610,7 +625,7 @@ export function useBudgetEditor(initialItems: BudgetLineItem[] = [], initialConf
     const renameChapter = useCallback((oldName: string, newName: string) => dispatch({ type: 'RENAME_CHAPTER', payload: { oldName, newName } }), []);
     const reorderChapters = useCallback((newOrder: string[]) => dispatch({ type: 'REORDER_CHAPTERS', payload: newOrder }), []);
 
-    const toggleExecutionMode = useCallback(() => dispatch({ type: 'TOGGLE_EXECUTION_MODE' }), []);
+    const setExecutionMode = useCallback((mode: ExecutionMode) => dispatch({ type: 'SET_EXECUTION_MODE', payload: mode }), []);
 
     const updateConfig = useCallback((config: Partial<BudgetConfig>) => dispatch({ type: 'UPDATE_CONFIG', payload: config }), []);
 
@@ -639,7 +654,7 @@ export function useBudgetEditor(initialItems: BudgetLineItem[] = [], initialConf
         removeChapter,
         renameChapter,
         reorderChapters,
-        toggleExecutionMode,
+        setExecutionMode,
         updateConfig,
         applyMarkup
     };

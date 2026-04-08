@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { BudgetDocument } from '@/components/pdf/BudgetDocument';
-import { EditableBudgetLineItem } from '@/types/budget-editor';
+import { EditableBudgetLineItem, ExecutionMode } from '@/types/budget-editor';
 import { BudgetCostBreakdown } from '@/backend/budget/domain/budget';
 import React, { useState } from 'react';
 import {
@@ -55,8 +55,8 @@ interface BudgetEditorToolbarProps {
     onToggleGhostMode: () => void;
 
     // Execution Mode
-    isExecutionOnly: boolean;
-    onToggleExecutionMode: () => void;
+    executionMode: ExecutionMode;
+    onSetExecutionMode: (mode: ExecutionMode) => void;
 
     // For PDF Generation
     clientName: string;
@@ -93,8 +93,8 @@ export const BudgetEditorToolbar = ({
     lastSavedAt,
     showGhostMode,
     onToggleGhostMode,
-    isExecutionOnly,
-    onToggleExecutionMode,
+    executionMode,
+    onSetExecutionMode,
     clientName,
     items,
     costBreakdown,
@@ -110,9 +110,14 @@ export const BudgetEditorToolbar = ({
     // Determine status text
     const [isTracing, setIsTracing] = useState(false); // Added isTracing state
 
-    // RAG Validation: Check if there are any variable materials in the budget
+    // RAG Validation: Check if any item has breakdowns with variable materials
     const hasVariableCosts = React.useMemo(() => {
-        return items.some(item => (item as any).breakdown?.some((b: any) => b.is_variable === true));
+        return items.some(item => (item as any).item?.breakdown?.some((b: any) => b.is_variable === true || b.is_variable === 'true'));
+    }, [items]);
+
+    // Check if any item has breakdowns at all (needed for labor mode)
+    const hasAnyBreakdown = React.useMemo(() => {
+        return items.some(item => (item as any).item?.breakdown?.length > 0);
     }, [items]);
 
     const statusText = isSaving ? 'Guardando...' :
@@ -149,24 +154,48 @@ export const BudgetEditorToolbar = ({
                 {/* RIGHT: Actions */}
                 <div className="flex items-center gap-2">
 
-                    {/* Execution Mode Toggle */}
-                    <Button
-                        disabled={!hasVariableCosts}
-                        variant={isExecutionOnly ? "secondary" : "outline"}
-                        size="sm"
-                        onClick={onToggleExecutionMode}
-                        className={cn(
-                            "hidden md:flex transition-colors shrink-0",
-                            !hasVariableCosts && "opacity-50 cursor-not-allowed",
-                            isExecutionOnly
-                                ? "bg-amber-100/50 hover:bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-900/30 dark:text-amber-500 dark:border-amber-800"
-                                : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
-                        )}
-                        title={!hasVariableCosts ? "Presupuesto extraído sin desgloses variables" : (isExecutionOnly ? "Mostrando: Sólo Ejecución (Sin materiales variables)" : "Mostrando: Presupuesto Completo")}
-                    >
-                        {isExecutionOnly ? <Wrench className="w-4 h-4 mr-2 text-amber-600" /> : <Layers className="w-4 h-4 mr-2 text-indigo-500" />}
-                        {isExecutionOnly ? 'Sólo Ejecución' : 'Completo'}
-                    </Button>
+                    {/* Execution Mode Dropdown */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant={executionMode !== 'complete' ? "secondary" : "outline"}
+                                size="sm"
+                                className={cn(
+                                    "hidden md:flex transition-colors shrink-0",
+                                    executionMode === 'execution'
+                                        ? "bg-amber-100/50 hover:bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-900/30 dark:text-amber-500 dark:border-amber-800"
+                                        : executionMode === 'labor'
+                                        ? "bg-blue-100/50 hover:bg-blue-100 text-blue-900 border-blue-200 dark:bg-blue-900/30 dark:text-blue-500 dark:border-blue-800"
+                                        : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
+                                )}
+                                title="Seleccionar modo de visualización"
+                            >
+                                {executionMode === 'execution' ? <Wrench className="w-4 h-4 mr-2 text-amber-600" /> : executionMode === 'labor' ? <Wrench className="w-4 h-4 mr-2 text-blue-600" /> : <Layers className="w-4 h-4 mr-2 text-indigo-500" />}
+                                {executionMode === 'execution' ? 'Sólo Ejecución' : executionMode === 'labor' ? 'Sólo Mano de Obra' : 'Completo'}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-60">
+                            <DropdownMenuLabel>Modo de Visualización</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => onSetExecutionMode('complete')} className={executionMode === 'complete' ? 'bg-slate-100 dark:bg-white/10 font-semibold' : ''}>
+                                <Layers className="w-4 h-4 mr-2 text-indigo-500" /> Presupuesto Completo
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onSetExecutionMode('execution')} disabled={!hasVariableCosts} className={executionMode === 'execution' ? 'bg-amber-50 dark:bg-amber-900/20 font-semibold' : ''}>
+                                <Wrench className="w-4 h-4 mr-2 text-amber-600" />
+                                <div className="flex flex-col">
+                                    <span>Sólo Ejecución</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{hasVariableCosts ? 'Excluye materiales variables' : 'Sin materiales variables detectados'}</span>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onSetExecutionMode('labor')} disabled={!hasAnyBreakdown} className={executionMode === 'labor' ? 'bg-blue-50 dark:bg-blue-900/20 font-semibold' : ''}>
+                                <Wrench className="w-4 h-4 mr-2 text-blue-600" />
+                                <div className="flex flex-col">
+                                    <span>Exclusivamente Mano de Obra</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{hasAnyBreakdown ? 'Solo componentes mo...' : 'Sin descompuestos disponibles'}</span>
+                                </div>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
 
                     {/* Mobile Menu */}
                     {!isReadOnly && (
@@ -180,9 +209,14 @@ export const BudgetEditorToolbar = ({
                                 <DropdownMenuContent align="end" className="w-56">
                                     <DropdownMenuLabel>Opciones</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onSelect={onToggleExecutionMode}>
-                                        {isExecutionOnly ? <Layers className="w-4 h-4 mr-2" /> : <Wrench className="w-4 h-4 mr-2" />} 
-                                        {isExecutionOnly ? 'Vista Completa' : 'Sólo Ejecución'}
+                                    <DropdownMenuItem onClick={() => onSetExecutionMode('complete')}>
+                                        <Layers className="w-4 h-4 mr-2 text-indigo-500" /> Presupuesto Completo
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onSetExecutionMode('execution')} disabled={!hasVariableCosts}>
+                                        <Wrench className="w-4 h-4 mr-2 text-amber-600" /> Sólo Ejecución
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onSetExecutionMode('labor')}>
+                                        <Wrench className="w-4 h-4 mr-2 text-blue-600" /> Sólo Mano de Obra
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>

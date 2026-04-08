@@ -29,6 +29,7 @@ interface BudgetGenerationProgressProps {
     progress: GenerationProgress;
     className?: string;
     onComplete?: (budgetId: string) => void;
+    budgetId?: string;
 }
 
 const AGENT_NODES = [
@@ -43,9 +44,9 @@ function getStepIndex(step: GenerationStep): number {
     return idx === -1 ? 0 : idx;
 }
 
-export function BudgetGenerationProgress({ progress, className, onComplete }: BudgetGenerationProgressProps) {
+export function BudgetGenerationProgress({ progress, className, onComplete, budgetId }: BudgetGenerationProgressProps) {
     const t = useTranslations('budgetRequest.demoProgress');
-    const { leadId } = useWidgetContext();
+    const telemetryId = budgetId;
     const { step, extractedItems, matchedItems, currentItem, error } = progress;
     const currentStepIndex = getStepIndex(step);
 
@@ -65,7 +66,7 @@ export function BudgetGenerationProgress({ progress, className, onComplete }: Bu
     const activeStepIndex = getStepIndex(activeStep);
 
     const eventSourceRef = useRef<EventSource | null>(null);
-    const processedEvents = useRef<Set<number>>(new Set());
+    const processedEvents = useRef<Set<string | number>>(new Set());
     const logEndRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll logs
@@ -102,21 +103,22 @@ export function BudgetGenerationProgress({ progress, className, onComplete }: Bu
     };
 
     useEffect(() => {
-        if (!leadId || step === 'idle' || step === 'complete' || step === 'error') return;
+        if (!telemetryId || step === 'idle' || step === 'complete' || step === 'error') return;
 
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
         }
 
-        const url = `/api/budget/stream?leadId=${leadId}`;
+        const url = `/api/budget/stream?budgetId=${telemetryId}`;
         const es = new EventSource(url);
         eventSourceRef.current = es;
 
         es.onmessage = (event) => {
             try {
                 const parsed = JSON.parse(event.data);
-                if (processedEvents.current.has(parsed.timestamp)) return;
-                processedEvents.current.add(parsed.timestamp);
+                const uniqueKey = parsed.id || parsed.timestamp;
+                if (processedEvents.current.has(uniqueKey)) return;
+                processedEvents.current.add(uniqueKey);
 
                 if (parsed.type === 'subtasks_extracted') {
                     if (parsed.data.totalTasks) setLocalExtractedItems(parsed.data.totalTasks);
@@ -152,7 +154,7 @@ export function BudgetGenerationProgress({ progress, className, onComplete }: Bu
         return () => {
             if (eventSourceRef.current) eventSourceRef.current.close();
         };
-    }, [leadId, step]);
+    }, [telemetryId, step]);
 
     if (step === 'idle') return null;
 

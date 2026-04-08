@@ -7,11 +7,21 @@ from src.budget.application.use_cases.restructure_budget_uc import RestructureBu
 from src.budget.application.services.pdf_extractor_service import InlinePdfExtractorService, AnnexedPdfExtractorService
 from src.budget.application.services.swarm_pricing_service import SwarmPricingService
 
+from firebase_admin import firestore
+from src.pipeline_telemetry.infrastructure.firebase_telemetry_repository import FirebaseTelemetryRepository
+from src.pipeline_telemetry.application.use_cases.emit_telemetry_uc import EmitTelemetryUseCase
+
 # Singletons for connections
 _llm_adapter = GoogleGenerativeAIAdapter()
 _vector_search_adapter = FirestorePriceBookAdapter()
 _firestore_repository = FirestoreBudgetRepository()
-_progress_emitter = FirestoreProgressEmitter()
+
+# Setup Telemetry dependencies
+_db_client = firestore.client()
+_telemetry_repo = FirebaseTelemetryRepository(db=_db_client)
+_emit_telemetry_uc = EmitTelemetryUseCase(repository=_telemetry_repo, ttl_hours=12)
+
+_progress_emitter = FirestoreProgressEmitter(emit_uc=_emit_telemetry_uc)
 
 # Service Instances
 _inline_extractor = InlinePdfExtractorService(llm_provider=_llm_adapter, emitter=_progress_emitter)

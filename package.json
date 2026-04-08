@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 9002",
+    "dev": "next dev -p 9003",
     "genkit:dev": "echo 'Genkit dev script disabled'",
     "genkit:watch": "echo 'Genkit watch script disabled'",
     "build": "next build",

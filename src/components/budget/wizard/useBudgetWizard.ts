@@ -42,7 +42,7 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
         loadConversations();
     }, [isAdmin, effectiveUserId]);
 
-    const loadConversations = async () => {
+    const loadConversations = async (preventSwitch: boolean = false) => {
         setIsLoadingChats(true);
         try {
             if (isAdmin) {
@@ -52,7 +52,9 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
 
                 if (result.success && result.conversations && result.conversations.length > 0) {
                     setConversations(result.conversations);
-                    switchConversation(result.conversations[0].id);
+                    if (!preventSwitch) {
+                        switchConversation(result.conversations[0].id);
+                    }
                 }
             } else {
                 // Lead Mode: Just load the default conversation for this lead
@@ -118,8 +120,8 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
             const { createAdminConversationAction } = await import('@/actions/chat/create-admin-conversation.action');
             const result = await createAdminConversationAction(effectiveUserId);
             if (result.success && result.conversationId) {
-                // Refresh list and switch to new
-                await loadConversations();
+                // Refresh list and switch to new, preventing the inner switch to avoid race condition
+                await loadConversations(true);
                 switchConversation(result.conversationId);
             }
         } catch (e) {

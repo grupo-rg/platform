@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { BudgetCostBreakdown } from '@/backend/budget/domain/budget';
-import { BudgetConfig } from '@/types/budget-editor';
+import { BudgetConfig, ExecutionMode } from '@/types/budget-editor';
 import { formatMoneyEUR } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { BudgetDocument } from '@/components/pdf/BudgetDocument';
 
 interface BudgetEconomicSummaryProps {
     costBreakdown: BudgetCostBreakdown;
+    executionMode: ExecutionMode;
     budgetConfig?: BudgetConfig;
     onUpdateConfig?: (config: { marginGG?: number; marginBI?: number; tax?: number; }) => void;
     applyMarkup?: (scope: 'global' | 'chapter' | 'item', percentage: number, targetId?: string) => void;
@@ -29,6 +30,7 @@ interface BudgetEconomicSummaryProps {
 
 export const BudgetEconomicSummary = ({ 
     costBreakdown, 
+    executionMode,
     budgetConfig,
     onUpdateConfig,
     applyMarkup,
@@ -285,7 +287,7 @@ export const BudgetEconomicSummary = ({
                                                 costBreakdown={costBreakdown}
                                                 date={new Date().toLocaleDateString('es-ES')}
                                                 budgetConfig={budgetConfig}
-                                                isExecutionOnly={costBreakdown.total !== costBreakdown.completeTotal} // We can derive isExecutionOnly here without passing it down manually 
+                                                executionMode={executionMode} 
                                                 renders={renders}
                                             />
                                         }

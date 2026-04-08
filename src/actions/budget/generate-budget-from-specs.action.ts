@@ -38,6 +38,8 @@ export async function generateBudgetFromSpecsAction(leadId: string | null, fullR
             }
         }
 
+        const generatedBudgetId = uuidv4();
+
         // 2. Build Narrative
         const specsNarrative = BudgetNarrativeBuilder.build((fullRequirements.specs || {}) as any);
 
@@ -58,21 +60,6 @@ export async function generateBudgetFromSpecsAction(leadId: string | null, fullR
         const contextUserId = leadId || 'admin-user';
         if (deepGeneration) {
             console.log(">> Using Recursive Flow (Deep Generation)");
-
-            // Cleanup old telemetry events
-            if (leadId) {
-                try {
-                    const { adminFirestore } = await import('@/backend/shared/infrastructure/firebase/admin-app');
-                    const oldEvents = await adminFirestore.collection('leads').doc(leadId).collection('generation_events').get();
-                    if (!oldEvents.empty) {
-                        const batch = adminFirestore.batch();
-                        oldEvents.docs.forEach((doc) => batch.delete(doc.ref));
-                        await batch.commit();
-                    }
-                } catch (e) {
-                    console.log("Failed to cleanup old events:", e);
-                }
-            }
 
             const architect = new ArchitectAgent();
             const surveyor = new SurveyorAgent();
@@ -112,10 +99,16 @@ export async function generateBudgetFromSpecsAction(leadId: string | null, fullR
 
             if (leadId) {
                 try {
-                    const { emitGenerationEvent } = await import('@/backend/budget/events/budget-generation.emitter');
-                    await emitGenerationEvent(leadId, 'subtasks_extracted', {
-                        step: 'searching',
-                        totalTasks: decomposedTasks.length
+                    // Update to new Pipeline Telemetry architecture
+                    const { adminFirestore } = await import('@/backend/shared/infrastructure/firebase/admin-app');
+                    await adminFirestore.collection('pipeline_telemetry').doc(generatedBudgetId).collection('events').add({
+                        type: 'subtasks_extracted',
+                        data: {
+                            step: 'searching',
+                            totalTasks: decomposedTasks.length
+                        },
+                        timestamp: new Date().toISOString(),
+                        expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
                     });
                 } catch (emitError) {
                     console.warn("Failed to emit generation event", emitError);
@@ -190,8 +183,6 @@ export async function generateBudgetFromSpecsAction(leadId: string | null, fullR
                     } else if (leadId) {
                         // Emitir streaming a UI por task resuelto
                         try {
-                            const { emitGenerationEvent } = await import('@/backend/budget/events/budget-generation.emitter');
-                            
                             let evCandidate = candidates.find(c => c.code === decision.selectedId);
                             if (!evCandidate && candidates.length > 0 && decision.selectedId !== 'GENERIC-EXPLICIT') {
                                 evCandidate = candidates[0];
@@ -201,9 +192,15 @@ export async function generateBudgetFromSpecsAction(leadId: string | null, fullR
                             const unitPrc = evCandidate ? Number((evCandidate as any).price_total || (evCandidate as any).priceTotal || (evCandidate as any).price || (evCandidate as any).unitPrice || 0) : 0;
                             const qty = Number(decision.quantity) || 1;
                             
-                            await emitGenerationEvent(leadId, 'item_resolved', {
-                                item: { code, description: desc, totalPrice: unitPrc * qty },
-                                type: 'PARTIDA'
+                            const { adminFirestore } = await import('@/backend/shared/infrastructure/firebase/admin-app');
+                            await adminFirestore.collection('pipeline_telemetry').doc(generatedBudgetId).collection('events').add({
+                                type: 'item_resolved',
+                                data: {
+                                    item: { code, description: desc, totalPrice: unitPrc * qty },
+                                    type: 'PARTIDA'
+                                },
+                                timestamp: new Date().toISOString(),
+                                expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
                             });
                         } catch (e) { console.warn("Stream API Emit Error", e); }
                     }
@@ -350,7 +347,7 @@ export async function generateBudgetFromSpecsAction(leadId: string | null, fullR
         }
 
         // 4. Persist Budget
-        const budgetId = uuidv4();
+        const budgetId = generatedBudgetId;
 
         const newBudget: Budget = {
             id: budgetId,

@@ -39,7 +39,7 @@ class IVectorSearch(ABC):
 class IGenerationEmitter(ABC):
     """Port for real-time streaming of progress events to the client."""
     @abstractmethod
-    def emit_event(self, lead_id: str, event_type: str, data: Dict[str, Any]) -> None:
+    def emit_event(self, budget_id: str, event_type: str, data: Dict[str, Any]) -> None:
         """Publishes an event to the underlying messaging system (e.g. Firestore, WebSockets)."""
         pass
 

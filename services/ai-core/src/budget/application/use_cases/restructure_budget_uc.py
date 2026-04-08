@@ -31,9 +31,9 @@ class RestructureBudgetUseCase:
         self.repository = repository
         self.emitter = emitter
         
-    def _emit(self, lead_id: str, event_type: str, data: Dict[str, Any]):
+    def _emit(self, budget_id: str, event_type: str, data: Dict[str, Any]):
         if self.emitter:
-            self.emitter.emit_event(lead_id, event_type, data)
+            self.emitter.emit_event(budget_id, event_type, data)
 
     async def execute(self, raw_items: List[Dict[str, Any]], lead_id: str = "anonymous", budget_id: str = None, strategy: str = "INLINE") -> Budget:
         start_time = time.time()
@@ -44,10 +44,10 @@ class RestructureBudgetUseCase:
         extractor = self.annexed_extractor if strategy.upper() == "ANNEXED" else self.inline_extractor
         
         # Phase 1: Semantically structure messy spatial PDF chunks
-        restructured_items = await extractor.extract(raw_items, lead_id, metrics)
+        restructured_items = await extractor.extract(raw_items, budget_id, metrics)
         
         # Phase 2: Swarm Pricing (Deconstructor + Vector Search + LLM Evaluator)
-        partidas = await self.pricing_service.evaluate_batch(restructured_items, lead_id, metrics)
+        partidas = await self.pricing_service.evaluate_batch(restructured_items, budget_id, metrics)
         
         # Phase 3: Assembly & Validation
         chapters_dict = {}
@@ -121,6 +121,6 @@ class RestructureBudgetUseCase:
         if self.repository:
             self.repository.save(budget)
             
-        self._emit(lead_id, 'budget_completed', {"budgetId": budget.id, "metrics": telemetry.metrics.model_dump()})
+        self._emit(budget.id, 'budget_completed', {"budgetId": budget.id, "metrics": telemetry.metrics.model_dump()})
             
         return budget

@@ -39,6 +39,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         conversations, conversationId, isLoadingChats, startNewConversation, switchConversation, deleteConversation, resetConversation
     } = useBudgetWizard(isAdmin);
     const { leadId, closeWidget, initialPrompt, setInitialPrompt } = useWidgetContext();
+    const effectiveId = isAdmin ? 'admin-user' : (leadId || 'unknown-lead');
     const { isRecording, startRecording, stopRecording, recordingTime } = useAudioRecorder();
     const router = useRouter();
     const [generationProgress, setGenerationProgress] = React.useState<{
@@ -47,6 +48,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         matchedItems?: number;
         currentItem?: string;
         error?: string;
+        budgetId?: string;
     }>({ step: 'idle' });
 
 
@@ -186,10 +188,14 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
 
         try {
             const { extractMeasurementPdfAction } = await import('@/actions/budget/extract-measurement-pdf.action');
-            const result = await extractMeasurementPdfAction(formData, leadId || 'unknown-lead', strategy);
+            const effectiveId = isAdmin ? 'admin-user' : (leadId || 'unknown-lead');
+            const result = await extractMeasurementPdfAction(formData, effectiveId, strategy);
 
             if (result.success && result.budgetId) {
-                if (result.isPending) return;
+                if (result.isPending) {
+                    setGenerationProgress({ step: 'extracting', currentItem: "Analizando presupuesto PDF estructural...", budgetId: result.budgetId });
+                    return;
+                }
 
                 setGenerationProgress({ step: 'complete', currentItem: "¡Presupuesto Generado!" });
                 const viewLink = isAdmin
@@ -339,14 +345,16 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             }
 
             if (result.success && result.budgetResult) {
+                const typedResult: any = result;
+                const budgetId = typedResult.budgetId || typedResult.budgetResult?.id;
+
                 setGenerationProgress({
                     step: 'searching',
                     extractedItems: detectedCount,
-                    currentItem: w.progress.searching
+                    currentItem: w.progress.searching,
+                    budgetId: budgetId
                 });
-                const typedResult: any = result;
 
-                const budgetId = typedResult.budgetId || typedResult.budgetResult?.id;
                 const itemCount = typedResult.budgetResult?.chapters?.reduce((acc: number, c: any) => acc + c.items.length, 0) || 0;
                 const total = typedResult.budgetResult?.costBreakdown?.total || typedResult.budgetResult?.totalEstimated || 0;
 
@@ -441,7 +449,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
 
 
     return (
-        <div className="flex h-full w-full overflow-hidden md:rounded-3xl md:border md:border-white/20 bg-background md:bg-white/95 md:dark:bg-black/90 md:shadow-2xl md:backdrop-blur-2xl md:ring-1 md:ring-black/5 md:dark:ring-white/10 relative">
+        <div className="flex flex-1 min-h-0 h-full w-full overflow-hidden md:rounded-3xl md:border md:border-white/20 bg-background md:bg-white/95 md:dark:bg-black/90 md:shadow-2xl md:backdrop-blur-2xl md:ring-1 md:ring-black/5 md:dark:ring-white/10 relative">
             {/* Admin Left Sidebar: Chat History */}
             {isAdmin && (
                 <div className={cn(
@@ -553,6 +561,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                     <div className="w-full bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden p-1">
                                         <BudgetGenerationProgress
                                             progress={generationProgress}
+                                            budgetId={(generationProgress as any).budgetId || leadId}
                                             className="shadow-none border-none rounded-xl"
                                             onComplete={(budgetId) => {
                                                 const viewLink = isAdmin

@@ -145,7 +145,7 @@ Cada objeto tarea en el array "tasks" debe tener:
 
         try {
             const result = await generateWithRetry({
-                model: 'googleai/gemini-2.0-flash-001',
+                model: 'googleai/gemini-2.5-flash',
                 prompt: prompt,
                 output: {
                     format: 'json',

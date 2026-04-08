@@ -1,21 +1,16 @@
 'use server';
 
 import { v4 as uuidv4 } from 'uuid';
-import { clearGenerationEvents } from '@/backend/budget/events/budget-generation.emitter';
 
-export async function extractMeasurementPdfAction(formData: FormData, leadId: string, strategy: 'INLINE' | 'ANNEXED' = 'INLINE') {
+export async function extractMeasurementPdfAction(formData: FormData, effectiveId: string, strategy: 'INLINE' | 'ANNEXED' = 'INLINE') {
     try {
-        if (leadId && leadId !== 'unknown-lead') {
-            await clearGenerationEvents(leadId);
-        }
-
         const file = formData.get('file') as File;
         if (!file) throw new Error("No file provided");
 
         const budgetId = uuidv4();
         
         // Append strict tracking IDs for the Python task
-        formData.append('leadId', leadId || 'anonymous');
+        formData.append('leadId', effectiveId || 'anonymous');
         formData.append('budgetId', budgetId);
         formData.append('strategy', strategy);
 

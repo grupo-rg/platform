@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GenerationEvent } from '@/backend/budget/events/budget-generation.emitter';
 import { adminFirestore } from '@/backend/shared/infrastructure/firebase/admin-app';
 
 // Prevent Next.js from caching this route
@@ -7,33 +6,34 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
-  const leadId = searchParams.get('leadId');
+  const budgetId = searchParams.get('budgetId');
 
-  if (!leadId) {
-    return NextResponse.json({ error: 'leadId is required' }, { status: 400 });
+  if (!budgetId) {
+    return NextResponse.json({ error: 'budgetId is required' }, { status: 400 });
   }
 
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
 
-      const sendEvent = (event: GenerationEvent) => {
+      const sendEvent = (event: any) => {
         const data = JSON.stringify(event);
         controller.enqueue(encoder.encode(`data: ${data}\n\n`));
       };
 
-      // Listener function
+      // Listener function targeting the new Pipeline Telemetry architecture
       const unsubscribe = adminFirestore
-        .collection('leads')
-        .doc(leadId)
-        .collection('generation_events')
+        .collection('pipeline_telemetry')
+        .doc(budgetId)
+        .collection('events')
         .orderBy('timestamp', 'asc') // Ensure order
         .onSnapshot(
           (snapshot) => {
             snapshot.docChanges().forEach((change) => {
               if (change.type === 'added') {
                 const eventData = change.doc.data();
-                sendEvent(eventData as GenerationEvent);
+                eventData.id = change.doc.id;
+                sendEvent(eventData);
               }
             });
           },

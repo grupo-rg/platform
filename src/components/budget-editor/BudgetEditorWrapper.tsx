@@ -57,7 +57,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
         removeChapter,
         renameChapter,
         reorderChapters,
-        toggleExecutionMode,
+        setExecutionMode,
         updateConfig,
         applyMarkup
     } = useBudgetEditor((budget as any).lineItems, budget.config);
@@ -284,7 +284,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
     const editorContextValue = {
         state, updateItem, addItem, reorderItems, removeItem, duplicateItem, undo, redo, 
         saveStart, saveSuccess, saveError, canUndo, canRedo, addChapter, removeChapter, 
-        renameChapter, reorderChapters, toggleExecutionMode, updateConfig, applyMarkup,
+        renameChapter, reorderChapters, setExecutionMode, updateConfig, applyMarkup,
         isAdmin, isReadOnly: isDemoLocked, leadId: budget.leadId === 'unassigned' ? undefined : budget.leadId
     };
 
@@ -307,8 +307,8 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                 budgetNumber={budget.id.substring(0, 8)}
                 showGhostMode={isGhostMode}
                 onToggleGhostMode={() => setIsGhostMode(!isGhostMode)}
-                isExecutionOnly={state.isExecutionOnly}
-                onToggleExecutionMode={toggleExecutionMode}
+                executionMode={state.executionMode}
+                onSetExecutionMode={setExecutionMode}
                 budgetConfig={state.config}
                 onUpdateConfig={updateConfig}
                 onAddItem={addItem}
@@ -389,6 +389,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                                 chapters={state.chapters}
                                                 clientName={budget.clientSnapshot?.name || 'Cliente'}
                                                 budgetNumber={budget.id.substring(0, 8)}
+                                                executionMode={state.executionMode}
                                                 onPdfDownloaded={handlePdfDownloaded}
                                                 initialPdfMeta={pdfMeta}
                                                 onSavePdfSettings={handleSavePdfSettings}
@@ -548,6 +549,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                         chapters={state.chapters}
                                         clientName={budget.clientSnapshot?.name || 'Cliente'}
                                         budgetNumber={budget.id.substring(0, 8)}
+                                        executionMode={state.executionMode}
                                         onPdfDownloaded={handlePdfDownloaded}
                                         initialPdfMeta={pdfMeta}
                                         onSavePdfSettings={handleSavePdfSettings}

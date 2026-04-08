@@ -1,13 +1,19 @@
-﻿import { OtpService } from '../domain/otp-service';
-import { getFirestore } from 'firebase-admin/firestore';
-import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
+import { OtpService } from '../domain/otp-service';
+import nodemailer from 'nodemailer';
 
-export class FirebaseOtpAdapter implements OtpService {
-    private db;
+export class NodemailerOtpAdapter implements OtpService {
+    private transporter: nodemailer.Transporter;
 
     constructor() {
-        initFirebaseAdminApp();
-        this.db = getFirestore();
+        this.transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST || 'smtp.hostinger.com',
+            port: parseInt(process.env.SMTP_PORT || '465'),
+            secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+            },
+        });
     }
 
     generateCode(length: number = 6): string {
@@ -16,7 +22,6 @@ export class FirebaseOtpAdapter implements OtpService {
     }
 
     async sendOtp(email: string, code: string): Promise<void> {
-        // Use Firebase Trigger Email Extension (collection 'mail')
         const htmlTemplate = `
 <!DOCTYPE html>
 <html>
@@ -82,12 +87,15 @@ export class FirebaseOtpAdapter implements OtpService {
 </html>
         `;
 
-        await this.db.collection('mail').add({
+        const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '"Basis" <noreply@basis.consultoria.systems>';
+
+        await this.transporter.sendMail({
+            from: fromEmail,
             to: email,
-            message: {
-                subject: 'Tu código de acceso seguro - Basis',
-                html: htmlTemplate,
-            }
+            subject: 'Tu código de acceso seguro - Basis',
+            html: htmlTemplate,
         });
+
+        console.log(`[OTP Sent] Code generated for ${email} sent via SMTP from ${fromEmail}`);
     }
 }

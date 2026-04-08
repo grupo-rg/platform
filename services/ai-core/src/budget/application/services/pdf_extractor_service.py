@@ -121,19 +121,19 @@ class IPdfExtractorService:
             
         return sys_p, usr_p
 
-    def _emit(self, lead_id: str, event_type: str, data: Dict[str, Any]):
+    def _emit(self, budget_id: str, event_type: str, data: Dict[str, Any]):
         if self.emitter:
-            self.emitter.emit_event(lead_id, event_type, data)
+            self.emitter.emit_event(budget_id, event_type, data)
 
 # --- Concrete: Inline (Standard) Extractor ---
 class InlinePdfExtractorService(IPdfExtractorService):
-    async def extract(self, raw_items: List[Dict[str, Any]], lead_id: str, metrics: Dict) -> List[RestructuredItem]:
-        logger.info(f"Starting INLINE Batch Restructure Phase for {len(raw_items)} pages...")
-        self._emit(lead_id, 'extraction_started', {"query": "Estrategia Visual Básica: Leyendo páginas completas (textos y mediciones juntos)..."})
+    async def extract(self, raw_items: List[Dict[str, Any]], budget_id: str, metrics: Dict) -> List[RestructuredItem]:
+        logger.info(f"Starting INLINE Restructure Phase for {len(raw_items)} raw items...")
+        self._emit(budget_id, 'extraction_started', {"query": f"Lanzando Analista de Estructuras sobre la página..."})
 
         CHUNK_SIZE = 1
         chunks = [raw_items[i:i + CHUNK_SIZE] for i in range(0, len(raw_items), CHUNK_SIZE)]
-        self._emit(lead_id, 'batch_restructure_submitted', {"query": f"Lote visual dividido en {len(chunks)} páginas atómicas concurrenciales."})
+        self._emit(budget_id, 'batch_restructure_submitted', {"query": f"Lote visual dividido en {len(chunks)} páginas atómicas concurrenciales."})
         
         semaphore = asyncio.Semaphore(15) 
         
@@ -160,7 +160,7 @@ class InlinePdfExtractorService(IPdfExtractorService):
                         start_instruction=start_instruction
                     )
                     
-                    self._emit(lead_id, 'restructuring', {"query": f"Extracción Multimodal Página {chunk_idx + 1}/{len(chunks)} (Iteración {iteration}/{max_iterations})..."})
+                    self._emit(budget_id, 'restructuring', {"query": f"Extracción Multimodal Página {chunk_idx + 1}/{len(chunks)} (Iteración {iteration}/{max_iterations})..."})
                     
                     partial_res, usage = await self.llm.generate_structured(
                         system_prompt=sys_prompt,
@@ -186,7 +186,7 @@ class InlinePdfExtractorService(IPdfExtractorService):
                         break
                 
                 merged_res = RestructureChunkResult(items=all_items_for_page, has_more_items=False, last_extracted_code="")
-                self._emit(lead_id, 'restructuring', {"query": f"Página {chunk_idx + 1}/{len(chunks)} consolidada (Total partidas: {len(all_items_for_page)})."})
+                self._emit(budget_id, 'restructuring', {"query": f"Página {chunk_idx + 1}/{len(chunks)} consolidada (Total partidas: {len(all_items_for_page)})."})
                 return merged_res, accumulated_usage
                 
         tasks = [process_restructure_chunk(idx, chunk) for idx, chunk in enumerate(chunks)]
@@ -202,7 +202,6 @@ class InlinePdfExtractorService(IPdfExtractorService):
                 self._track_telemetry(metrics, usage)
                 
         final_items = []
-        final_items = []
         current_chapter = "Sin Capítulo"
         for item in consolidated:
             current_chapter = stabilize_chapter_name(item.chapter, current_chapter)
@@ -211,33 +210,35 @@ class InlinePdfExtractorService(IPdfExtractorService):
         
         # Filtro Anti-Fantasmas
         valid_items = [item for item in final_items if item.code and str(item.code).strip() != ""]
+        total_valid = len(valid_items)
         
-        self._emit(lead_id, 'subtasks_extracted', {"count": len(valid_items), "totalTasks": len(valid_items)})
+        self._emit(budget_id, 'subtasks_extracted', {"count": total_valid, "totalTasks": total_valid})
+        self._emit(budget_id, 'batch_restructure_submitted', {"query": f"Extracción Finalizada. Consolidando {total_valid} partidas..."})
         return valid_items
 
 # --- Concrete: Annexed (MapReduce) Extractor ---
 class AnnexedPdfExtractorService(IPdfExtractorService):
-    async def extract(self, raw_items: List[Dict[str, Any]], lead_id: str, metrics: Dict) -> List[RestructuredItem]:
-        logger.info(f"Starting ANNEXED (MapReduce) Batch Restructure Phase for {len(raw_items)} pages...")
-        self._emit(lead_id, 'extraction_started', {"query": "Estrategia Visual Compleja: Mapeando Obras (Literatura) y Resolviendo Anexos (Cantidades)..."})
+    async def extract(self, pages_chunks: List[Dict[str, Any]], budget_id: str, metrics: Dict) -> List[RestructuredItem]:
+        logger.info(f"Starting ANNEXED (MapReduce) Batch Restructure Phase for {len(pages_chunks)} pages...")
+        self._emit(budget_id, 'extraction_started', {"query": f"Desplegando Analista Documental sobre documento multipágina ({len(pages_chunks)} páginas)..."})
         
         # En producción "real", el Endpoint separa los `raw_items` en descriptivos y contables.
         # Asumimos que los primeros N-1 son literatura y la página `raw_items[-1]` es mediciones.
         # Aquí puedes iterar o usar una heurística. Como POC robusto:
         
-        if len(raw_items) < 2:
+        if len(pages_chunks) < 2:
             # Fallback a inline si no hay modo de hacer mapreduce
             inline_svc = InlinePdfExtractorService(self.llm, self.emitter)
-            return await inline_svc.extract(raw_items, lead_id, metrics)
+            return await inline_svc.extract(pages_chunks, budget_id, metrics)
             
-        desc_pages = [p for p in raw_items if not p.get("is_summatory", False)]
-        summ_pages = [p for p in raw_items if p.get("is_summatory", False)]
+        desc_pages = [p for p in pages_chunks if not p.get("is_summatory", False)]
+        summ_pages = [p for p in pages_chunks if p.get("is_summatory", False)]
         
         # Fallback heurístico si no vienen taggeadas: MITAD Y MITAD (Solo para safety, idealmente vienen de UI)
         if not desc_pages or not summ_pages:
-            mid = len(raw_items) // 2
-            desc_pages = raw_items[:mid]
-            summ_pages = raw_items[mid:]
+            mid = len(pages_chunks) // 2
+            desc_pages = pages_chunks[:mid]
+            summ_pages = pages_chunks[mid:]
         
         semaphore = asyncio.Semaphore(15) 
         
@@ -246,7 +247,7 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
             async with semaphore:
                 b64_img = page_data.get("image_base64")
                 sys_prompt, user_prompt = self._load_prompt("vision_annexed_descriptions.prompt", image_base64_data="[IMAGE_B64]")
-                self._emit(lead_id, 'restructuring', {"query": f"Mapeando Literatura de Obra (Página {chunk_idx+1}/{len(desc_pages)})..."})
+                self._emit(budget_id, 'restructuring', {"query": f"Mapeando Literatura de Obra (Página {chunk_idx+1}/{len(desc_pages)})..."})
                 res, usage = await self.llm.generate_structured(
                     system_prompt=sys_prompt, user_prompt=user_prompt,
                     response_schema=Phase1Result, temperature=0.0, image_base64=b64_img
@@ -266,7 +267,7 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
             async with semaphore:
                 b64_img = page_data.get("image_base64")
                 sys_prompt, user_prompt = self._load_prompt("vision_annexed_summatory.prompt", image_base64_data="[IMAGE_B64]")
-                self._emit(lead_id, 'restructuring', {"query": f"Auditando Mediciones Contables en Anexos (Página {chunk_idx+1}/{len(summ_pages)})..."})
+                self._emit(budget_id, 'restructuring', {"query": f"Auditando Mediciones Contables en Anexos (Página {chunk_idx+1}/{len(summ_pages)})..."})
                 res, usage = await self.llm.generate_structured(
                     system_prompt=sys_prompt, user_prompt=user_prompt,
                     response_schema=Phase2Result, temperature=0.0, image_base64=b64_img
@@ -282,7 +283,7 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
             if isinstance(r, list): all_summatories.extend(r)
             
         # --- Fase Reduce (El Diccionario) ---
-        self._emit(lead_id, 'restructuring', {"query": f"Cruzando {len(all_descriptions)} descripciones con {len(all_summatories)} mediciones de obra..."})
+        self._emit(budget_id, 'restructuring', {"query": f"Cruzando {len(all_descriptions)} descripciones con {len(all_summatories)} mediciones de obra..."})
         
         def normalize_code(code_str: str) -> str:
             return re.sub(r'[^0-9]', '', str(code_str))
@@ -308,5 +309,5 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
             ))
             
         valid_items = [i for i in final_items if i.code and str(i.code).strip() != ""]
-        self._emit(lead_id, 'subtasks_extracted', {"count": len(valid_items), "totalTasks": len(valid_items)})
+        self._emit(budget_id, 'subtasks_extracted', {"count": len(valid_items), "totalTasks": len(valid_items)})
         return valid_items

@@ -16,6 +16,20 @@ export function BudgetWizardTips({ setInput }: BudgetWizardTipsProps) {
     const isMobile = useIsMobile();
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [hasOpenedBefore, setHasOpenedBefore] = useState(false);
+    const [isDesktopOpen, setIsDesktopOpen] = useState(true);
+
+    useEffect(() => {
+        const stored = localStorage.getItem('dochevi_wizard_tips_expanded');
+        if (stored !== null) {
+            setIsDesktopOpen(stored === 'true');
+        }
+    }, []);
+
+    const toggleDesktop = () => {
+        const newVal = !isDesktopOpen;
+        setIsDesktopOpen(newVal);
+        localStorage.setItem('dochevi_wizard_tips_expanded', String(newVal));
+    };
 
     // Auto-open on mobile on first load
     useEffect(() => {
@@ -165,15 +179,44 @@ export function BudgetWizardTips({ setInput }: BudgetWizardTipsProps) {
 
     // Desktop View
     return (
-        <div className="hidden md:flex flex-col w-[320px] shrink-0 border-l border-white/10 bg-[#1e1f20]/50 backdrop-blur-xl h-full p-6 overflow-y-auto custom-scrollbar auto-cols-auto z-10">
-            <div className="mb-6">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Lightbulb className="w-5 h-5 text-primary" />
-                    Cómo pedirlo
-                </h3>
-                <p className="text-sm text-slate-400 mt-1">Mejores descripciones = Mejor presupuesto generado por la IA.</p>
-            </div>
-            <TipsContent />
+        <div 
+            className={cn(
+                "hidden md:flex flex-col shrink-0 border-l border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e1f20]/50 backdrop-blur-xl h-full overflow-y-auto custom-scrollbar auto-cols-auto transition-all duration-300 relative",
+                isDesktopOpen ? "w-[320px] p-6" : "w-[65px] items-center py-6 px-2"
+            )}
+        >
+            {isDesktopOpen ? (
+                <div className="flex flex-col animate-in fade-in duration-300">
+                    <div className="mb-6 flex items-start justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                <Lightbulb className="w-5 h-5 text-primary" />
+                                Cómo pedirlo
+                            </h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 pr-2">Mejores descripciones = Mejor presupuesto generado por la IA.</p>
+                        </div>
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={toggleDesktop} 
+                            className="h-8 w-8 shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-white -mr-2"
+                        >
+                            <X className="w-4 h-4" />
+                        </Button>
+                    </div>
+                    <TipsContent />
+                </div>
+            ) : (
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={toggleDesktop} 
+                    className="w-10 h-10 rounded-full bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary mt-2"
+                    title="Ver Tips y Plantillas"
+                >
+                    <Lightbulb className="w-5 h-5" />
+                </Button>
+            )}
         </div>
     );
 }

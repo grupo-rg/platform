@@ -51,6 +51,8 @@ export interface BudgetConfig {
 }
 
 
+export type ExecutionMode = 'complete' | 'execution' | 'labor';
+
 export interface BudgetEditorState {
     items: EditableBudgetLineItem[];
     costBreakdown: BudgetCostBreakdown;
@@ -63,7 +65,7 @@ export interface BudgetEditorState {
     lastSavedAt?: Date;
     isSaving: boolean;
     chapters: string[]; // List of chapter names in order
-    isExecutionOnly: boolean; // Toggle for Execution Only mode
+    executionMode: ExecutionMode; // Toggle for Execution modes
     config: BudgetConfig;
 }
 
@@ -80,7 +82,7 @@ export type BudgetEditorAction =
     | { type: 'REORDER_CHAPTERS'; payload: string[] }
     | { type: 'UNDO' }
     | { type: 'REDO' }
-    | { type: 'TOGGLE_EXECUTION_MODE' }
+    | { type: 'SET_EXECUTION_MODE'; payload: ExecutionMode }
     | { type: 'UPDATE_CONFIG'; payload: Partial<BudgetConfig> }
     | { type: 'APPLY_MARKUP'; payload: { scope: 'global' | 'chapter' | 'item'; targetId?: string; percentage: number } }
     | { type: 'SAVE_START' }

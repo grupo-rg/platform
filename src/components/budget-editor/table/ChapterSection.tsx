@@ -41,7 +41,7 @@ export const ChapterSection = ({
         leadId
     } = useBudgetEditorContext();
 
-    const isExecutionOnly = state.isExecutionOnly;
+    const executionMode = state.executionMode;
     const [isExpanded, setIsExpanded] = useState(true);
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameDraft, setNameDraft] = useState(chapterName);
@@ -55,7 +55,9 @@ export const ChapterSection = ({
 
     const totalChapter = items.reduce((acc: number, i: any) => {
         let total = i.item?.totalPrice || 0;
-        if (isExecutionOnly && i.item?.breakdown) {
+        let deduct = 0;
+        
+        if (executionMode === 'execution' && i.item?.breakdown) {
             const vCost = i.item.breakdown
                 .filter((comp: any) => comp.is_variable === true || comp.is_variable === 'true' || comp.isVariable === true)
                 .reduce((cAcc: number, comp: any) => {
@@ -63,9 +65,20 @@ export const ChapterSection = ({
                     const cQuantity = comp.quantity || comp.yield || 1;
                     return cAcc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
                 }, 0);
-            total = Math.max(0, total - vCost);
+            deduct = vCost * (i.item?.quantity || 1);
+        } else if (executionMode === 'labor' && i.item?.breakdown) {
+            const laborCosts = i.item.breakdown
+                .filter((comp: any) => comp.code && String(comp.code).toLowerCase().startsWith('mo'))
+                .reduce((cAcc: number, comp: any) => {
+                    const cPrice = comp.unitPrice || comp.price || 0;
+                    const cQuantity = comp.quantity || comp.yield || 1;
+                    return cAcc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
+                }, 0);
+            const totalLaborCosts = laborCosts * (i.item?.quantity || 1);
+            deduct = total - totalLaborCosts;
         }
-        return acc + total;
+
+        return acc + Math.max(0, total - deduct);
     }, 0);
 
     return (
@@ -162,7 +175,7 @@ export const ChapterSection = ({
                             onRemove={removeItem}
                             onDuplicate={duplicateItem}
                             showGhostMode={showGhostMode}
-                            isExecutionOnly={isExecutionOnly}
+                            executionMode={executionMode}
                             onOpenBreakdown={onOpenBreakdown}
                             onOpenMarkup={onOpenMarkup}
                             isReadOnly={isReadOnly}

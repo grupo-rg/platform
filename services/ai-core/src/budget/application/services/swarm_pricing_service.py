@@ -48,9 +48,9 @@ class SwarmPricingService:
         self.vector_search = vector_search
         self.emitter = emitter
 
-    def _emit(self, lead_id: str, event_type: str, data: Dict[str, Any]):
+    def _emit(self, budget_id: str, event_type: str, data: Dict[str, Any]):
         if self.emitter:
-            self.emitter.emit_event(lead_id, event_type, data)
+            self.emitter.emit_event(budget_id, event_type, data)
 
     def _track_telemetry(self, metrics_dict: Dict, usage: Dict[str, int]):
         metrics_dict["prompt"] += usage.get("promptTokenCount", 0)
@@ -127,9 +127,9 @@ class SwarmPricingService:
         return all_candidates[:15]
 
     # --- 3. Ejecución Orquestada de Pricing (Public Method) ---
-    async def evaluate_batch(self, items: List[RestructuredItem], lead_id: str, metrics: Dict) -> List[BudgetPartida]:
+    async def evaluate_batch(self, items: List[RestructuredItem], budget_id: str, metrics: Dict) -> List[BudgetPartida]:
         logger.info(f"Starting Swarm Pricing Phase for {len(items)} items...")
-        self._emit(lead_id, 'vector_search_started', {"query": f"Invocando al cerebro Flash para romper {len(items)} partidas en queries atómicas..."})
+        self._emit(budget_id, 'vector_search_started', {"query": f"Invocando al cerebro Flash para romper {len(items)} partidas en queries atómicas..."})
         
         # Obtenemos candidatos masivos
         async def fetch_item_candidates(item: RestructuredItem):
@@ -162,7 +162,7 @@ class SwarmPricingService:
                 batch_tasks.append({"id": item.code, "prompt": prompt_block})
                 
         # Pro Evaluating
-        self._emit(lead_id, 'batch_pricing_submitted', {"query": f"Generados {len(batch_tasks)} Enjambres de Mercado. Evaluando costes exactos con Gemini Pro..."})
+        self._emit(budget_id, 'batch_pricing_submitted', {"query": f"Generados {len(batch_tasks)} Enjambres de Mercado. Evaluando costes exactos con Gemini Pro..."})
         
         CHUNK_SIZE = 3
         grouped_tasks = [batch_tasks[i:i + CHUNK_SIZE] for i in range(0, len(batch_tasks), CHUNK_SIZE)]
@@ -182,7 +182,7 @@ class SwarmPricingService:
                     temperature=0.0,
                     model="gemini-2.5-pro"
                 )
-                self._emit(lead_id, 'vector_search', {"query": f"Evaluación Matemática Grupo {chunk_idx + 1}/{len(grouped_tasks)} terminada."})
+                self._emit(budget_id, 'vector_search', {"query": f"Evaluación Matemática Grupo {chunk_idx + 1}/{len(grouped_tasks)} terminada."})
                 return eval_res, usage
 
         eval_tasks = [evaluate_chunk(idx, g) for idx, g in enumerate(grouped_tasks)]
@@ -266,8 +266,8 @@ class SwarmPricingService:
                 )
                 priced_partidas.append(partida)
                 
-                self._emit(lead_id, 'item_resolved', {"type": "PARTIDA", "item": partida.model_dump()})
+                self._emit(budget_id, 'item_resolved', {"type": "PARTIDA", "item": partida.model_dump()})
                 global_order += 1
                 
-        self._emit(lead_id, 'batch_pricing_completed', {"query": "Swarm finalizado. Ensamblando Presupuesto Real..."})
+        self._emit(budget_id, 'batch_pricing_completed', {"query": "Swarm finalizado. Ensamblando Presupuesto Real..."})
         return priced_partidas

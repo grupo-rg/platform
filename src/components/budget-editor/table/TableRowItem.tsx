@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { Reorder, useDragControls } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { EditableBudgetLineItem } from "@/types/budget-editor";
+import { EditableBudgetLineItem, ExecutionMode } from "@/types/budget-editor";
 import { EditableCell } from "../EditableCell"; // Adjust relative path
 import { sileo } from 'sileo';
 import { generateBreakdownAction } from '@/actions/budget/smart-actions';
@@ -48,7 +48,7 @@ interface TableRowItemProps {
     onRemove: (id: string) => void;
     onDuplicate: (id: string) => void;
     showGhostMode?: boolean;
-    isExecutionOnly?: boolean;
+    executionMode?: ExecutionMode;
     onOpenBreakdown: (item: EditableBudgetLineItem) => void;
     onOpenMarkup: (id: string) => void;
     isReadOnly?: boolean;
@@ -56,7 +56,7 @@ interface TableRowItemProps {
 }
 
 export const TableRowItem = React.memo(({
-    item, onUpdate, onRemove, onDuplicate, showGhostMode, isExecutionOnly, onOpenBreakdown, onOpenMarkup, isReadOnly, leadId
+    item, onUpdate, onRemove, onDuplicate, showGhostMode, executionMode, onOpenBreakdown, onOpenMarkup, isReadOnly, leadId
 }: TableRowItemProps) => {
     const controls = useDragControls();
     const [isPending, startTransition] = useTransition();
@@ -79,18 +79,29 @@ export const TableRowItem = React.memo(({
     const showIclPrompt = (hasManualDelta || item.isDirty) && !isReadOnly;
 
     // Execution Only logic
-    const variableCosts = isExecutionOnly && item.item?.breakdown
-        ? item.item.breakdown
+    let deduct = 0;
+    if (executionMode === 'execution' && item.item?.breakdown) {
+        deduct = item.item.breakdown
             .filter((comp: any) => comp.is_variable === true || comp.is_variable === 'true' || comp.isVariable === true)
             .reduce((acc: number, comp: any) => {
                 const cPrice = comp.unitPrice || comp.price || 0;
                 const cQuantity = comp.quantity || comp.yield || 1;
                 return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
-            }, 0)
-        : 0;
-
-    const actualTotal = item.item?.totalPrice || 0;
-    const displayTotal = Number(Math.max(0, actualTotal - variableCosts).toFixed(2));
+            }, 0) * (item.item?.quantity || 1);
+    } else if (executionMode === 'labor' && item.item?.breakdown) {
+        const laborCosts = item.item.breakdown
+            .filter((comp: any) => comp.code && String(comp.code).toLowerCase().startsWith('mo'))
+            .reduce((acc: number, comp: any) => {
+                const cPrice = comp.unitPrice || comp.price || 0;
+                const cQuantity = comp.quantity || comp.yield || 1;
+                return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
+            }, 0);
+        const totalLaborCosts = laborCosts * (item.item?.quantity || 1);
+        deduct = (item.item?.totalPrice || 0) - totalLaborCosts;
+    }
+    
+    const activePrice = Math.max(0, (item.item?.totalPrice || 0) - deduct);
+    const displayTotal = Number(activePrice.toFixed(2));
     const displayUnitPrice = Number(((item.item?.quantity || 1) > 0 ? displayTotal / item.item!.quantity : 0).toFixed(2));
 
     const handleTotalChange = (val: string | number) => {
@@ -491,7 +502,7 @@ export const TableRowItem = React.memo(({
 }, (prev, next) => {
     // Memoization deep-diff to avoid hundreds of useless re-renders on dragging and typing
     if (prev.showGhostMode !== next.showGhostMode) return false;
-    if (prev.isExecutionOnly !== next.isExecutionOnly) return false;
+    if (prev.executionMode !== next.executionMode) return false;
     if (prev.isReadOnly !== next.isReadOnly) return false;
     if (JSON.stringify(prev.item.item) !== JSON.stringify(next.item.item)) return false;
     if (prev.item.isDirty !== next.item.isDirty) return false;
