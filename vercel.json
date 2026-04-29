@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/re-engagement",
-      "schedule": "0 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
