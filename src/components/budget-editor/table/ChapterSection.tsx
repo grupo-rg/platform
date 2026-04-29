@@ -53,10 +53,15 @@ export const ChapterSection = ({
         setIsEditingName(false);
     };
 
-    const totalChapter = items.reduce((acc: number, i: any) => {
+    // Phase 15 — markup factor distribuido equitativamente sobre partidas
+    // (GG + BI sobre raw PEM). El total del capítulo mostrado al usuario
+    // refleja precios all-in coherentes con el Resumen Económico (Base Imponible).
+    const markupFactor = 1 + ((state.config?.marginGG || 0) + (state.config?.marginBI || 0)) / 100;
+
+    const totalChapterRaw = items.reduce((acc: number, i: any) => {
         let total = i.item?.totalPrice || 0;
         let deduct = 0;
-        
+
         if (executionMode === 'execution' && i.item?.breakdown) {
             const vCost = i.item.breakdown
                 .filter((comp: any) => comp.is_variable === true || comp.is_variable === 'true' || comp.isVariable === true)
@@ -80,6 +85,9 @@ export const ChapterSection = ({
 
         return acc + Math.max(0, total - deduct);
     }, 0);
+
+    // Total mostrado = raw × markupFactor (consistente con Base Imponible).
+    const totalChapter = totalChapterRaw * markupFactor;
 
     return (
         <>

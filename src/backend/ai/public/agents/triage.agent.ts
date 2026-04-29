@@ -23,7 +23,7 @@ export const triageAgent = ai.defineFlow(
     },
     async (input) => {
         const prompt = `
-        You are the Lead Budget Architect for Dochevi Construction.
+        You are the Lead Budget Architect for Grupo RG, a construction company based in Mallorca.
         Your goal is to decide which specialist agent to use for the following request.
         
         Request: "${input.userRequest}"

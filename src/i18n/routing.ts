@@ -65,11 +65,20 @@ export const routing = defineRouting({
             nl: '/locaties/[zone]'
         },
         '/dashboard': '/dashboard',
+        '/dashboard/assistant': {
+            es: '/dashboard/asistente',
+            en: '/dashboard/assistant',
+            ca: '/dashboard/assistent',
+            de: '/dashboard/assistent',
+            nl: '/dashboard/assistent'
+        },
         '/dashboard/budget-request': '/dashboard/budget-request',
         '/dashboard/admin/budgets': '/dashboard/admin/budgets',
+        '/dashboard/admin/pipelines': '/dashboard/admin/pipelines',
         '/dashboard/seo-generator': '/dashboard/seo-generator',
         '/dashboard/settings/pricing': '/dashboard/settings/pricing',
         '/dashboard/settings/financial': '/dashboard/settings/financial',
+        '/dashboard/settings/company': '/dashboard/settings/company',
         '/dashboard/admin/prices': '/dashboard/admin/prices',
         '/dashboard/settings': '/dashboard/settings'
     }

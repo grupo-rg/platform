@@ -1,0 +1,40 @@
+{
+  "golden_id": "003-nl-reforma-bano",
+  "source": "BudgetWizardTips.tsx:67 — Reforma de Baño Estándar",
+  "description": "Test cualitativo del flujo NL. No tiene verdad humana de precios (el price_book es la única fuente de verdad). Valida estructura, selección de capítulos, compliance con DAG y órdenes de magnitud.",
+  "mandatory_chapters": [
+    "DEMOLICIONES",
+    "FONTANERIA Y GAS",
+    "SOLADOS Y ALICATADOS"
+  ],
+  "optional_chapters": [
+    "PINTURA Y REVESTIMIENTOS",
+    "REVOCOS Y ENLUCIDOS",
+    "CARPINTERIA DE MADERA",
+    "SEGURIDAD Y SALUD"
+  ],
+  "mandatory_chapters_note": "PINTURA quitada de mandatory: el brief no pide pintar. Calibrado tras primera corrida real v005 — 2026-04-21.",
+  "dag_constraints": [
+    "DEMOLICIONES antes de FONTANERIA Y GAS",
+    "FONTANERIA Y GAS antes de REVOCOS Y ENLUCIDOS",
+    "REVOCOS Y ENLUCIDOS antes de SOLADOS Y ALICATADOS",
+    "REVOCOS Y ENLUCIDOS antes de PINTURA Y REVESTIMIENTOS"
+  ],
+  "pem_range_eur": {
+    "min": 3000,
+    "max": 8000,
+    "note": "Rango amplio y tolerante. Solo detecta outliers gruesos (ej. < 1000€ → no se tasó nada; > 15000€ → interpretó un baño de lujo que el brief no pide)."
+  },
+  "partida_count_range": {
+    "min": 6,
+    "max": 30,
+    "note": "Un baño de 5 m² con los 6 trabajos listados debería generar entre 6 (1 partida por trabajo) y 30 (desglosado en materiales + mano de obra por cada trabajo)."
+  },
+  "units_expected": {
+    "alicatados_m2": "aprox 20-25 m² (paredes + suelo de un baño de 5 m² en planta)",
+    "plato_ducha_ud": 1,
+    "mampara_ud": 1,
+    "inodoro_ud": 1,
+    "mueble_lavabo_ud": 1
+  }
+}

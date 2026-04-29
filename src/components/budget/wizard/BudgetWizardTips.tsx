@@ -19,7 +19,7 @@ export function BudgetWizardTips({ setInput }: BudgetWizardTipsProps) {
     const [isDesktopOpen, setIsDesktopOpen] = useState(true);
 
     useEffect(() => {
-        const stored = localStorage.getItem('dochevi_wizard_tips_expanded');
+        const stored = localStorage.getItem('grupo_rg_wizard_tips_expanded');
         if (stored !== null) {
             setIsDesktopOpen(stored === 'true');
         }
@@ -28,7 +28,7 @@ export function BudgetWizardTips({ setInput }: BudgetWizardTipsProps) {
     const toggleDesktop = () => {
         const newVal = !isDesktopOpen;
         setIsDesktopOpen(newVal);
-        localStorage.setItem('dochevi_wizard_tips_expanded', String(newVal));
+        localStorage.setItem('grupo_rg_wizard_tips_expanded', String(newVal));
     };
 
     // Auto-open on mobile on first load

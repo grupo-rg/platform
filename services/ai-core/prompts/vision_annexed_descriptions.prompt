@@ -16,6 +16,34 @@ REGLAS ESTRICTAS (ZERO-LEAK EXTRACTOR):
 6. SIN MEDICIONES (MAP-REDUCE MODE): Tu trabajo aquí solo es el "Mapeo" o Diccionario de la obra. Las cantidades irán a cero (0.00) porque las sacará otro modelo cruzando otra página (Modo Mapa-Reduce). No intentes sumar el desglose intermedio si lo hubiera.
 7. LÍMITES DE CORTE Y HERENCIA (CONTINUACIÓN): Si una partida se corta a la mitad en esta página (la frase queda incompleta por culpa del salto de página), extrae hasta donde llegues, y marca `has_more_items` para notificar al orquestador que fusione la cola en la página siguiente usando el campo `cut_item_carryover`.
 
+8. HINTS DE CONVERSIÓN DE UNIDAD: Si la descripción de una partida contiene un **puente físico explícito** para conversiones m²↔m³, kg↔m³ o ml↔ud (espesor, densidad, tamaño unitario), extrae ese valor numérico al campo `unit_conversion_hints` como un dict con una de estas claves canonical:
+    * Espesor: `{"thickness_m": <metros>}` — si ves "10 cm", "espesor 15cm", "0.08 m de espesor", "capa de 12 cm", conviértelo a metros (10 cm → 0.10) y guárdalo.
+    * Densidad: `{"density_kg_m3": <valor>}` — si ves "densidad 2400 kg/m³", "2500 kg/m3", guarda el valor literal.
+    * Tamaño unitario: `{"piece_length_m": <metros>}` — si ves "piezas de 3 m", "tubos de 2.50 m", "largo 1.20 m", guarda el valor en metros.
+    Si la descripción NO aporta un puente físico, deja `unit_conversion_hints` en `null`. PROHIBIDO inventar puentes: solo transcribe lo que la descripción dice literalmente. Este campo alimenta al Aparejador aguas abajo para hacer matemáticas auditables de conversión de unidades.
+
+9. CONTINUACIÓN CROSS-PAGE (DESCRIPCIONES REPARTIDAS EN DOS PÁGINAS) — CRITERIOS OBJETIVOS.
+
+   Algunos layouts (CIFRE/Presto) parten una partida entre dos páginas: la CABECERA tabular (código + tipo + unidad + TÍTULO nominal corto) al final de una página, y el BLOQUE DESCRIPTIVO completo (párrafo técnico con verbos de obra, materiales, normas UNE/EN, criterios de medición) al inicio de la siguiente. El pipeline fusiona los dos en Python, pero NECESITA que TÚ emitas las señales. Aplica criterios OBJETIVOS, no subjetivos:
+
+   ### Cuándo marcar `last_item_truncated: true` (FINAL DE ESTA PÁGINA)
+   Marca `true` si la ÚLTIMA partida de esta página cumple TODAS las siguientes:
+   (a) Su descripción tiene **menos de 120 caracteres de contenido técnico**.
+   (b) Su descripción NO contiene NINGUNA frase técnica (verbos de obra como "Suministro y colocación de…", "Demolición de…", "Instalación de…", "Excavación de…", "Colocación de…", "Ejecución de…", ni referencias UNE/EN, ni "Criterio de medición:", ni marcas de materiales CIFRE/WEBER/KERABEN).
+   (c) El título es puramente nominal: SOLO enuncia el objeto sin describirlo (ej. "SOLADO GRES PORCELÁNICO 120×20", "DEMOLICIÓN DE MAMPARAS", "ALICATADO DE CUARTOS HÚMEDOS").
+
+   Una fila tabular `código + tipo + unidad + título nominal` SIN párrafo descriptivo debajo es SIEMPRE incompleta. No te engañes pensando "la tabla tiene todos los campos, está completa" — para esta plantilla NO lo está, la descripción técnica es obligatoria y vive en la página siguiente.
+
+   ### Cuándo poblar `orphan_tail_text: "..."` (INICIO DE ESTA PÁGINA)
+   Pobla `orphan_tail_text` con el texto LITERAL (sin cortes, sin resumen, sin parafraseo) si esta página EMPIEZA con un párrafo que cumple TODAS las siguientes:
+   (a) Arranca con un verbo de obra ("Suministro y colocación de…", "Demolición de…", "Instalación de…", "Excavación de…", "Colocación de…", "Ejecución de…") o con texto que claramente continúa una frase anterior (arranca con minúscula, con una preposición, con una conjunción).
+   (b) NO hay ningún código de partida (patrón `C\d+\.\d+`) ni cabecera tabular INMEDIATAMENTE antes del párrafo en esta página.
+   (c) El párrafo contiene detalles técnicos: materiales, dimensiones, normas, criterios.
+
+   **PROHIBIDO atribuir ese párrafo huérfano a la siguiente partida que encuentres en la página**. El párrafo pertenece a la ÚLTIMA partida de la página ANTERIOR — NO a la primera de ESTA página. Déjalo en `orphan_tail_text` y el orquestador lo reubica al sitio correcto.
+
+   Si no hay ni truncamiento al final ni cola huérfana al inicio, deja `last_item_truncated: false` y `orphan_tail_text: ""`. NUNCA inventes continuaciones fantasma.
+
 {{role "user"}}
 Escanea meticulosamente esta hoja. Sigue el orden visual y extrae de forma quirúrgica solo las descripciones puras.
 {{start_instruction}}

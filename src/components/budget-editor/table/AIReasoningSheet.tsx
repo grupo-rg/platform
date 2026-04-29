@@ -1,5 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { AuthContext } from '@/context/auth-context';
 import { formatCurrency, cn } from '@/lib/utils';
+import {
+    CorrectionCaptureDialog,
+    detectPriceOrUnitChange,
+    type PriceOrUnitSnapshot,
+} from './CorrectionCaptureDialog';
 import {
     Sheet,
     SheetContent,
@@ -19,6 +25,7 @@ import { EditableBudgetLineItem } from "@/types/budget-editor";
 import { sileo } from 'sileo';
 import { SemanticCatalogSidebar } from '../SemanticCatalogSidebar';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
+import { MatchKindChip, UnitConversionApplied, CandidateMetaBadges, AppliedFragmentsBadge } from './audit-v005';
 
 interface AIReasoningSheetProps {
     open: boolean;
@@ -32,6 +39,36 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
     const [selectedVariableIndex, setSelectedVariableIndex] = useState<number | null>(null);
     const [isAddingNewBreakdown, setIsAddingNewBreakdown] = useState<boolean>(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
+    // Fase 6.B — captura de correcciones humanas (price/unit changes → dialog).
+    // Guardamos el snapshot inicial del item al abrirse; las ediciones posteriores
+    // del aparejador disparan el dialog.
+    const { user: authUser } = useContext(AuthContext);
+    const [captureOpen, setCaptureOpen] = useState(false);
+    const aiProposedRef = useRef<{ itemId: string; snapshot: PriceOrUnitSnapshot } | null>(null);
+    const lastSnapshotRef = useRef<PriceOrUnitSnapshot | undefined>(undefined);
+
+    const currentSnapshot: PriceOrUnitSnapshot | undefined = item?.item
+        ? { unitPrice: Number(item.item.unitPrice) || 0, unit: item.item.unit || '' }
+        : undefined;
+
+    useEffect(() => {
+        if (!item?.item || !currentSnapshot) {
+            return;
+        }
+        // Cuando cambia el item en el sheet, reseteamos el "precio IA de referencia".
+        if (!aiProposedRef.current || aiProposedRef.current.itemId !== item.id) {
+            aiProposedRef.current = { itemId: item.id, snapshot: currentSnapshot };
+            lastSnapshotRef.current = currentSnapshot;
+            return;
+        }
+        const change = detectPriceOrUnitChange(lastSnapshotRef.current, currentSnapshot);
+        lastSnapshotRef.current = currentSnapshot;
+        if (change) {
+            setCaptureOpen(true);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [item?.id, currentSnapshot?.unitPrice, currentSnapshot?.unit]);
 
     if (!item || !item.item) return null;
 
@@ -283,6 +320,10 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                 <Sparkles className="w-3.5 h-3.5" /> Métricas Financieras Activas
                             </h3>
                             <div className="flex items-center gap-2">
+                                {/* Fase 5.F — chip del tipo de match del Judge (1:1 / 1:N / from_scratch). */}
+                                <MatchKindChip matchKind={item.item.match_kind} />
+                                {/* Fase 6.D — badge con los fragments ICL aplicados. */}
+                                <AppliedFragmentsBadge fragments={item.item.applied_fragments} />
                                 <Badge variant="outline" className="text-[9px] font-mono bg-white dark:bg-black/50 text-slate-500 border-slate-200 dark:border-slate-800">
                                     {item.item.code || 'S/C'}
                                 </Badge>
@@ -384,6 +425,9 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                         </div>
                     </div>
                     
+                    {/* Fase 5.F — fórmula de conversión de unidad cuando el Judge la aplicó. */}
+                    <UnitConversionApplied record={item.item.unit_conversion_applied} />
+
                     {/* START VIOLET CONTEXT */}
                     {/* Documento Original PDF - Collapsible */}
                     {item.original_item && (
@@ -571,21 +615,34 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                         </div>
                                     );
                                 } else {
-                                    // Fallback to item.item
-                                    return (
-                                        <>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <Badge variant="outline" className="font-mono text-[10px] bg-white dark:bg-black/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
-                                                    {item.item?.code || 'SIN CÓDIGO'}
-                                                </Badge>
-                                                <span className="font-bold text-sm text-emerald-700 dark:text-emerald-400 shadow-sm bg-white dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-100 dark:border-emerald-900/50">
-                                                    {formatCurrency(item.item?.unitPrice || 0)}/{item.item?.unit || 'ud'}
-                                                </span>
+                                    // Phase 16 — sin winner del catálogo. Diferenciar por match_kind
+                                    // (composición 1:N vs estimación from_scratch). Antes este branch
+                                    // mostraba la descripción de la partida como si fuera el candidato,
+                                    // confundiendo al aparejador.
+                                    const matchKind = item.item?.match_kind;
+                                    if (matchKind === '1:N') {
+                                        const componentCount = (item.item?.breakdown || []).length;
+                                        return (
+                                            <div className="text-blue-700 dark:text-blue-400 text-sm mb-3 font-medium flex flex-col gap-2 bg-blue-50 dark:bg-blue-900/10 p-3 rounded-lg border border-blue-200 dark:border-blue-900/30">
+                                                <span>Composición 1:N{componentCount > 0 ? ` — ${componentCount} componentes del catálogo` : ''}.</span>
+                                                <span className="text-xs font-normal">El precio se construye sumando varios componentes del catálogo COAATMCA. No hay un candidato base único. Ver "Desglose Aplicado" abajo para los componentes individuales.</span>
                                             </div>
-                                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium mb-3">
-                                                {item.item?.description || item.originalTask}
-                                            </p>
-                                        </>
+                                        );
+                                    }
+                                    if (matchKind === 'from_scratch') {
+                                        return (
+                                            <div className="text-amber-700 dark:text-amber-400 text-sm mb-3 font-medium flex flex-col gap-2 bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-200 dark:border-amber-900/30">
+                                                <span>Estimación libre (from scratch).</span>
+                                                <span className="text-xs font-normal">Ningún candidato del catálogo encajaba; la IA estimó el precio basándose en heurística sectorial (raw PEM target).</span>
+                                            </div>
+                                        );
+                                    }
+                                    // Caso defensivo (datos antiguos sin match_kind o valor desconocido)
+                                    return (
+                                        <div className="text-slate-500 dark:text-slate-400 text-sm mb-3 font-medium flex flex-col gap-2 bg-slate-50 dark:bg-slate-900/10 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+                                            <span>Sin candidato del catálogo seleccionado.</span>
+                                            <span className="text-xs font-normal">El registro de razonamiento no especifica el tipo de match. Posible budget legacy.</span>
+                                        </div>
                                     );
                                 }
                             })()}
@@ -650,6 +707,10 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                             <div className="flex items-center justify-between mb-2">
                                                 <Badge variant="outline" className="font-mono text-[10px] bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-300">{c.code || 'SIN CODIGO'}</Badge>
                                                 <span className="font-bold text-sm text-indigo-700 dark:text-indigo-400">{formatCurrency(cPrice)}/{c.unit || 'ud'}</span>
+                                            </div>
+                                            {/* Fase 5.F — score + rejected_reason + kind (solo si el backend los aporta). */}
+                                            <div className="mb-2">
+                                                <CandidateMetaBadges candidate={c} />
                                             </div>
                                             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-1">{c.description}</p>
                                             
@@ -769,6 +830,37 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Fase 6.B — captura del motivo de la corrección */}
+            {item?.item && aiProposedRef.current && (
+                <CorrectionCaptureDialog
+                    open={captureOpen}
+                    onOpenChange={setCaptureOpen}
+                    context={{
+                        budgetId: (item as any).budgetId || (item.item as any).budgetId || '',
+                        chapter:
+                            (item.item as any).chapter ||
+                            item.original_item?.chapter ||
+                            'General',
+                        originalDescription:
+                            item.originalTask ||
+                            item.original_item?.description ||
+                            item.item.description ||
+                            '',
+                        originalQuantity: item.original_item?.quantity ?? item.item.quantity ?? null,
+                        originalUnit: item.original_item?.unit ?? item.item.unit ?? null,
+                        aiProposedPrice: aiProposedRef.current.snapshot.unitPrice,
+                        aiProposedCandidateId:
+                            (item.item as any)?.aiResolution?.selected_candidate?.code ||
+                            (item.item as any)?.ai_resolution?.selected_candidate?.code ||
+                            null,
+                        aiReasoning: aiReasoning || null,
+                        correctedPrice: item.item.unitPrice ?? null,
+                        correctedUnit: item.item.unit ?? null,
+                        correctedByUserId: authUser?.uid ?? null,
+                    }}
+                />
+            )}
         </Sheet>
     );
 }

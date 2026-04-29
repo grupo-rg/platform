@@ -1,0 +1,255 @@
+{
+  "_meta": {
+    "version": "2025.1",
+    "derived_from": "data/pdf_index_2025.json",
+    "description": "DAG del orden lógico de ejecución de obra — derivado del libro COAATMCA 2025 (Mallorca). Borrador inicial basado en la práctica estándar de construcción residencial; validar aristas dudosas contra la obra concreta.",
+    "_review_status": "DRAFT_AWAITING_VALIDATION",
+    "validated_by": null,
+    "last_validated_at": null
+  },
+  "phases": [
+    "preparacion",
+    "estructura",
+    "envolvente",
+    "instalaciones_empotradas",
+    "acabados_gruesos",
+    "carpinteria_cerrajeria",
+    "acabados_finos",
+    "instalaciones_finales",
+    "exteriores",
+    "transversal"
+  ],
+  "transversal_chapters": [
+    "OBRAS VARIAS Y ALBAÑILERIA",
+    "ENERGIA SOLAR",
+    "REHABILITACIÓN, REPARACIÓN Y MANTENIMIENTO",
+    "BIOCONSTRUCCIÓN",
+    "SEGURIDAD Y SALUD",
+    "ENSAYOS Y CONTROL TECNICO"
+  ],
+  "nodes": [
+    {
+      "key": "DEMOLICIONES",
+      "phase": "preparacion",
+      "depends_on": [],
+      "typical_companions": []
+    },
+    {
+      "key": "MOVIMIENTO DE TIERRAS",
+      "phase": "preparacion",
+      "depends_on": ["DEMOLICIONES"],
+      "typical_companions": []
+    },
+    {
+      "key": "HORMIGONES",
+      "phase": "estructura",
+      "depends_on": ["MOVIMIENTO DE TIERRAS"],
+      "typical_companions": []
+    },
+    {
+      "key": "ESTRUCTURAS METALICAS",
+      "phase": "estructura",
+      "depends_on": ["HORMIGONES"],
+      "typical_companions": ["HORMIGONES"]
+    },
+    {
+      "key": "FORJADOS",
+      "phase": "estructura",
+      "depends_on": ["HORMIGONES", "ESTRUCTURAS METALICAS"],
+      "typical_companions": []
+    },
+    {
+      "key": "CUBIERTAS",
+      "phase": "envolvente",
+      "depends_on": ["FORJADOS"],
+      "typical_companions": ["AISLAMIENTOS"]
+    },
+    {
+      "key": "FABRICAS Y TABIQUES",
+      "phase": "envolvente",
+      "depends_on": ["FORJADOS"],
+      "typical_companions": []
+    },
+    {
+      "key": "RED DE SANEAMIENTO",
+      "phase": "instalaciones_empotradas",
+      "depends_on": ["MOVIMIENTO DE TIERRAS", "FABRICAS Y TABIQUES"],
+      "typical_companions": []
+    },
+    {
+      "key": "RED DE VENTILACIÓN",
+      "phase": "instalaciones_empotradas",
+      "depends_on": ["FORJADOS", "FABRICAS Y TABIQUES"],
+      "typical_companions": ["AIRE ACONDICIONADO"]
+    },
+    {
+      "key": "FONTANERIA Y GAS",
+      "phase": "instalaciones_empotradas",
+      "depends_on": ["FABRICAS Y TABIQUES", "RED DE SANEAMIENTO"],
+      "typical_companions": []
+    },
+    {
+      "key": "ELECTRICIDAD Y TELECOMUNICACIONES",
+      "phase": "instalaciones_empotradas",
+      "depends_on": ["FABRICAS Y TABIQUES"],
+      "typical_companions": []
+    },
+    {
+      "key": "REVOCOS Y ENLUCIDOS",
+      "phase": "acabados_gruesos",
+      "depends_on": [
+        "FABRICAS Y TABIQUES",
+        "RED DE SANEAMIENTO",
+        "RED DE VENTILACIÓN",
+        "FONTANERIA Y GAS",
+        "ELECTRICIDAD Y TELECOMUNICACIONES"
+      ],
+      "typical_companions": []
+    },
+    {
+      "key": "AISLAMIENTOS",
+      "phase": "acabados_gruesos",
+      "depends_on": ["FABRICAS Y TABIQUES", "CUBIERTAS"],
+      "typical_companions": ["CUBIERTAS"]
+    },
+    {
+      "key": "FIRMES Y PAVIMENTOS",
+      "phase": "acabados_gruesos",
+      "depends_on": ["MOVIMIENTO DE TIERRAS", "FABRICAS Y TABIQUES"],
+      "typical_companions": []
+    },
+    {
+      "key": "CANTERIA Y PIEDRA  ARTIFICIAL",
+      "phase": "acabados_finos",
+      "depends_on": ["FABRICAS Y TABIQUES"],
+      "typical_companions": []
+    },
+    {
+      "key": "CARPINTERIA DE MADERA",
+      "phase": "carpinteria_cerrajeria",
+      "depends_on": ["FABRICAS Y TABIQUES", "REVOCOS Y ENLUCIDOS"],
+      "typical_companions": ["CERRAJERIA"]
+    },
+    {
+      "key": "CERRAJERIA",
+      "phase": "carpinteria_cerrajeria",
+      "depends_on": ["FABRICAS Y TABIQUES", "REVOCOS Y ENLUCIDOS"],
+      "typical_companions": ["CARPINTERIA DE MADERA"]
+    },
+    {
+      "key": "ACRISTALAMIENTOS",
+      "phase": "carpinteria_cerrajeria",
+      "depends_on": ["CARPINTERIA DE MADERA", "CERRAJERIA"],
+      "typical_companions": []
+    },
+    {
+      "key": "SOLADOS Y ALICATADOS",
+      "phase": "acabados_finos",
+      "depends_on": ["FIRMES Y PAVIMENTOS", "REVOCOS Y ENLUCIDOS"],
+      "typical_companions": ["PAVIMENTOS DE MADERA"]
+    },
+    {
+      "key": "PAVIMENTOS DE MADERA",
+      "phase": "acabados_finos",
+      "depends_on": ["FIRMES Y PAVIMENTOS", "REVOCOS Y ENLUCIDOS"],
+      "typical_companions": ["SOLADOS Y ALICATADOS"]
+    },
+    {
+      "key": "PINTURA Y REVESTIMIENTOS",
+      "phase": "acabados_finos",
+      "depends_on": [
+        "REVOCOS Y ENLUCIDOS",
+        "CARPINTERIA DE MADERA",
+        "CERRAJERIA"
+      ],
+      "typical_companions": []
+    },
+    {
+      "key": "CALEFACCION",
+      "phase": "instalaciones_finales",
+      "depends_on": ["FONTANERIA Y GAS", "REVOCOS Y ENLUCIDOS"],
+      "typical_companions": []
+    },
+    {
+      "key": "AIRE ACONDICIONADO",
+      "phase": "instalaciones_finales",
+      "depends_on": [
+        "RED DE VENTILACIÓN",
+        "ELECTRICIDAD Y TELECOMUNICACIONES"
+      ],
+      "typical_companions": []
+    },
+    {
+      "key": "APARATOS ELEVADORES",
+      "phase": "instalaciones_finales",
+      "depends_on": [
+        "ESTRUCTURAS METALICAS",
+        "ELECTRICIDAD Y TELECOMUNICACIONES"
+      ],
+      "typical_companions": []
+    },
+    {
+      "key": "CONTRAINCENDIOS",
+      "phase": "instalaciones_finales",
+      "depends_on": [
+        "ELECTRICIDAD Y TELECOMUNICACIONES",
+        "FONTANERIA Y GAS"
+      ],
+      "typical_companions": []
+    },
+    {
+      "key": "PISCINAS",
+      "phase": "exteriores",
+      "depends_on": ["MOVIMIENTO DE TIERRAS", "HORMIGONES"],
+      "typical_companions": []
+    },
+    {
+      "key": "URBANIZACION INTERIOR PARCELA",
+      "phase": "exteriores",
+      "depends_on": ["FIRMES Y PAVIMENTOS"],
+      "typical_companions": ["JARDINERIA"]
+    },
+    {
+      "key": "JARDINERIA",
+      "phase": "exteriores",
+      "depends_on": ["URBANIZACION INTERIOR PARCELA", "FIRMES Y PAVIMENTOS"],
+      "typical_companions": ["URBANIZACION INTERIOR PARCELA"]
+    },
+    {
+      "key": "OBRAS VARIAS Y ALBAÑILERIA",
+      "phase": "transversal",
+      "depends_on": [],
+      "typical_companions": []
+    },
+    {
+      "key": "ENERGIA SOLAR",
+      "phase": "transversal",
+      "depends_on": [],
+      "typical_companions": ["CUBIERTAS", "ELECTRICIDAD Y TELECOMUNICACIONES"]
+    },
+    {
+      "key": "REHABILITACIÓN, REPARACIÓN Y MANTENIMIENTO",
+      "phase": "transversal",
+      "depends_on": [],
+      "typical_companions": []
+    },
+    {
+      "key": "BIOCONSTRUCCIÓN",
+      "phase": "transversal",
+      "depends_on": [],
+      "typical_companions": []
+    },
+    {
+      "key": "SEGURIDAD Y SALUD",
+      "phase": "transversal",
+      "depends_on": [],
+      "typical_companions": []
+    },
+    {
+      "key": "ENSAYOS Y CONTROL TECNICO",
+      "phase": "transversal",
+      "depends_on": [],
+      "typical_companions": []
+    }
+  ]
+}

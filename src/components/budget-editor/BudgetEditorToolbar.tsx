@@ -171,7 +171,7 @@ export const BudgetEditorToolbar = ({
                                 title="Seleccionar modo de visualización"
                             >
                                 {executionMode === 'execution' ? <Wrench className="w-4 h-4 mr-2 text-amber-600" /> : executionMode === 'labor' ? <Wrench className="w-4 h-4 mr-2 text-blue-600" /> : <Layers className="w-4 h-4 mr-2 text-indigo-500" />}
-                                {executionMode === 'execution' ? 'Sólo Ejecución' : executionMode === 'labor' ? 'Sólo Mano de Obra' : 'Completo'}
+                                {executionMode === 'execution' ? 'M.O. + Mat. Fijos' : executionMode === 'labor' ? 'Sólo Mano de Obra' : 'Completo'}
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-60">
@@ -183,8 +183,8 @@ export const BudgetEditorToolbar = ({
                             <DropdownMenuItem onClick={() => onSetExecutionMode('execution')} disabled={!hasVariableCosts} className={executionMode === 'execution' ? 'bg-amber-50 dark:bg-amber-900/20 font-semibold' : ''}>
                                 <Wrench className="w-4 h-4 mr-2 text-amber-600" />
                                 <div className="flex flex-col">
-                                    <span>Sólo Ejecución</span>
-                                    <span className="text-[10px] text-slate-400 font-normal">{hasVariableCosts ? 'Excluye materiales variables' : 'Sin materiales variables detectados'}</span>
+                                    <span>Mano de Obra y Materiales Fijos</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{hasVariableCosts ? 'Excluye solo materiales variables (mt* is_variable)' : 'Sin materiales variables detectados'}</span>
                                 </div>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => onSetExecutionMode('labor')} disabled={!hasAnyBreakdown} className={executionMode === 'labor' ? 'bg-blue-50 dark:bg-blue-900/20 font-semibold' : ''}>

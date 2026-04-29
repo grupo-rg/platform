@@ -28,15 +28,38 @@ service firebase.storage {
                    && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('application/pdf'));
     }
 
-    // Simple Uploads
+    // Simple Uploads — restringido a image/* y application/pdf para
+    // evitar que se suba .html con XSS, .exe, scripts, etc.
     match /uploads/{allPaths=**} {
       allow read: if true;
-      allow write: if request.resource.size < 10 * 1024 * 1024;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && (
+                     request.resource.contentType.matches('image/.*')
+                     || request.resource.contentType.matches('application/pdf')
+                   );
     }
 
-    // Admin Base rules (allows specific CSVs)
+    // Public uploads: imágenes y PDFs subidos desde formularios públicos
+    // y desde el chat público (foto de la estancia, plano, etc.).
+    // Server-side (Admin SDK) los persiste bajo public_uploads/leads/<email>/...
+    // y public_uploads/chat-<userId>/... Cliente-side los persiste en raíz.
+    match /public_uploads/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 10 * 1024 * 1024
+                   && (
+                     request.resource.contentType.matches('image/.*')
+                     || request.resource.contentType.matches('application/pdf')
+                   );
+    }
+
+    // Admin Base rules: el price book sólo lo gestionan administradores
+    // autenticados con custom claim `admin == true`. Lectura idem — el
+    // catálogo de precios es información comercial sensible.
     match /admin/price-books/{allPaths=**} {
-       allow read, write: if request.resource.size < 10 * 1024 * 1024;
+       allow read: if request.auth != null && request.auth.token.admin == true;
+       allow write: if request.auth != null
+                    && request.auth.token.admin == true
+                    && request.resource.size < 10 * 1024 * 1024;
     }
   }
 }

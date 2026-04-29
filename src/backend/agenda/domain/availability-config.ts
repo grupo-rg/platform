@@ -18,7 +18,14 @@ export class AvailabilityConfig {
         public weekSchedule: Record<number, DaySchedule>, // 0 = Sunday, 1 = Monday, etc.
         public slotDurationMinutes: number, // e.g., 30 or 60
         public bufferMinutes: number, // e.g., 15 (gap between meetings)
-        public updatedAt: Date
+        public updatedAt: Date,
+        /**
+         * Si true, cuando un lead se cualifica como `qualified` desde el chat
+         * público, el agente le ofrece automáticamente los próximos slots
+         * disponibles via InlineBookingPicker. Si false, el admin agenda
+         * manualmente desde el dashboard.
+         */
+        public autoProposeBooking: boolean = true
     ) { }
 
     static createDefault(id: string = 'default'): AvailabilityConfig {
@@ -41,7 +48,8 @@ export class AvailabilityConfig {
             defaultWeekSchedule,
             30,
             0,
-            new Date()
+            new Date(),
+            true
         );
     }
 }

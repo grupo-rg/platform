@@ -4,7 +4,6 @@ import React from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
-import { useWidgetContext } from '@/context/budget-widget-context';
 
 import { ModernSidebar } from '@/components/layout/modern-sidebar';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
@@ -25,7 +24,7 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
   // Determine if the current page should be full-width/app-like (no default padding)
   const isBudgetsEditView = pathname.includes('/budgets/') && pathname.includes('/edit');
   const isAppPage = pathname.includes('/admin/messages') ||
-    pathname.includes('/wizard') ||
+    pathname.includes('/assistant') || pathname.includes('/asistente') ||
     pathname.includes('/projects') ||
     isBudgetsEditView ||
     pathname.includes('/presupuesto');
@@ -41,13 +40,13 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
     }
   }, [user, loading, router]);
 
-  // SYNC AUTH USER WITH WIDGET CONTEXT (CRITICAL FOR CHAT)
-  const { setLeadId } = useWidgetContext();
-  React.useEffect(() => {
-    if (user) {
-      setLeadId(user.uid);
-    }
-  }, [user, setLeadId]);
+  // Importante: NO sincronizamos `user.uid` con el `leadId` del widget context.
+  // Son dominios distintos: el widget existe para visitantes públicos
+  // OTP-verificados (lead anónimo), mientras que el admin tiene su propia
+  // identidad por Firebase Auth. Mezclarlos hacía que al volver a la home
+  // el formulario público fetcheara el lead del admin en vez del lead OTP
+  // del visitante. Si un componente del dashboard necesita el UID, debe
+  // leerlo de `useAuth()` directamente, no del widget context.
 
   if (loading || !user) {
     return (
@@ -98,7 +97,7 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
         {/* Children Content */}
         <div className={cn(
           "flex-1 min-h-0",
-          isAppPage ? "overflow-hidden p-0" : "overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 p-4 md:p-8 lg:p-10"
+          isAppPage ? "overflow-hidden p-0" : "overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-10"
         )}>
           {children}
         </div>

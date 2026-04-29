@@ -41,15 +41,17 @@ export async function generateMetadata({
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'metadata' });
 
+  const baseMetadata = await constructMetadata({
+    title: t('title'),
+    description: t('description'),
+    path: '/',
+    locale,
+    image: '/images/og-home.jpg'
+  });
+
   return {
-    metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://expressrenovationmallorca.com'),
-    ...constructMetadata({
-      title: t('title'),
-      description: t('description'),
-      path: '/',
-      locale,
-      image: '/images/og-home.jpg'
-    }),
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://constructoresenmallorca.com'),
+    ...baseMetadata,
     keywords: t('keywords'),
   };
 }

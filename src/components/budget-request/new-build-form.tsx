@@ -21,13 +21,13 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, ArrowRight, ArrowLeft } from 'lucide-react';
-import { addDoc, collection } from 'firebase/firestore';
-import { getSafeDb } from '@/lib/firebase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SimpleFileUpload } from '@/components/ui/simple-file-upload';
 import { createBudgetAction } from '@/actions/budget/create-budget.action';
+import { useVerifiedLead } from '@/hooks/use-verified-lead';
+import { VerifiedContactBanner, VerifiedFieldIcon } from '@/components/forms/verified-contact-banner';
 
 // Schema
 const newBuildSchema = z.object({
@@ -48,6 +48,7 @@ export function NewBuildForm({ t, onSuccess, onBack }: { t: any, onSuccess?: () 
     const { toast } = useToast();
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const { lead: verifiedLead, isReady: isLeadVerified } = useVerifiedLead();
 
     const form = useForm<NewBuildValues>({
         resolver: zodResolver(newBuildSchema),
@@ -63,6 +64,18 @@ export function NewBuildForm({ t, onSuccess, onBack }: { t: any, onSuccess?: () 
             files: []
         }
     });
+
+    useEffect(() => {
+        if (!verifiedLead) return;
+        const current = form.getValues();
+        form.reset({
+            ...current,
+            name: current.name || verifiedLead.name || '',
+            email: current.email || verifiedLead.email || '',
+            phone: current.phone || verifiedLead.phone || '',
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [verifiedLead?.id]);
 
     const { watch, trigger, handleSubmit } = form;
     const hasLand = watch('hasLand');
@@ -83,37 +96,18 @@ export function NewBuildForm({ t, onSuccess, onBack }: { t: any, onSuccess?: () 
     async function onSubmit(values: NewBuildValues) {
         setIsLoading(true);
         try {
-            const db = getSafeDb();
-
-            // Create Budget in Admin Dashboard
+            // Registra el lead. El listener NotifyAdminOnLeadCreatedUseCase
+            // notifica al admin vía Resend.
             await createBudgetAction('new_build', {
                 name: values.name,
                 email: values.email,
                 phone: values.phone,
-                address: values.location, // using location as address for now
-                plotArea: values.approxMeters, // Assumption if not asked
+                address: values.location,
+                plotArea: values.approxMeters,
                 buildingArea: values.approxMeters,
-                floors: 1, // Default
+                floors: 1,
                 description: `Obra Nueva en ${values.location}. Terreno: ${values.hasLand}. Proyecto: ${values.hasProject || 'N/A'}. Detalles: ${values.details}`,
-                files: values.files || []
-            });
-
-            // Send email via Firebase Extension (mail collection)
-            await addDoc(collection(db, 'mail'), {
-                to: ['info@Grupo RG.com'], // Replace with real admin email
-                message: {
-                    subject: '🎯 Nuevo Lead: OBRA NUEVA',
-                    html: `
-                        <h1>Solicitud Obra Nueva</h1>
-                        <p><strong>Cliente:</strong> ${values.name} (${values.email}, ${values.phone})</p>
-                        <p><strong>Zona:</strong> ${values.location}</p>
-                        <p><strong>Terreno:</strong> ${values.hasLand}</p>
-                        <p><strong>Proyecto Arq:</strong> ${values.hasProject || 'N/A'}</p>
-                        <p><strong>Metros aprox:</strong> ${values.approxMeters} m2</p>
-                        <p><strong>Detalles:</strong> ${values.details}</p>
-                        ${values.files && values.files.length > 0 ? `<p><strong>Archivos:</strong> ${values.files.length} adjuntos.</p>` : ''}
-                    `
-                }
+                files: values.files || [],
             });
 
             toast({
@@ -231,16 +225,35 @@ export function NewBuildForm({ t, onSuccess, onBack }: { t: any, onSuccess?: () 
 
                     {step === 3 && (
                         <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                            <VerifiedContactBanner show={isLeadVerified} />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <FormField control={form.control} name="name" render={({ field }) => (
-                                    <FormItem><FormLabel>{t.budgetRequest.form.name.label}</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem>
+                                        <FormLabel className="flex items-center gap-1.5">
+                                            {t.budgetRequest.form.name.label} <VerifiedFieldIcon show={isLeadVerified} />
+                                        </FormLabel>
+                                        <FormControl><Input {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
                                 )} />
                                 <FormField control={form.control} name="phone" render={({ field }) => (
-                                    <FormItem><FormLabel>{t.budgetRequest.form.phone.label}</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem>
+                                        <FormLabel className="flex items-center gap-1.5">
+                                            {t.budgetRequest.form.phone.label} <VerifiedFieldIcon show={isLeadVerified} />
+                                        </FormLabel>
+                                        <FormControl><Input {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
                                 )} />
                             </div>
                             <FormField control={form.control} name="email" render={({ field }) => (
-                                <FormItem><FormLabel>{t.budgetRequest.form.email.label}</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem>
+                                    <FormLabel className="flex items-center gap-1.5">
+                                        {t.budgetRequest.form.email.label} <VerifiedFieldIcon show={isLeadVerified} />
+                                    </FormLabel>
+                                    <FormControl><Input {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
                             )} />
                         </motion.div>
                     )}

@@ -41,6 +41,11 @@ import { generateBreakdownAction } from '@/actions/budget/smart-actions';
 import { ICLFeedbackModal } from './ICLFeedbackModal';
 import { BrainCircuit } from 'lucide-react';
 import { useBudgetEditorContext } from '../BudgetEditorContext';
+import {
+    BudgetMode,
+    computePartidaTotalForMode,
+    executionModeToBudgetMode,
+} from '@/lib/budget/budget-mode-calculator';
 
 interface TableRowItemProps {
     item: EditableBudgetLineItem;
@@ -60,6 +65,10 @@ export const TableRowItem = React.memo(({
 }: TableRowItemProps) => {
     const controls = useDragControls();
     const [isPending, startTransition] = useTransition();
+    const { state } = useBudgetEditorContext();
+    // Phase 15 — markup factor (GG + BI distribuidos equitativamente sobre raw PEM)
+    // para mostrar precios all-in al usuario, consistentes con Base Imponible.
+    const markupFactor = 1 + ((state.config?.marginGG || 0) + (state.config?.marginBI || 0)) / 100;
 
     // Deviation Analysis
     const currentPrice = item.item?.unitPrice || 0;
@@ -78,36 +87,32 @@ export const TableRowItem = React.memo(({
     const hasManualDelta = item.originalState && item.item?.unitPrice !== undefined && (Math.abs(item.item.unitPrice - item.originalState.unitPrice) > 0.01);
     const showIclPrompt = (hasManualDelta || item.isDirty) && !isReadOnly;
 
-    // Execution Only logic
-    let deduct = 0;
-    if (executionMode === 'execution' && item.item?.breakdown) {
-        deduct = item.item.breakdown
-            .filter((comp: any) => comp.is_variable === true || comp.is_variable === 'true' || comp.isVariable === true)
-            .reduce((acc: number, comp: any) => {
-                const cPrice = comp.unitPrice || comp.price || 0;
-                const cQuantity = comp.quantity || comp.yield || 1;
-                return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
-            }, 0) * (item.item?.quantity || 1);
-    } else if (executionMode === 'labor' && item.item?.breakdown) {
-        const laborCosts = item.item.breakdown
-            .filter((comp: any) => comp.code && String(comp.code).toLowerCase().startsWith('mo'))
-            .reduce((acc: number, comp: any) => {
-                const cPrice = comp.unitPrice || comp.price || 0;
-                const cQuantity = comp.quantity || comp.yield || 1;
-                return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
-            }, 0);
-        const totalLaborCosts = laborCosts * (item.item?.quantity || 1);
-        deduct = (item.item?.totalPrice || 0) - totalLaborCosts;
-    }
-    
-    const activePrice = Math.max(0, (item.item?.totalPrice || 0) - deduct);
-    const displayTotal = Number(activePrice.toFixed(2));
+    // Fase 11.D — modo de presupuesto centralizado en helper puro.
+    // Mapea executionMode legacy ('complete'|'execution'|'labor') a BudgetMode
+    // y delega la suma a `computePartidaTotalForMode`. Misma semántica que el
+    // código previo, ahora con doble señal (code prefix + is_variable + type).
+    const budgetMode: BudgetMode = executionModeToBudgetMode(executionMode);
+    const totalPriceFromBreakdown = computePartidaTotalForMode(
+        item.item?.breakdown,
+        item.item?.unitPrice ?? 0,
+        item.item?.quantity ?? 0,
+        budgetMode,
+    );
+    const activePrice = budgetMode === BudgetMode.COMPLETE
+        ? (item.item?.totalPrice || 0)
+        : totalPriceFromBreakdown;
+    // Phase 15 — multiplicar por markupFactor para mostrar precios all-in al usuario.
+    // Internamente seguimos almacenando raw PEM. Cuando el usuario edita un valor,
+    // dividimos por markupFactor para guardar el raw PEM equivalente.
+    const displayTotal = Number((activePrice * markupFactor).toFixed(2));
     const displayUnitPrice = Number(((item.item?.quantity || 1) > 0 ? displayTotal / item.item!.quantity : 0).toFixed(2));
 
     const handleTotalChange = (val: string | number) => {
-        const newTotal = Number(val);
+        // El usuario edita el valor all-in mostrado. Almacenamos raw PEM.
+        const newTotalAllIn = Number(val);
+        const newTotalRaw = newTotalAllIn / (markupFactor || 1);
         const quantity = item.item?.quantity || 1;
-        const newUnitPrice = newTotal / (quantity === 0 ? 1 : quantity);
+        const newUnitPrice = newTotalRaw / (quantity === 0 ? 1 : quantity);
         onUpdate(item.id, { item: { ...item.item!, unitPrice: newUnitPrice } });
     };
 
@@ -339,12 +344,17 @@ export const TableRowItem = React.memo(({
                 />
             </div>
 
-            {/* Unit Price */}
+            {/* Unit Price — mostrado all-in (raw × markupFactor). Edita en valor all-in y se guarda raw. */}
             <div className="w-[120px] shrink-0 p-2 text-right pt-3">
                 <div className="relative group/price">
                     <EditableCell
                         value={displayUnitPrice}
-                        onChange={(val) => onUpdate(item.id, { item: { ...item.item!, unitPrice: Number(val) } })}
+                        onChange={(val) => {
+                            // Phase 15 — el usuario edita en all-in; almacenamos raw PEM.
+                            const newUnitPriceAllIn = Number(val);
+                            const newUnitPriceRaw = newUnitPriceAllIn / (markupFactor || 1);
+                            onUpdate(item.id, { item: { ...item.item!, unitPrice: newUnitPriceRaw } });
+                        }}
                         type="currency"
                         className={cn(
                             "text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full",
@@ -353,7 +363,7 @@ export const TableRowItem = React.memo(({
                     />
                     {showGhostMode && item.originalState && (
                         <div className="absolute -bottom-4 right-2 text-[10px] text-slate-400 line-through">
-                            {item.originalState.unitPrice.toFixed(2)}€
+                            {(item.originalState.unitPrice * markupFactor).toFixed(2)}€
                         </div>
                     )}
                 </div>

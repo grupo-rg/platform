@@ -1,0 +1,92 @@
+{
+  "_meta": {
+    "source_book": "COAATMCA_2025",
+    "source_book_real_name": "COOATMCA (Colegio Oficial de Aparejadores, Arquitectos Técnicos y Ingenieros de Edificación de Mallorca)",
+    "source_pdf_filename": "Libro Precios 46_COAATMCA.pdf",
+    "source_pages": "6-10",
+    "convenio": "Convenio Colectivo de la Construcción y Obras Públicas de Baleares",
+    "vigencia": "1-1-2024 a 31-12-2024",
+    "description": "Cuadros base oficiales de mano de obra extraídos literalmente del cuadro 'COSTES ORIENTATIVOS POR ADMINISTRACION' (página 10 del libro). Se corresponden con el Convenio de la Construcción de Baleares vigente desde el 1 de enero de 2024. Son precios base por categoría, SIN oficio especializado — los oficios (cristalero, fontanero, electricista, etc.) viven como componentes de cada breakdown del price_book vectorizado, no aquí.",
+    "_review_status": "VALIDATED_AGAINST_PDF",
+    "last_validated_against_book_at": "2026-04-19",
+    "validated_by": "Grupo RG pipeline (extracción automática + revisión de texto plano del PDF)",
+    "_notes_for_judge": [
+      "El libro indica (página 10, nota 1): 'Sobre estos precios de mano de obra se incrementará un 15% de Utillaje y Beneficio Industrial'.",
+      "El libro no incluye costes indirectos, gastos generales, beneficio industrial ni IVA — el usuario debe añadirlos.",
+      "El libro indica (página 7) un coste indirecto ORIENTATIVO del 3% si se usa el generador de precios de la aplicación.",
+      "Los precios NO son válidos para obras de reparación/reforma sin coeficiente corrector."
+    ]
+  },
+  "labor_rates": [
+    {
+      "id": "labor-peon-ordinario",
+      "category": "peon_ordinario",
+      "trade": null,
+      "label_es": "Peón Suelto",
+      "rate_eur_hour": 23.01,
+      "source_book": "COAATMCA_2025",
+      "source_page": 10,
+      "aliases": ["peón", "peon", "peon suelto", "peon ordinario", "peón ordinario", "peón suelto"]
+    },
+    {
+      "id": "labor-peon-especialista",
+      "category": "peon_especialista",
+      "trade": null,
+      "label_es": "Peón Especializado",
+      "rate_eur_hour": 23.81,
+      "source_book": "COAATMCA_2025",
+      "source_page": 10,
+      "aliases": ["peón especialista", "peon especialista", "peon especializado", "peón especializado", "peon esp"]
+    },
+    {
+      "id": "labor-ayudante",
+      "category": "ayudante",
+      "trade": null,
+      "label_es": "Oficial 3ª (Ayudante)",
+      "rate_eur_hour": 24.61,
+      "source_book": "COAATMCA_2025",
+      "source_page": 10,
+      "aliases": ["ayudante", "ayte", "oficial 3", "oficial 3a", "oficial tercera"]
+    },
+    {
+      "id": "labor-oficial-2a",
+      "category": "oficial_2a",
+      "trade": null,
+      "label_es": "Oficial 2ª",
+      "rate_eur_hour": 25.38,
+      "source_book": "COAATMCA_2025",
+      "source_page": 10,
+      "aliases": ["oficial 2", "oficial segunda", "off 2a", "of 2", "oficial 2a"]
+    },
+    {
+      "id": "labor-oficial-1a",
+      "category": "oficial_1a",
+      "trade": null,
+      "label_es": "Oficial 1ª",
+      "rate_eur_hour": 28.59,
+      "source_book": "COAATMCA_2025",
+      "source_page": 10,
+      "aliases": ["oficial 1", "oficial primera", "off 1a", "of 1", "oficial 1a"]
+    },
+    {
+      "id": "labor-capataz",
+      "category": "capataz",
+      "trade": null,
+      "label_es": "Capataz",
+      "rate_eur_hour": 31.48,
+      "source_book": "COAATMCA_2025",
+      "source_page": 10,
+      "aliases": ["capataz"]
+    },
+    {
+      "id": "labor-encargado-obra",
+      "category": "capataz",
+      "trade": null,
+      "label_es": "Encargado de Obra",
+      "rate_eur_hour": 36.15,
+      "source_book": "COAATMCA_2025",
+      "source_page": 10,
+      "aliases": ["encargado", "encargado obra", "encargado de obra", "jefe de obra"]
+    }
+  ]
+}

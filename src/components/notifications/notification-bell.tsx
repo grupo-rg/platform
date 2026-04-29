@@ -114,11 +114,12 @@ export function NotificationBell({ collapsed = false }: NotificationBellProps) {
                 <Bell className="w-4 h-4" />
                 {!collapsed && <span className="text-sm font-medium">Alertas</span>}
 
-                {/* Badge */}
+                {/* Badge — corrección del bug de comma-typo que rompía la clase
+                    `right-1` en modo expandido y dejaba el badge sobre el texto. */}
                 {unreadCount > 0 && (
                     <span className={cn(
-                        "absolute flex items-center justify-center text-[9px] font-bold text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 animate-in zoom-in duration-300",
-                        collapsed ? "top-0.5 right-0.5 w-4 h-4" : "top-1 right-1, w-4 h-4"
+                        "absolute flex items-center justify-center text-[9px] font-bold text-white bg-red-500 rounded-full shadow-md shadow-red-500/30 animate-in zoom-in duration-300 w-4 h-4",
+                        collapsed ? "top-0.5 right-0.5" : "top-1 right-2"
                     )}>
                         {unreadCount}
                     </span>

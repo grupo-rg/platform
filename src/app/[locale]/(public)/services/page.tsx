@@ -7,6 +7,7 @@ import { Link } from '@/i18n/navigation';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ServiceCTA } from '@/components/services/service-cta';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
 
 import i18nConfig from '@/../i18nConfig';
 
@@ -16,10 +17,10 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
     const { locale } = await params;
-    const dict = await getDictionary(locale as any);
+    const company = await companyConfigService.get();
 
     return constructMetadata({
-        title: `Servicios de Construcción y Reformas en Mallorca - Grupo RG`,
+        title: `Servicios de Construcción y Reformas en Mallorca - ${company.name}`,
         description: 'Descubre nuestros servicios: reformas integrales, piscinas, electricidad, fontanería, pintura, carpintería e impermeabilización en Mallorca.',
         path: '/services',
         locale
@@ -29,6 +30,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 export default async function ServicesPage({ params }: { params: Promise<{ locale: string }> }) {
     const { locale } = await params;
     const dict = await getDictionary(locale as any);
+    const company = await companyConfigService.get();
 
     const navServices = dict.header?.nav?.services || 'Servicios';
 
@@ -37,7 +39,7 @@ export default async function ServicesPage({ params }: { params: Promise<{ local
             <WebPageJsonLd
                 name="Servicios de Construcción y Reformas"
                 description="Soluciones integrales de construcción, reformas e instalaciones en Mallorca y las Islas Baleares."
-                url={`https://gruporg.es/${locale}/services`}
+                url={`${company.web}/${locale}/services`}
                 type="CollectionPage"
             />
             <BreadcrumbJsonLd items={[
@@ -59,7 +61,7 @@ export default async function ServicesPage({ params }: { params: Promise<{ local
                         <div className="max-w-4xl">
                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-white/70 mb-8 backdrop-blur-sm">
                                 <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                Grupo RG Experience
+                                {company.name} Experience
                             </div>
 
                             <h1 className="font-headline text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-8 leading-[1.1]">

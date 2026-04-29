@@ -79,7 +79,9 @@ export async function createBudgetFromMeasurementsAction(
                 uploadedFileName: fileName,
                 ...(pageCount !== undefined && { pageCount }),
                 extractionConfidence: (pricingOutput.summary.matchedItems / pricingOutput.summary.totalItems) * 100
-            }
+            },
+            // Phase 15 — partidas almacenan raw PEM; editor distribuye GG+BI según config.
+            calibrationVersion: 'phase15',
         });
 
         revalidatePath('/dashboard/admin/budgets');

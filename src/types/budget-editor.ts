@@ -1,4 +1,4 @@
-import { BudgetCostBreakdown, BudgetBreakdownComponent } from '@/backend/budget/domain/budget';
+import { BudgetCostBreakdown, BudgetBreakdownComponent, MatchKind, UnitConversionRecord } from '@/backend/budget/domain/budget';
 
 export interface LegacyBudgetLineItemDetails {
     quantity: number;
@@ -29,6 +29,11 @@ export interface EditableBudgetLineItem {
         needsHumanReview?: boolean; // Highlight alert for human review
         aiResolution?: any; // Telemetry and reasoning from Zero-Leak pipeline
         ai_justification?: string; // Additional reasoning trace from Python engine
+        // Fase 5.F — v005 trace surfaced to the audit panel.
+        match_kind?: MatchKind;
+        unit_conversion_applied?: UnitConversionRecord;
+        // Fase 6.D — v006 trace: fragments históricos inyectados al Pro.
+        applied_fragments?: string[];
     };
 
     // Editor State

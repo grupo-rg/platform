@@ -2,6 +2,7 @@
  * JSON-LD Structured Data Components
  * Reusable across all public pages for SEO
  */
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
 
 interface BreadcrumbItem {
     name: string;
@@ -32,34 +33,27 @@ interface OrganizationSchemaProps {
 }
 
 // Organization JSON-LD
-export function OrganizationJsonLd({
-    name = 'Grupo RG',
-    description = 'Empresa de construcción y reformas con más de 30 años de experiencia en Mallorca y las Islas Baleares.',
-    url = 'https://gruporg.es',
-    logo = '/logo.webp',
-    areaServed = ['Mallorca', 'Menorca', 'Ibiza', 'Formentera', 'Islas Baleares'],
-    telephone,
-    email
-}: OrganizationSchemaProps) {
+export async function OrganizationJsonLd(props: OrganizationSchemaProps = {}) {
+    const company = await companyConfigService.get();
+    const name = props.name ?? company.name;
+    const description = props.description ?? company.tagline ?? '';
+    const url = props.url ?? company.web;
+    const logo = props.logo ?? company.logoUrl ?? '/logo.webp';
+    const areaServed = props.areaServed ?? ['Mallorca', 'Menorca', 'Ibiza', 'Formentera', 'Islas Baleares'];
+    const telephone = props.telephone ?? company.phone;
+    const email = props.email ?? company.email;
+
     const schema = {
         '@context': 'https://schema.org',
         '@type': 'HomeAndConstructionBusiness',
         name,
         description,
         url,
-        logo: `${url}${logo}`,
-        areaServed: areaServed.map(area => ({
-            '@type': 'Place',
-            name: area
-        })),
+        logo: logo.startsWith('http') ? logo : `${url}${logo}`,
+        areaServed: areaServed.map(area => ({ '@type': 'Place', name: area })),
         ...(telephone && { telephone }),
         ...(email && { email }),
         priceRange: '€€€',
-        foundingDate: '1994',
-        numberOfEmployees: {
-            '@type': 'QuantitativeValue',
-            minValue: 50
-        },
         aggregateRating: {
             '@type': 'AggregateRating',
             ratingValue: '4.8',
@@ -76,7 +70,9 @@ export function OrganizationJsonLd({
 }
 
 // Breadcrumb JSON-LD
-export function BreadcrumbJsonLd({ items, baseUrl = 'https://gruporg.es' }: { items: BreadcrumbItem[]; baseUrl?: string }) {
+export async function BreadcrumbJsonLd({ items, baseUrl }: { items: BreadcrumbItem[]; baseUrl?: string }) {
+    const company = await companyConfigService.get();
+    const base = baseUrl ?? company.web;
     const schema = {
         '@context': 'https://schema.org',
         '@type': 'BreadcrumbList',
@@ -84,7 +80,7 @@ export function BreadcrumbJsonLd({ items, baseUrl = 'https://gruporg.es' }: { it
             '@type': 'ListItem',
             position: index + 1,
             name: item.name,
-            item: `${baseUrl}${item.href}`
+            item: `${base}${item.href}`
         }))
     };
 
@@ -97,13 +93,14 @@ export function BreadcrumbJsonLd({ items, baseUrl = 'https://gruporg.es' }: { it
 }
 
 // Service JSON-LD
-export function ServiceJsonLd({
+export async function ServiceJsonLd({
     name,
     description,
     category,
     image,
     areaServed = 'Mallorca, Islas Baleares'
 }: ServiceSchemaProps) {
+    const company = await companyConfigService.get();
     const schema = {
         '@context': 'https://schema.org',
         '@type': 'Service',
@@ -112,8 +109,8 @@ export function ServiceJsonLd({
         category,
         provider: {
             '@type': 'HomeAndConstructionBusiness',
-            name: 'Grupo RG',
-            url: 'https://gruporg.es'
+            name: company.name,
+            url: company.web,
         },
         areaServed: {
             '@type': 'Place',
@@ -156,7 +153,7 @@ export function FAQJsonLd({ items }: { items: FAQItem[] }) {
 }
 
 // WebPage JSON-LD
-export function WebPageJsonLd({
+export async function WebPageJsonLd({
     name,
     description,
     url,
@@ -167,6 +164,7 @@ export function WebPageJsonLd({
     url: string;
     type?: 'WebPage' | 'CollectionPage' | 'AboutPage' | 'ContactPage';
 }) {
+    const company = await companyConfigService.get();
     const schema = {
         '@context': 'https://schema.org',
         '@type': type,
@@ -175,8 +173,8 @@ export function WebPageJsonLd({
         url,
         isPartOf: {
             '@type': 'WebSite',
-            name: 'Grupo RG',
-            url: 'https://gruporg.es'
+            name: company.name,
+            url: company.web,
         }
     };
 

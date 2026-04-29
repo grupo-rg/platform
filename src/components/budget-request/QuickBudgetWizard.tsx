@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { quickBudgetSchema, QuickBudgetFormValues } from './schema';
@@ -15,11 +15,14 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useVerifiedLead } from '@/hooks/use-verified-lead';
+import { VerifiedContactBanner, VerifiedFieldIcon } from '@/components/forms/verified-contact-banner';
 
 export function QuickBudgetWizard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const { toast } = useToast();
+    const { lead: verifiedLead, isReady: isLeadVerified } = useVerifiedLead();
 
     const form = useForm<QuickBudgetFormValues>({
         resolver: zodResolver(quickBudgetSchema),
@@ -32,6 +35,19 @@ export function QuickBudgetWizard() {
             address: ''
         }
     });
+
+    useEffect(() => {
+        if (!verifiedLead) return;
+        const current = form.getValues();
+        form.reset({
+            ...current,
+            name: current.name || verifiedLead.name || '',
+            email: current.email || verifiedLead.email || '',
+            phone: current.phone || verifiedLead.phone || '',
+            address: current.address || verifiedLead.address || '',
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [verifiedLead?.id]);
 
     const onSubmit = async (values: QuickBudgetFormValues) => {
         setIsSubmitting(true);
@@ -140,15 +156,20 @@ export function QuickBudgetWizard() {
 
                             <div className="pt-6 border-t">
                                 <h3 className="text-lg font-semibold mb-4">Datos de Contacto</h3>
+                                <div className="mb-4">
+                                    <VerifiedContactBanner show={isLeadVerified} />
+                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
                                         name="name"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Nombre y Apellidos</FormLabel>
+                                                <FormLabel className="flex items-center gap-1.5">
+                                                    Nombre y Apellidos <VerifiedFieldIcon show={isLeadVerified} />
+                                                </FormLabel>
                                                 <FormControl>
-                                                    <Input placeholder="Tu nombre" {...field} />
+                                                    <Input placeholder="Tu nombre" {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -159,9 +180,11 @@ export function QuickBudgetWizard() {
                                         name="phone"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Teléfono</FormLabel>
+                                                <FormLabel className="flex items-center gap-1.5">
+                                                    Teléfono <VerifiedFieldIcon show={isLeadVerified} />
+                                                </FormLabel>
                                                 <FormControl>
-                                                    <Input placeholder="Ej: 600 000 000" {...field} />
+                                                    <Input placeholder="Ej: 600 000 000" {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -172,9 +195,11 @@ export function QuickBudgetWizard() {
                                         name="email"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Email</FormLabel>
+                                                <FormLabel className="flex items-center gap-1.5">
+                                                    Email <VerifiedFieldIcon show={isLeadVerified} />
+                                                </FormLabel>
                                                 <FormControl>
-                                                    <Input placeholder="tucorreo@ejemplo.com" {...field} />
+                                                    <Input placeholder="tucorreo@ejemplo.com" {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>

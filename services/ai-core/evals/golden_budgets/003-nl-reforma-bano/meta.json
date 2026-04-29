@@ -1,0 +1,14 @@
+{
+  "golden_id": "003-nl-reforma-bano",
+  "flow": "NL",
+  "rigor": "qualitative",
+  "source": "BudgetWizardTips.tsx:67",
+  "brief_summary": "Reforma integral de baño 5m² — demolición alicatados + fontanería + plato ducha + mampara + inodoro + mueble lavabo",
+  "thresholds": {
+    "mandatory_chapters_present_min": 3,
+    "dag_compliance_min_pct": 0.75,
+    "pem_in_range": true,
+    "all_codes_valid_pct": 0.95
+  },
+  "note": "NL no tiene verdad humana de precios — el price_book_2025 es la única fuente. Esto es un regression guard cualitativo que valida DAG, cobertura de capítulos y códigos válidos."
+}

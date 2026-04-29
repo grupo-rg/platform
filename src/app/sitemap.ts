@@ -1,12 +1,14 @@
 import { MetadataRoute } from 'next';
 import { routing } from '@/i18n/routing';
 import { services } from '@/lib/services';
-import { blogPosts } from '@/lib/blog-posts';
 import { locations } from '@/lib/locations';
 import { getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
+import { blogPostService } from '@/backend/marketing/application/blog-post-service';
 
-export default function sitemap(): MetadataRoute.Sitemap {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://Grupo RG.es';
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+    const company = await companyConfigService.get();
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || company.web || 'http://localhost:9002';
     const entries: MetadataRoute.Sitemap = [];
 
     // Helper to get localized path
@@ -76,20 +78,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
         }
     });
 
-    // 3. Dynamic Blog Posts
-    blogPosts.forEach(post => {
-        routing.locales.forEach(locale => {
-            const path = getLocalizedPath('/blog/[slug]', locale, {
-                slug: post.slug
-            });
+    // 3. Dynamic Blog Posts — leemos desde Firestore por cada locale
+    for (const locale of routing.locales) {
+        const posts = await blogPostService.listPublishedAll(locale as any, 100).catch(() => []);
+        for (const post of posts) {
+            const path = getLocalizedPath('/blog/[slug]', locale, { slug: post.slug });
             entries.push({
                 url: `${baseUrl}${path}`,
-                lastModified: new Date(), // Ideally create date from post
+                lastModified: post.publishedAt ? new Date(post.publishedAt) : new Date(),
                 changeFrequency: 'monthly',
                 priority: 0.7,
             });
-        });
-    });
+        }
+    }
 
     // 4. Dynamic Locations
     locations.forEach(location => {

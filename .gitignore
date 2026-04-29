@@ -66,16 +66,32 @@ credentials.json
 firebase-debug.log
 firestore-debug.log
 
-# agent config & scripts
+# agent config
 .agent/
 .agents/
-scripts/
+
+# Scripts dev-only del repo raíz Next (NO afecta services/ai-core/scripts/,
+# que contiene seeds/vectorize de producción y deben commitearse).
+/scripts/
 src/backend/**/scripts/
 
-# Documentos PDF de cliente (NO subir al repo)
-/docs/
+# PDFs de clientes en /docs/ — los markdown se conservan, los JSONs grandes se ignoran.
+/docs/*.pdf
+# JSONs de catálogo y seed data en /docs/ — son inputs regenerables de scripts
+# one-shot (vectorize_catalog, ingest_materials, etc). Pesan ~16 MB. No los
+# necesitamos en git ni en producción. Si alguien necesita reseed, los pulls
+# desde commits anteriores o desde GCS.
+/docs/*.json
 /tmp-lab/
+
+# PDFs en general: bloqueados por defecto, EXCEPTO los inputs golden del eval
+# runner — esos son necesarios para que los tests de regresión corran en cualquier clone.
 *.pdf
+!services/ai-core/evals/golden_budgets/**/*.pdf
+
+# Outputs regenerables del eval runner (se reescriben en cada corrida).
+/services/ai-core/evals/eval_v*.json
+/services/ai-core/evals/eval_*_smoke.json
 
 # Large Vector Indexes & Catalog Data
 /prices/*.json
@@ -91,6 +107,10 @@ models_list.txt
 /logs/
 *.log
 
+# Coverage (Python + Node)
+/.coverage
+/services/ai-core/.coverage
+
 # Entornos Virtuales y Caché Pura (Python/AI-Core)
 __pycache__/
 *.py[cod]
@@ -101,3 +121,33 @@ __pycache__/
 
 # Archivos de Sistema Operativo
 logs/
+.DS_Store
+Thumbs.db
+
+# Editor swap & temp files
+*.swp
+*.swo
+*~
+
+# Firebase emulator runtime data
+.firebase/
+firebase-export-*/
+
+# Python testing artifacts adicionales
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Cloud Run / GCloud cached creds locales
+.gcloud/
+
+# Outputs ad-hoc de testing local
+test-output/
+*.test.json
+
+# Backups operativos (Firestore dumps, etc.) — pueden ser grandes y contener
+# datos sensibles. Restáuralos manualmente si se necesitan.
+/backups/
+/services/ai-core/backups/
+

@@ -1,7 +1,9 @@
 ﻿import type { MetadataRoute } from 'next';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
 
-export default function robots(): MetadataRoute.Robots {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://Grupo RG.com';
+export default async function robots(): Promise<MetadataRoute.Robots> {
+    const company = await companyConfigService.get();
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || company.web || 'http://localhost:9002';
 
     return {
         rules: {

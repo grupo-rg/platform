@@ -27,8 +27,9 @@ export function AvailabilitySettings() {
             setConfig({
                 weekSchedule: data.weekSchedule,
                 slotDurationMinutes: data.slotDurationMinutes,
-                bufferMinutes: data.bufferMinutes
-            });
+                bufferMinutes: data.bufferMinutes,
+                autoProposeBooking: (data as any).autoProposeBooking !== false,
+            } as any);
         } catch (err: any) {
             setError('Error al cargar la configuración: ' + err.message);
         } finally {
@@ -142,6 +143,19 @@ export function AvailabilitySettings() {
                             <span className="text-sm text-muted-foreground">tiempo libre entre sesiones</span>
                         </div>
                     </div>
+                </div>
+
+                <div className="mt-8 flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/30 p-4">
+                    <div>
+                        <Label className="text-sm font-semibold">Proponer agenda automática a leads cualificados</Label>
+                        <p className="mt-1 text-xs text-muted-foreground max-w-xl">
+                            Cuando un visitante se cualifica desde el chat público, el agente le ofrece directamente los próximos slots disponibles. Si está apagado, gestionas la agenda manualmente desde el dashboard.
+                        </p>
+                    </div>
+                    <Switch
+                        checked={(config as any).autoProposeBooking !== false}
+                        onCheckedChange={(checked) => setConfig({ ...config, autoProposeBooking: checked } as any)}
+                    />
                 </div>
             </div>
 

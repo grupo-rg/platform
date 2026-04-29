@@ -82,7 +82,7 @@ const initialState: BudgetEditorState = {
         globalAdjustment: 0,
         total: 0
     },
-    config: { marginGG: 13, marginBI: 6, tax: 21 }, // Default, can be overridden by INIT_STATE
+    config: { marginGG: 10, marginBI: 15, tax: 10 }, // Phase 15 — Default Grupo RG (markup distribuido sobre raw PEM, IVA reducido reformas)
     historyIndex: -1,
     hasUnsavedChanges: false,
     isSaving: false,

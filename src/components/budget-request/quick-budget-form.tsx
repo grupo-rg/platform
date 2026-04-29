@@ -23,13 +23,13 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Check, Loader2, MailCheck, RotateCw, Star } from 'lucide-react';
 import Link from 'next/link';
-import { addDoc, collection } from 'firebase/firestore';
-import { getSafeDb } from '@/lib/firebase/client';
 import { SimpleFileUpload } from '@/components/ui/simple-file-upload';
 import { createBudgetAction } from '@/actions/budget/create-budget.action';
+import { useVerifiedLead } from '@/hooks/use-verified-lead';
+import { VerifiedContactBanner, VerifiedFieldIcon } from '@/components/forms/verified-contact-banner';
 
 const pricingConfig = {
   integral: { basic: 400, medium: 600, premium: 800 },
@@ -59,6 +59,9 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [calculatedBudget, setCalculatedBudget] = useState<number | null>(null);
 
+  // Precarga datos del lead verificado por OTP (si existen).
+  const { lead: verifiedLead, isReady: isLeadVerified } = useVerifiedLead();
+
   const form = useForm<QuickFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -75,6 +78,21 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
     },
   });
 
+  // Precarga campos cuando el lead verificado llega (solo si están vacíos).
+  useEffect(() => {
+    if (!verifiedLead) return;
+    const current = form.getValues();
+    form.reset({
+      ...current,
+      name: current.name || verifiedLead.name || '',
+      email: current.email || verifiedLead.email || '',
+      phone: current.phone || verifiedLead.phone || '',
+      address: current.address || verifiedLead.address || '',
+    });
+    // No queremos re-trigger por cambios del form mismo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verifiedLead?.id]);
+
   const watchRenovationType = form.watch('renovationType');
   const tInclusions = t.budgetRequest.reformInclusions;
   const inclusionItems = tInclusions[watchRenovationType] || [];
@@ -90,55 +108,19 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
         setCalculatedBudget(budget);
       }
 
-      // Create Budget in Admin Dashboard
+      // Registra la solicitud como Lead cualificable. El listener
+      // NotifyAdminOnLeadCreatedUseCase envía el email al admin vía Resend.
       await createBudgetAction('quick', {
         name: values.name,
         email: values.email,
         phone: values.phone,
         address: values.address,
         description: values.description || `Solicitud Web: ${values.renovationType} - ${values.squareMeters}m2 - ${values.quality}`,
-        files: values.files || []
-      });
-
-      const db = getSafeDb();
-      const mailCollection = collection(db, 'mail');
-
-      const isTestEmail = values.testEmail && values.testEmail.trim() !== '';
-      const recipientEmail = isTestEmail ? values.testEmail : 'your-email@example.com';
-      const subject = isTestEmail
-        ? '[EMAIL DE PRUEBA] Nueva Solicitud de Presupuesto Rápido'
-        : 'Nueva Solicitud de Presupuesto Rápido';
-
-      await addDoc(mailCollection, {
-        to: [recipientEmail],
-        message: {
-          subject: subject,
-          html: `
-                <h1>Nueva Solicitud de Presupuesto Rápido</h1>
-                <p>Se ha recibido una nueva solicitud de presupuesto a través del formulario rápido de la web.</p>
-                <h2>Detalles del Cliente:</h2>
-                <ul>
-                    <li><strong>Nombre:</strong> ${values.name}</li>
-                    <li><strong>Email:</strong> ${values.email}</li>
-                    <li><strong>Teléfono:</strong> ${values.phone}</li>
-                    <li><strong>Dirección:</strong> ${values.address}</li>
-                </ul>
-                <h2>Detalles del Proyecto:</h2>
-                <ul>
-                    <li><strong>Tipo de Reforma:</strong> ${t.budgetRequest.quickForm.renovationType.options[values.renovationType]}</li>
-                    <li><strong>Metros Cuadrados:</strong> ${values.squareMeters} m²</li>
-                    ${values.renovationType !== 'pool' ? `<li><strong>Calidad:</strong> ${t.budgetRequest.form.quality.options[values.quality]}</li>` : ''}
-                </ul>
-                ${values.description ? `<p><strong>Descripción:</strong> ${values.description}</p>` : ''}
-                ${values.files && values.files.length > 0 ? `<p><strong>Archivos adjuntos:</strong> ${values.files.length} archivos subidos al dashboard.</p>` : ''}
-                <h2>Presupuesto Estimado:</h2>
-                <p style="font-size: 24px; font-weight: bold;">
-                    ${budget ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(budget) : 'A consultar (Piscina)'}
-                </p>
-                <p>Por favor, ponte en contacto con el cliente para dar seguimiento.</p>
-            `,
-        },
-      });
+        files: values.files || [],
+        renovationType: values.renovationType,
+        squareMeters: values.squareMeters,
+        quality: values.quality,
+      } as any);
 
       toast({
         title: t.budgetRequest.form.toast.success.title,
@@ -232,15 +214,38 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-8">
+              <VerifiedContactBanner show={isLeadVerified} />
+
               <div className="grid md:grid-cols-2 gap-6">
                 <FormField control={form.control} name="name" render={({ field }) => (
-                  <FormItem><FormLabel>{t.budgetRequest.form.name.label}</FormLabel><FormControl><Input placeholder={t.budgetRequest.form.name.placeholder} {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      {t.budgetRequest.form.name.label}
+                      <VerifiedFieldIcon show={isLeadVerified} />
+                    </FormLabel>
+                    <FormControl><Input placeholder={t.budgetRequest.form.name.placeholder} {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )} />
                 <FormField control={form.control} name="email" render={({ field }) => (
-                  <FormItem><FormLabel>{t.budgetRequest.form.email.label}</FormLabel><FormControl><Input type="email" placeholder={t.budgetRequest.form.email.placeholder} {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      {t.budgetRequest.form.email.label}
+                      <VerifiedFieldIcon show={isLeadVerified} />
+                    </FormLabel>
+                    <FormControl><Input type="email" placeholder={t.budgetRequest.form.email.placeholder} {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )} />
                 <FormField control={form.control} name="phone" render={({ field }) => (
-                  <FormItem><FormLabel>{t.budgetRequest.form.phone.label}</FormLabel><FormControl><Input placeholder={t.budgetRequest.form.phone.placeholder} {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      {t.budgetRequest.form.phone.label}
+                      <VerifiedFieldIcon show={isLeadVerified} />
+                    </FormLabel>
+                    <FormControl><Input placeholder={t.budgetRequest.form.phone.placeholder} {...field} readOnly={isLeadVerified} className={isLeadVerified ? 'bg-muted/40' : ''} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )} />
                 <FormField control={form.control} name="address" render={({ field }) => (
                   <FormItem><FormLabel>{t.budgetRequest.form.address.label}</FormLabel><FormControl><Input placeholder={t.budgetRequest.form.address.placeholder} {...field} /></FormControl><FormMessage /></FormItem>

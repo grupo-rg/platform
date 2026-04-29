@@ -34,6 +34,10 @@ class BudgetBreakdownComponent(BaseModel):
     total: float
     isSubstituted: Optional[bool] = None
     alternativeComponents: Optional[List[Dict[str, Any]]] = None
+    # Fase 9.7 — flag heredado del catálogo. Optional para retrocompat con
+    # presupuestos históricos que no lo tenían. El editor frontend (modos
+    # Sólo Ejecución / Exclusivamente Mano de Obra) lo lee como `is_variable`.
+    is_variable: Optional[bool] = None
 
 class BudgetConfig(BaseModel):
     marginGG: float
@@ -126,6 +130,17 @@ class BudgetPartida(BaseModel):
     reasoning: Optional[str] = None
     breakdown: Optional[List[BudgetBreakdownComponent]] = None
     relatedMaterial: Optional[Dict[str, Any]] = None # Could be strictly typed if needed
+    # Fase 5.E — trazabilidad v005 del Judge hacia la UI. Ambos Optional para que
+    # presupuestos históricos (sin estos campos en Firestore) sigan leyéndose sin
+    # romper. `unit_conversion_applied` se guarda como dict plano (no como el
+    # modelo pydantic original `UnitConversionRecord`) para serializar directo a
+    # Firestore y ser consumible por la UI de Next.js sin conversiones.
+    match_kind: Optional[Literal['1:1', '1:N', 'from_scratch']] = None
+    unit_conversion_applied: Optional[Dict[str, Any]] = None
+    # Fase 6.D — IDs de los HeuristicFragments (v006) que el Swarm inyectó en el
+    # prompt del Pro al tasar esta partida. `None` = no se buscó fragments;
+    # `[]` (no lo emitimos en este sprint) sería "se buscó y no había ninguno".
+    applied_fragments: Optional[List[str]] = None
 
 class BudgetMaterial(BaseModel):
     type: Literal['MATERIAL'] = 'MATERIAL'
@@ -191,3 +206,7 @@ class Budget(BaseModel):
     quickQuote: Optional[Dict[str, Any]] = None
     renders: Optional[List[Dict[str, Any]]] = None
     telemetry: Optional[BudgetTelemetry] = None
+    # Phase 15 — versión de calibración con que fue producido este budget.
+    # 'phase15' indica que partidas almacenan raw PEM (markup distribuido por editor).
+    # Ausencia o 'phase14' indica calibración legacy (partidas all-in).
+    calibrationVersion: Optional[str] = None

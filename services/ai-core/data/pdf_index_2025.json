@@ -1,0 +1,1126 @@
+[
+  {
+    "name": "DEMOLICIONES",
+    "printedPage": 1,
+    "subchapters": [
+      {
+        "name": "Cubiertas",
+        "printedPage": 1
+      },
+      {
+        "name": "Forjados",
+        "printedPage": 2
+      },
+      {
+        "name": "Hormigones",
+        "printedPage": 3
+      },
+      {
+        "name": "Cimentaciones",
+        "printedPage": 5
+      },
+      {
+        "name": "Pavimentos",
+        "printedPage": 5
+      },
+      {
+        "name": "Revestimientos",
+        "printedPage": 7
+      },
+      {
+        "name": "Fábricas",
+        "printedPage": 7
+      },
+      {
+        "name": "Saneamiento",
+        "printedPage": 9
+      },
+      {
+        "name": "Carpintería y Cerrajería",
+        "printedPage": 10
+      },
+      {
+        "name": "Instalaciones",
+        "printedPage": 11
+      },
+      {
+        "name": "Carga y recogida de escombros",
+        "printedPage": 14
+      },
+      {
+        "name": "Cantería",
+        "printedPage": 15
+      },
+      {
+        "name": "Estructuras de acero",
+        "printedPage": 16
+      }
+    ]
+  },
+  {
+    "name": "MOVIMIENTO DE TIERRAS",
+    "printedPage": 18,
+    "subchapters": [
+      {
+        "name": "Desmontes",
+        "printedPage": 18
+      },
+      {
+        "name": "Zanjas",
+        "printedPage": 19
+      },
+      {
+        "name": "Pozos",
+        "printedPage": 20
+      },
+      {
+        "name": "Entibaciones",
+        "printedPage": 21
+      },
+      {
+        "name": "Rellenos y terraplenados",
+        "printedPage": 21
+      },
+      {
+        "name": "Carga y transporte",
+        "printedPage": 23
+      },
+      {
+        "name": "Estabilización de taludes",
+        "printedPage": 23
+      }
+    ]
+  },
+  {
+    "name": "HORMIGONES",
+    "printedPage": 24,
+    "subchapters": [
+      {
+        "name": "Pilotes",
+        "printedPage": 24
+      },
+      {
+        "name": "Cimentaciones",
+        "printedPage": 28
+      },
+      {
+        "name": "Muros de contención",
+        "printedPage": 31
+      },
+      {
+        "name": "Muros de sótano",
+        "printedPage": 32
+      },
+      {
+        "name": "Pilares",
+        "printedPage": 33
+      },
+      {
+        "name": "Jácenas y zunchos",
+        "printedPage": 36
+      },
+      {
+        "name": "Placas de escalera",
+        "printedPage": 38
+      }
+    ]
+  },
+  {
+    "name": "FORJADOS",
+    "printedPage": 42,
+    "subchapters": [
+      {
+        "name": "Pretensados",
+        "printedPage": 42
+      },
+      {
+        "name": "Semirresistentes",
+        "printedPage": 46
+      },
+      {
+        "name": "Semirresistentes pretensados (T-12)",
+        "printedPage": 49
+      },
+      {
+        "name": "Reticulares y losas macizas",
+        "printedPage": 52
+      },
+      {
+        "name": "Madera",
+        "printedPage": 56
+      },
+      {
+        "name": "Placas alveolares",
+        "printedPage": 58
+      }
+    ]
+  },
+  {
+    "name": "ESTRUCTURAS METALICAS",
+    "printedPage": 62,
+    "subchapters": [
+      {
+        "name": "Pilares",
+        "printedPage": 62
+      },
+      {
+        "name": "Jácenas",
+        "printedPage": 64
+      },
+      {
+        "name": "Zancas escaleras",
+        "printedPage": 64
+      },
+      {
+        "name": "Forjados",
+        "printedPage": 65
+      }
+    ]
+  },
+  {
+    "name": "CUBIERTAS",
+    "printedPage": 68,
+    "subchapters": [
+      {
+        "name": "Bases de cubierta inclinada",
+        "printedPage": 68
+      },
+      {
+        "name": "Teja árabe",
+        "printedPage": 69
+      },
+      {
+        "name": "Teja hormigón",
+        "printedPage": 71
+      },
+      {
+        "name": "Teja cerámica mixta",
+        "printedPage": 71
+      },
+      {
+        "name": "Azoteas a la catalana",
+        "printedPage": 72
+      },
+      {
+        "name": "Fibrocemento",
+        "printedPage": 75
+      },
+      {
+        "name": "Cubiertas planas",
+        "printedPage": 75
+      },
+      {
+        "name": "Juntas de dilatación",
+        "printedPage": 87
+      }
+    ]
+  },
+  {
+    "name": "FABRICAS Y TABIQUES",
+    "printedPage": 89,
+    "subchapters": [
+      {
+        "name": "Marés",
+        "printedPage": 89
+      },
+      {
+        "name": "Bloque de hormigón",
+        "printedPage": 91
+      },
+      {
+        "name": "Bloque de hormigón de marés",
+        "printedPage": 94
+      },
+      {
+        "name": "Bloque de arlita",
+        "printedPage": 97
+      },
+      {
+        "name": "Fábrica de ladrillo",
+        "printedPage": 98
+      },
+      {
+        "name": "Tabiques",
+        "printedPage": 101
+      },
+      {
+        "name": "Tabiques prefabricados",
+        "printedPage": 103
+      },
+      {
+        "name": "Peldañeados",
+        "printedPage": 106
+      }
+    ]
+  },
+  {
+    "name": "RED DE SANEAMIENTO",
+    "printedPage": 107,
+    "subchapters": [
+      {
+        "name": "Albañales",
+        "printedPage": 107
+      },
+      {
+        "name": "Arquetas y pozos",
+        "printedPage": 109
+      },
+      {
+        "name": "Depuración",
+        "printedPage": 113
+      },
+      {
+        "name": "Bajantes",
+        "printedPage": 114
+      },
+      {
+        "name": "Colectores colgados",
+        "printedPage": 117
+      },
+      {
+        "name": "Canalones",
+        "printedPage": 120
+      },
+      {
+        "name": "Gárgolas, sumideros y desagües",
+        "printedPage": 122
+      },
+      {
+        "name": "Impermeabilización de muros y estructuras enterradas",
+        "printedPage": 124
+      }
+    ]
+  },
+  {
+    "name": "RED DE VENTILACIÓN",
+    "printedPage": 126,
+    "subchapters": [
+      {
+        "name": "Ventilación general",
+        "printedPage": 126
+      },
+      {
+        "name": "Recuperadores de calor",
+        "printedPage": 130
+      },
+      {
+        "name": "Distribución de recuperación de calor",
+        "printedPage": 136
+      },
+      {
+        "name": "Conductos de recuperacion de calor",
+        "printedPage": 138
+      },
+      {
+        "name": "Rejillas y plénums",
+        "printedPage": 141
+      },
+      {
+        "name": "Accesorios, control y puesta en marcha",
+        "printedPage": 144
+      }
+    ]
+  },
+  {
+    "name": "REVOCOS Y ENLUCIDOS",
+    "printedPage": 146,
+    "subchapters": [
+      {
+        "name": "Enfoscados",
+        "printedPage": 146
+      },
+      {
+        "name": "Morteros naturales",
+        "printedPage": 149
+      },
+      {
+        "name": "Guarnecidos y enlucidos",
+        "printedPage": 150
+      },
+      {
+        "name": "Falsos techos",
+        "printedPage": 152
+      },
+      {
+        "name": "Matarrincones y cortineros",
+        "printedPage": 154
+      },
+      {
+        "name": "Morteros monocapa",
+        "printedPage": 155
+      },
+      {
+        "name": "Fachadas SATE",
+        "printedPage": 156
+      }
+    ]
+  },
+  {
+    "name": "SOLADOS Y ALICATADOS",
+    "printedPage": 158,
+    "subchapters": [
+      {
+        "name": "Bases para embaldosar",
+        "printedPage": 158
+      },
+      {
+        "name": "Terrazo pulido o cepillado",
+        "printedPage": 160
+      },
+      {
+        "name": "Alfareria",
+        "printedPage": 162
+      },
+      {
+        "name": "Cerámica",
+        "printedPage": 163
+      },
+      {
+        "name": "Gres",
+        "printedPage": 164
+      },
+      {
+        "name": "Aceras",
+        "printedPage": 165
+      },
+      {
+        "name": "Piedra natural",
+        "printedPage": 167
+      },
+      {
+        "name": "Rodapiés",
+        "printedPage": 170
+      },
+      {
+        "name": "Alicatados",
+        "printedPage": 172
+      },
+      {
+        "name": "Hidráulicas",
+        "printedPage": 173
+      },
+      {
+        "name": "Microcemento",
+        "printedPage": 174
+      },
+      {
+        "name": "Fachada ventilada",
+        "printedPage": 175
+      },
+      {
+        "name": "Sintéticos y textiles",
+        "printedPage": 176
+      }
+    ]
+  },
+  {
+    "name": "CANTERIA Y PIEDRA  ARTIFICIAL",
+    "printedPage": 177,
+    "subchapters": [
+      {
+        "name": "Mampostería",
+        "printedPage": 177
+      },
+      {
+        "name": "Aplacados",
+        "printedPage": 178
+      },
+      {
+        "name": "Vierteaguas, jambas y dinteles",
+        "printedPage": 179
+      },
+      {
+        "name": "Escaleras",
+        "printedPage": 182
+      },
+      {
+        "name": "Celosías",
+        "printedPage": 184
+      },
+      {
+        "name": "Balaustradas",
+        "printedPage": 185
+      },
+      {
+        "name": "Encimeras",
+        "printedPage": 187
+      },
+      {
+        "name": "Cornisas",
+        "printedPage": 188
+      },
+      {
+        "name": "Esquinas, pilares y columnas",
+        "printedPage": 189
+      }
+    ]
+  },
+  {
+    "name": "AISLAMIENTOS",
+    "printedPage": 191,
+    "subchapters": [
+      {
+        "name": "Térmicos paredes y techos",
+        "printedPage": 191
+      },
+      {
+        "name": "Cubiertas",
+        "printedPage": 194
+      },
+      {
+        "name": "Fontanería y calefacción",
+        "printedPage": 195
+      },
+      {
+        "name": "Láminas para el control del vapor",
+        "printedPage": 196
+      },
+      {
+        "name": "Sellado de Carpinterías",
+        "printedPage": 200
+      },
+      {
+        "name": "Sellado de Instalaciones",
+        "printedPage": 200
+      }
+    ]
+  },
+  {
+    "name": "FIRMES Y PAVIMENTOS",
+    "printedPage": 204,
+    "subchapters": [
+      {
+        "name": "Soleras",
+        "printedPage": 204
+      },
+      {
+        "name": "Adoquinados y bordillos",
+        "printedPage": 209
+      },
+      {
+        "name": "Pavimentos asfálticos",
+        "printedPage": 211
+      },
+      {
+        "name": "Pistas deportivas",
+        "printedPage": 213
+      }
+    ]
+  },
+  {
+    "name": "OBRAS VARIAS Y ALBAÑILERIA",
+    "printedPage": 216,
+    "subchapters": [
+      {
+        "name": "Recibo de marcos y persianas",
+        "printedPage": 216
+      },
+      {
+        "name": "Rozas",
+        "printedPage": 218
+      },
+      {
+        "name": "Sanitarios",
+        "printedPage": 218
+      },
+      {
+        "name": "Ayudas a industriales",
+        "printedPage": 219
+      }
+    ]
+  },
+  {
+    "name": "CARPINTERIA DE MADERA",
+    "printedPage": 222,
+    "subchapters": [
+      {
+        "name": "Ventanas fijas",
+        "printedPage": 222
+      },
+      {
+        "name": "Ventantas practicables",
+        "printedPage": 225
+      },
+      {
+        "name": "Puertas balconeras",
+        "printedPage": 228
+      },
+      {
+        "name": "Puertas de entrada",
+        "printedPage": 230
+      },
+      {
+        "name": "Puertas de paso",
+        "printedPage": 232
+      },
+      {
+        "name": "Armarios",
+        "printedPage": 234
+      },
+      {
+        "name": "Persianas",
+        "printedPage": 236
+      },
+      {
+        "name": "Puertas RF",
+        "printedPage": 237
+      }
+    ]
+  },
+  {
+    "name": "CERRAJERIA",
+    "printedPage": 239,
+    "subchapters": [
+      {
+        "name": "Hierro y acero inoxidable",
+        "printedPage": 239
+      },
+      {
+        "name": "Aluminio",
+        "printedPage": 243
+      },
+      {
+        "name": "Puertas arrollables",
+        "printedPage": 258
+      },
+      {
+        "name": "Rejillas",
+        "printedPage": 259
+      },
+      {
+        "name": "Carpintería de PVC",
+        "printedPage": 261
+      },
+      {
+        "name": "Persianas de aluminio",
+        "printedPage": 264
+      },
+      {
+        "name": "Claraboya",
+        "printedPage": 268
+      }
+    ]
+  },
+  {
+    "name": "FONTANERIA Y GAS",
+    "printedPage": 270,
+    "subchapters": [
+      {
+        "name": "Gas",
+        "printedPage": 270
+      },
+      {
+        "name": "Fontanería",
+        "printedPage": 272
+      },
+      {
+        "name": "Aparatos sanitarios",
+        "printedPage": 277
+      },
+      {
+        "name": "Aparatos sanitarios adaptados",
+        "printedPage": 282
+      },
+      {
+        "name": "Grifería",
+        "printedPage": 283
+      },
+      {
+        "name": "Grupos de presión",
+        "printedPage": 286
+      },
+      {
+        "name": "Depósitos",
+        "printedPage": 287
+      }
+    ]
+  },
+  {
+    "name": "CALEFACCION",
+    "printedPage": 289,
+    "subchapters": [
+      {
+        "name": "Radiadores hierro fundido",
+        "printedPage": 289
+      },
+      {
+        "name": "Radiadores de chapa de acero",
+        "printedPage": 291
+      },
+      {
+        "name": "Paneles doble convectores chapa",
+        "printedPage": 293
+      },
+      {
+        "name": "Radiadores fundición de aluminio",
+        "printedPage": 294
+      },
+      {
+        "name": "Aerotermos",
+        "printedPage": 297
+      },
+      {
+        "name": "Ramales",
+        "printedPage": 298
+      },
+      {
+        "name": "Calderas",
+        "printedPage": 299
+      },
+      {
+        "name": "Accesorios",
+        "printedPage": 301
+      },
+      {
+        "name": "Radiadores eléctricos",
+        "printedPage": 302
+      },
+      {
+        "name": "Depósitos de combustible",
+        "printedPage": 303
+      },
+      {
+        "name": "Suelo radiante agua caliente",
+        "printedPage": 305
+      }
+    ]
+  },
+  {
+    "name": "ELECTRICIDAD Y TELECOMUNICACIONES",
+    "printedPage": 307,
+    "subchapters": [
+      {
+        "name": "Cuadros y derivación individual",
+        "printedPage": 307
+      },
+      {
+        "name": "Instalación interior",
+        "printedPage": 310
+      },
+      {
+        "name": "Toma de tierra",
+        "printedPage": 313
+      },
+      {
+        "name": "Antenas y porteros automáticos",
+        "printedPage": 314
+      },
+      {
+        "name": "Iluminación",
+        "printedPage": 316
+      },
+      {
+        "name": "Instalaciones de telecomunicaciones",
+        "printedPage": 317
+      },
+      {
+        "name": "Instalaciones antiintrusión",
+        "printedPage": 319
+      },
+      {
+        "name": "Pararrayos",
+        "printedPage": 319
+      },
+      {
+        "name": "Contra incendios",
+        "printedPage": 320
+      }
+    ]
+  },
+  {
+    "name": "ENERGIA SOLAR",
+    "printedPage": 322,
+    "subchapters": [
+      {
+        "name": "Energía solar térmica",
+        "printedPage": 322
+      },
+      {
+        "name": "Energía solar fotovoltaica",
+        "printedPage": 323
+      }
+    ]
+  },
+  {
+    "name": "AIRE ACONDICIONADO",
+    "printedPage": 325,
+    "subchapters": [
+      {
+        "name": "Conjuntos split",
+        "printedPage": 325
+      },
+      {
+        "name": "Conjuntos multi-split",
+        "printedPage": 326
+      },
+      {
+        "name": "Bombas de calor",
+        "printedPage": 328
+      },
+      {
+        "name": "Fancoils",
+        "printedPage": 330
+      },
+      {
+        "name": "Geotermia",
+        "printedPage": 331
+      },
+      {
+        "name": "Rejillas y conductos",
+        "printedPage": 334
+      }
+    ]
+  },
+  {
+    "name": "APARATOS ELEVADORES",
+    "printedPage": 337,
+    "subchapters": [
+      {
+        "name": "Ascensores",
+        "printedPage": 337
+      },
+      {
+        "name": "Escaleras móviles",
+        "printedPage": 339
+      },
+      {
+        "name": "Plataformas elevadoras",
+        "printedPage": 339
+      }
+    ]
+  },
+  {
+    "name": "CONTRAINCENDIOS",
+    "printedPage": 341,
+    "subchapters": [
+      {
+        "name": "Sistemas de detección de incendios",
+        "printedPage": 341
+      },
+      {
+        "name": "Sistemas de extinción de incendios",
+        "printedPage": 342
+      },
+      {
+        "name": "Luminarias de emergencia",
+        "printedPage": 344
+      }
+    ]
+  },
+  {
+    "name": "PISCINAS",
+    "printedPage": 346,
+    "subchapters": [
+      {
+        "name": "Piscinas de obra",
+        "printedPage": 346
+      },
+      {
+        "name": "Piscinas prefabricadas",
+        "printedPage": 348
+      },
+      {
+        "name": "Equipamiento",
+        "printedPage": 349
+      }
+    ]
+  },
+  {
+    "name": "ACRISTALAMIENTOS",
+    "printedPage": 353,
+    "subchapters": [
+      {
+        "name": "Vidrios dobles estándar",
+        "printedPage": 353
+      },
+      {
+        "name": "Vidrios dobles bajo emisivos y control solar",
+        "printedPage": 358
+      },
+      {
+        "name": "Vidrios de seguridad",
+        "printedPage": 362
+      },
+      {
+        "name": "Vidrio flotado",
+        "printedPage": 364
+      },
+      {
+        "name": "Vidrios colados traslúcidos",
+        "printedPage": 365
+      },
+      {
+        "name": "Bloques de vidrio",
+        "printedPage": 366
+      },
+      {
+        "name": "Vidrios templados",
+        "printedPage": 367
+      },
+      {
+        "name": "Vidrios mate",
+        "printedPage": 368
+      },
+      {
+        "name": "Vidrios plateados (espejos)",
+        "printedPage": 369
+      },
+      {
+        "name": "Vidrios triples",
+        "printedPage": 370
+      }
+    ]
+  },
+  {
+    "name": "PINTURA Y REVESTIMIENTOS",
+    "printedPage": 373,
+    "subchapters": [
+      {
+        "name": "Pintura sobre metal",
+        "printedPage": 373
+      },
+      {
+        "name": "Pintura exteriores",
+        "printedPage": 375
+      },
+      {
+        "name": "Pintura interiores",
+        "printedPage": 376
+      },
+      {
+        "name": "Pintura sobre madera",
+        "printedPage": 377
+      },
+      {
+        "name": "Empapelado y corcho",
+        "printedPage": 379
+      },
+      {
+        "name": "Pinturas de protección",
+        "printedPage": 380
+      }
+    ]
+  },
+  {
+    "name": "URBANIZACION INTERIOR PARCELA",
+    "printedPage": 381,
+    "subchapters": [
+      {
+        "name": "Iluminación exterior",
+        "printedPage": 381
+      },
+      {
+        "name": "Mobiliario urbano",
+        "printedPage": 383
+      },
+      {
+        "name": "Hornacinas",
+        "printedPage": 385
+      },
+      {
+        "name": "Protecciones y señalización",
+        "printedPage": 385
+      }
+    ]
+  },
+  {
+    "name": "JARDINERIA",
+    "printedPage": 386,
+    "subchapters": [
+      {
+        "name": "Tratamiento del terreno y césped",
+        "printedPage": 386
+      },
+      {
+        "name": "Plantación de árboles y arbustos",
+        "printedPage": 388
+      },
+      {
+        "name": "Riego",
+        "printedPage": 393
+      }
+    ]
+  },
+  {
+    "name": "PAVIMENTOS DE MADERA",
+    "printedPage": 396,
+    "subchapters": [
+      {
+        "name": "Parquet",
+        "printedPage": 396
+      },
+      {
+        "name": "Parquet flotante",
+        "printedPage": 397
+      },
+      {
+        "name": "Rodapiés",
+        "printedPage": 399
+      },
+      {
+        "name": "Exterior",
+        "printedPage": 399
+      }
+    ]
+  },
+  {
+    "name": "REHABILITACIÓN, REPARACIÓN Y MANTENIMIENTO",
+    "printedPage": 401,
+    "subchapters": [
+      {
+        "name": "PREPARACIÓN DE SUPERFICIES",
+        "printedPage": 401
+      },
+      {
+        "name": "REPARACIONES DE ELEMENTOS HORMIGÓN",
+        "printedPage": 403
+      },
+      {
+        "name": "REFUERZOS ESTRUCTURALES",
+        "printedPage": 404
+      },
+      {
+        "name": "MUROS, FÁBRICAS Y TABIQUES",
+        "printedPage": 405
+      },
+      {
+        "name": "FACHADAS, REVOCOS Y ENLUCIDOS",
+        "printedPage": 406
+      },
+      {
+        "name": "CANTERIA",
+        "printedPage": 407
+      }
+    ]
+  },
+  {
+    "name": "BIOCONSTRUCCIÓN",
+    "printedPage": 408,
+    "subchapters": [
+      {
+        "name": "Actuaciones previas",
+        "printedPage": 408
+      },
+      {
+        "name": "Movimiento de tierras",
+        "printedPage": 409
+      },
+      {
+        "name": "Cimentaciones y hormigones",
+        "printedPage": 409
+      },
+      {
+        "name": "Estructura de madera",
+        "printedPage": 409
+      },
+      {
+        "name": "Cubierta",
+        "printedPage": 413
+      },
+      {
+        "name": "Particiones",
+        "printedPage": 415
+      },
+      {
+        "name": "Aislamientos e impermeabilizaciones",
+        "printedPage": 416
+      },
+      {
+        "name": "Firmes y pavimentos",
+        "printedPage": 418
+      },
+      {
+        "name": "Revestimientos",
+        "printedPage": 419
+      },
+      {
+        "name": "Solados y alicatados",
+        "printedPage": 421
+      },
+      {
+        "name": "Pinturas",
+        "printedPage": 422
+      }
+    ]
+  },
+  {
+    "name": "SEGURIDAD Y SALUD",
+    "printedPage": 424,
+    "subchapters": [
+      {
+        "name": "Instalaciones para el personal",
+        "printedPage": 424
+      },
+      {
+        "name": "Protecciones personales",
+        "printedPage": 425
+      },
+      {
+        "name": "Protecciones colectivas",
+        "printedPage": 428
+      },
+      {
+        "name": "Señalizaciones",
+        "printedPage": 434
+      },
+      {
+        "name": "Medicina preventiva",
+        "printedPage": 436
+      },
+      {
+        "name": "Andamios",
+        "printedPage": 436
+      }
+    ]
+  },
+  {
+    "name": "ENSAYOS Y CONTROL TECNICO",
+    "printedPage": 438,
+    "subchapters": [
+      {
+        "name": "Hormigón",
+        "printedPage": 438
+      },
+      {
+        "name": "Acero para armaduras",
+        "printedPage": 440
+      },
+      {
+        "name": "Materiales de obra",
+        "printedPage": 440
+      },
+      {
+        "name": "Cubiertas",
+        "printedPage": 441
+      },
+      {
+        "name": "Viales y rellenos",
+        "printedPage": 441
+      },
+      {
+        "name": "Geotécnicos",
+        "printedPage": 442
+      },
+      {
+        "name": "Acústica",
+        "printedPage": 443
+      },
+      {
+        "name": "Barandillas",
+        "printedPage": 443
+      },
+      {
+        "name": "Soldadura",
+        "printedPage": 443
+      },
+      {
+        "name": "Estanqueidad durante la ejecucion de la obra",
+        "printedPage": 443
+      },
+      {
+        "name": "Estanqueidad al finalizar la obra",
+        "printedPage": 445
+      }
+    ]
+  }
+]

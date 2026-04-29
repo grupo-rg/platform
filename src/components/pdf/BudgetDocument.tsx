@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatNumberES } from '@/lib/utils';
+import type { CompanyConfig } from '@/backend/platform/domain/company-config';
 
 const styles = StyleSheet.create({
     page: {
@@ -87,35 +88,66 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9', // Subtle divider between items
     },
+    // Header de columnas — repetido al inicio de cada capítulo para legibilidad.
+    columnHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#94A3B8',
+        paddingBottom: 3,
+        marginBottom: 6,
+    },
+    columnHeaderText: {
+        fontSize: 7,
+        fontWeight: 'bold',
+        color: '#64748B',
+        textTransform: 'uppercase',
+    },
     itemMainRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         marginBottom: 4,
     },
+    // Distribución 6 columnas (suma 100%): Code | Description | Ud | Cant | Precio | Total
     itemCode: {
-        width: '12%',
+        width: '10%',
         fontSize: 9,
         fontWeight: 'bold',
-        color: '#000000'
-    },
-    itemUnit: {
-        width: '5%',
-        fontSize: 9,
-        fontWeight: 'bold',
-        color: '#000000'
+        color: '#000000',
+        paddingRight: 4,
     },
     itemTitleColumn: {
-        width: '68%',
+        width: '40%',
         flexDirection: 'column',
-        paddingRight: 10,
+        paddingRight: 8,
     },
     itemTitle: {
         fontSize: 9,
         color: '#334155',
         lineHeight: 1.3
     },
-    itemTotal: {
+    itemUnit: {
+        width: '8%',
+        fontSize: 9,
+        color: '#000000',
+        textAlign: 'center',
+    },
+    itemQty: {
+        width: '10%',
+        fontSize: 9,
+        color: '#000000',
+        textAlign: 'right',
+        paddingRight: 4,
+    },
+    itemPrice: {
         width: '15%',
+        fontSize: 9,
+        color: '#000000',
+        textAlign: 'right',
+        paddingRight: 4,
+    },
+    itemTotal: {
+        width: '17%',
         fontSize: 10,
         fontWeight: 'bold',
         color: '#000000',
@@ -130,7 +162,7 @@ const styles = StyleSheet.create({
     },
     breakdownRow: {
         flexDirection: 'row',
-        marginLeft: '17%', // Indent under description
+        marginLeft: '10%', // Indent bajo la columna de código (10% width)
         marginBottom: 2,
     },
     bdCode: { width: '15%', fontSize: 7, color: '#475569' },
@@ -211,52 +243,64 @@ interface BudgetDocumentProps {
     items: any[];
     costBreakdown: any;
     date: string;
+    /** Logo específico del presupuesto. Si no se pasa, se usa company.logoUrl. */
     logoUrl?: string;
     notes?: string;
     budgetConfig?: { tax: number; marginGG: number; marginBI: number };
     executionMode?: 'complete' | 'execution' | 'labor';
     renders?: any[];
+    /** IDs de renders seleccionados para incluir en el anexo visual. Vacío/undefined = sin anexo. */
+    selectedRenderIds?: string[];
+    /** Datos de la empresa emisora. Fuente única para header, footer y branding del PDF. */
+    company: CompanyConfig;
 }
 
-const Footer = ({ pageNumber, companyName, cif, address }: { pageNumber: number, companyName?: string, cif?: string, address?: string }) => {
-    const defaultCompany = 'Basis';
+const Footer = ({ pageNumber, company }: { pageNumber: number; company: CompanyConfig }) => {
+    const line = [company.legalName || company.name, company.cif && `CIF: ${company.cif}`, company.address]
+        .filter(Boolean)
+        .join(' · ');
     return (
         <View style={styles.footerContainer} fixed>
             <View style={styles.footerLine} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.footerText}>
-                    {companyName || defaultCompany} {cif ? `- CIF: ${cif}` : ''} {address ? `- ${address}` : ''}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={{ fontSize: 6, color: '#CBD5E1', fontStyle: 'italic' }}>Generado con Basis</Text>
-                    <Text style={[styles.footerText, { marginLeft: 10 }]}>Página {pageNumber}</Text>
-                </View>
+                <Text style={styles.footerText}>{line}</Text>
+                <Text style={styles.footerText}>Página {pageNumber}</Text>
             </View>
+            {company.footerText && (
+                <Text style={{ fontSize: 6, color: '#94A3B8', marginTop: 2 }}>{company.footerText}</Text>
+            )}
         </View>
     );
 };
 
-const Header = ({ budgetNumber, date, logoUrl, companyName }: { budgetNumber: string, date: string, logoUrl?: string, companyName?: string }) => (
-    <View style={styles.header}>
-        <View style={styles.logoSection}>
-            {logoUrl ? (
-                <Image
-                    src={logoUrl}
-                    style={styles.companyLogo}
-                />
-            ) : (
-                <Image
-                    src="/images/logo-negro.png"
-                    style={{ height: 32, marginBottom: 10, objectFit: 'contain' }}
-                />
-            )}
+const Header = ({ budgetNumber, date, logoUrl, company, totalAmount }: { budgetNumber: string; date: string; logoUrl?: string; company: CompanyConfig; totalAmount?: number }) => {
+    const resolvedLogo = logoUrl || company.logoUrl;
+    return (
+        <View style={styles.header}>
+            <View style={styles.logoSection}>
+                {resolvedLogo ? (
+                    <Image src={resolvedLogo} style={styles.companyLogo} />
+                ) : (
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>{company.name}</Text>
+                )}
+                {company.tagline && (
+                    <Text style={{ fontSize: 8, color: '#64748B', marginTop: 2 }}>{company.tagline}</Text>
+                )}
+            </View>
+            <View style={styles.metaSection}>
+                <Text style={styles.bold}>PRESUPUESTO Nº {budgetNumber}</Text>
+                <Text>Fecha: {date}</Text>
+                {totalAmount !== undefined && totalAmount > 0 && (
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#0F172A', marginTop: 4 }}>
+                        Total: {formatCurrency(totalAmount)}
+                    </Text>
+                )}
+                {company.web && <Text>{company.web}</Text>}
+                {company.phone && <Text>{company.phone}</Text>}
+            </View>
         </View>
-        <View style={styles.metaSection}>
-            <Text style={styles.bold}>PRESUPUESTO Nº {budgetNumber}</Text>
-            <Text>Fecha: {date}</Text>
-        </View>
-    </View>
-);
+    );
+};
 
 export const BudgetDocument = ({
     budgetNumber,
@@ -270,8 +314,17 @@ export const BudgetDocument = ({
     notes,
     budgetConfig,
     executionMode = 'complete',
-    renders = []
+    renders = [],
+    selectedRenderIds,
+    company,
 }: BudgetDocumentProps) => {
+    const selectedRenders = selectedRenderIds && selectedRenderIds.length > 0
+        ? renders.filter((r: any) => selectedRenderIds.includes(r.id))
+        : [];
+    const renderPages: any[][] = [];
+    for (let i = 0; i < selectedRenders.length; i += 2) {
+        renderPages.push(selectedRenders.slice(i, i + 2));
+    }
 
     // Group items by chapter
     const itemsByChapter = items.reduce((acc: Record<string, any[]>, item) => {
@@ -287,13 +340,13 @@ export const BudgetDocument = ({
         <Document>
             {/* --- PAGES: DETAILED BUDGET (NOW COMES FIRST) --- */}
             <Page size="A4" style={styles.page}>
-                <Header budgetNumber={budgetNumber} date={date} logoUrl={logoUrl} companyName={clientEmail} />
+                <Header budgetNumber={budgetNumber} date={date} logoUrl={logoUrl} company={company} totalAmount={costBreakdown.total} />
 
                 <View style={{ marginTop: 20, marginBottom: 30 }}>
                     <Text style={styles.title}>Propuesta Técnica y Económica</Text>
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 5 }}>
                         <Text style={styles.badge}>Reforma Personalizada</Text>
-                        <Text style={styles.badge}>Basis Estándar de Calidad</Text>
+                        <Text style={styles.badge}>{company.name} · Estándar de Calidad</Text>
                     </View>
                 </View>
 
@@ -308,10 +361,20 @@ export const BudgetDocument = ({
                     <View key={chapterName} style={{ marginBottom: 15 }}>
                         <Text style={styles.chapterHeader} wrap={false}>{chapterName}</Text>
 
+                        {/* Header de columnas (repetido por capítulo para legibilidad si rompe página). */}
+                        <View style={styles.columnHeaderRow} wrap={false}>
+                            <Text style={[styles.columnHeaderText, { width: '10%' }]}>Cód</Text>
+                            <Text style={[styles.columnHeaderText, { width: '40%' }]}>Descripción</Text>
+                            <Text style={[styles.columnHeaderText, { width: '8%', textAlign: 'center' }]}>Ud</Text>
+                            <Text style={[styles.columnHeaderText, { width: '10%', textAlign: 'right' }]}>Cant.</Text>
+                            <Text style={[styles.columnHeaderText, { width: '15%', textAlign: 'right' }]}>Precio</Text>
+                            <Text style={[styles.columnHeaderText, { width: '17%', textAlign: 'right' }]}>Total</Text>
+                        </View>
+
                         {itemsByChapter[chapterName].map((item: any, index: number) => {
                             let bTotal = (item.item?.totalPrice || item.item?.price || 0);
                             const qTotal = (item.item?.quantity || 1);
-                            
+
                             // Adjust bTotal dynamically for PDF based on execution mode
                             const activeBreakdown = item.item?.breakdown || [];
                             if (executionMode === 'execution' && activeBreakdown.length > 0) {
@@ -326,22 +389,34 @@ export const BudgetDocument = ({
                                 bTotal = Math.max(0, laborCost * qTotal);
                             }
 
+                            // Phase 15 — distribuir GG+BI equitativamente sobre partidas para PDF.
+                            // El cliente ve precios all-in por partida; sus sumas matchean el Base Imponible.
+                            // Los componentes internos (breakdown) siguen mostrando raw para auditabilidad.
+                            const markupFactor = 1 + ((budgetConfig?.marginGG || 0) + (budgetConfig?.marginBI || 0)) / 100;
+                            const bTotalAllIn = bTotal * markupFactor;
+
                             // Prevent duplicating title into description if they are implicitly the same 
                             const showDescription = item.item?.description && item.item.description.trim() !== "" && item.item.description.trim() !== item.originalTask.trim();
 
+                            // Phase 16.C — precio unitario all-in (raw × markupFactor) para mostrar al cliente.
+                            const unitPriceRaw = item.item?.unitPrice || 0;
+                            const unitPriceAllIn = unitPriceRaw * markupFactor;
+
                             return (
                                 <View key={item.id || index} style={styles.itemContainer} wrap={false}>
-                                    {/* Main Row: Code | Unit | Titles Column | Total */}
+                                    {/* Main Row: 6 columnas (Code | Description | Ud | Cant | Precio | Total) */}
                                     <View style={styles.itemMainRow}>
                                         <Text style={styles.itemCode}>{item.item?.code || '-'}</Text>
-                                        <Text style={styles.itemUnit}>{item.item?.unit || 'ud'}</Text>
                                         <View style={styles.itemTitleColumn}>
                                             <Text style={styles.itemTitle}>{item.originalTask}</Text>
                                             {showDescription && (
                                                 <Text style={styles.itemDescription}>{item.item.description}</Text>
                                             )}
                                         </View>
-                                        <Text style={styles.itemTotal}>{bTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</Text>
+                                        <Text style={styles.itemUnit}>{item.item?.unit || 'ud'}</Text>
+                                        <Text style={styles.itemQty}>{formatNumberES(qTotal, 2)}</Text>
+                                        <Text style={styles.itemPrice}>{formatNumberES(unitPriceAllIn, 2)}</Text>
+                                        <Text style={styles.itemTotal}>{formatNumberES(bTotalAllIn, 2)}</Text>
                                     </View>
 
                                     {/* Detailed Breakdown nested correctly */}
@@ -357,11 +432,11 @@ export const BudgetDocument = ({
                                                 return (
                                                     <View key={bIdx} style={styles.breakdownRow}>
                                                         <Text style={styles.bdCode}>{b.code || '-'}</Text>
-                                                        <Text style={styles.bdQty}>{parseFloat(qty.toString()).toLocaleString('es-ES', { minimumFractionDigits: 3 })}</Text>
+                                                        <Text style={styles.bdQty}>{formatNumberES(parseFloat(qty.toString()), 3)}</Text>
                                                         <Text style={styles.bdUnit}>{b.unit?.toLowerCase() === '%' ? 'h' : (b.unit || 'u')}</Text>
                                                         <Text style={styles.bdDesc}>{b.description || b.concept}</Text>
-                                                        <Text style={styles.bdPrice}>{unitPrice.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</Text>
-                                                        <Text style={styles.bdTotal}>{lineTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</Text>
+                                                        <Text style={styles.bdPrice}>{formatNumberES(unitPrice, 2)}</Text>
+                                                        <Text style={styles.bdTotal}>{formatNumberES(lineTotal, 2)}</Text>
                                                     </View>
                                                 );
                                             })}
@@ -373,17 +448,16 @@ export const BudgetDocument = ({
                     </View>
                 ))}
 
+                {/* Phase 15 — Resumen económico simplificado: Base Imponible + IVA + Total.
+                    Sin GG/BI como líneas separadas (markup distribuido implícitamente entre partidas).
+                    Convención de presupuesto al cliente final. */}
                 <View style={[styles.totalSection, { marginTop: 20 }]} wrap={false}>
                     <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Base Imponible (P.E.M.):</Text>
-                        <Text style={styles.totalValue}>{formatCurrency(costBreakdown.materialExecutionPrice)}</Text>
+                        <Text style={styles.totalLabel}>Base Imponible:</Text>
+                        <Text style={styles.totalValue}>{formatCurrency(costBreakdown.materialExecutionPrice + costBreakdown.overheadExpenses + costBreakdown.industrialBenefit)}</Text>
                     </View>
                     <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Gastos Generales / Org.:</Text>
-                        <Text style={styles.totalValue}>{formatCurrency(costBreakdown.overheadExpenses)}</Text>
-                    </View>
-                    <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>IVA ({budgetConfig?.tax || 21}%):</Text>
+                        <Text style={styles.totalLabel}>IVA ({budgetConfig?.tax || 10}%):</Text>
                         <Text style={styles.totalValue}>{formatCurrency(costBreakdown.tax)}</Text>
                     </View>
                     <View style={[styles.totalRow, { marginTop: 8 }]}>
@@ -404,12 +478,12 @@ export const BudgetDocument = ({
                         * Este documento es una estimación técnica preliminar. Un experto contactará con usted para realizar una visita técnica y refinar los detalles finales del presupuesto.
                     </Text>
                 </View>
-                <Footer pageNumber={1} companyName={clientEmail} cif={clientEmail ? "Generado desde Basis" : undefined} address={clientEmail ? "Presupuesto" : undefined} />
+                <Footer pageNumber={1} company={company} />
             </Page>
 
             {/* --- PAGE: METHODOLOGY & INFO (MOVED TO THE END) --- */}
             <Page size="A4" style={styles.page}>
-                <Header budgetNumber={budgetNumber} date={date} logoUrl={logoUrl} companyName={clientEmail} />
+                <Header budgetNumber={budgetNumber} date={date} logoUrl={logoUrl} company={company} totalAmount={costBreakdown.total} />
 
                 <Text style={styles.sectionTitle}>1. Por qué es importante leer este presupuesto hasta el final</Text>
                 <Text style={styles.textBlock}>
@@ -422,7 +496,7 @@ export const BudgetDocument = ({
 
                 <Text style={styles.sectionTitle}>2. Precio y Validez del Presupuesto</Text>
                 <Text style={styles.textBlock}>
-                    El precio total estimado para este proyecto es de <Text style={styles.bold}>{costBreakdown.total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</Text>.
+                    El precio total estimado para este proyecto es de <Text style={styles.bold}>{formatCurrency(costBreakdown.total)}</Text>.
                 </Text>
                 <Text style={styles.textBlock}>
                     <Text style={styles.bold}>Validez del presupuesto:</Text> hasta el 15 días posteriores a la fecha de emisión.
@@ -487,28 +561,43 @@ export const BudgetDocument = ({
                     </Text>
                 </View>
 
-                <Footer pageNumber={2} companyName={clientEmail} cif={clientEmail ? "Generado desde Basis" : undefined} address={clientEmail ? "Presupuesto" : undefined} />
+                <Footer pageNumber={2} company={company} />
             </Page>
 
-            {/* --- AI VISUAL PROPOSAL PAGE --- */}
-            {renders && renders.filter(r => r.includeInPdf).length > 0 && (
-                <Page size="A4" style={styles.page}>
-                    <Header budgetNumber={budgetNumber} date={date} logoUrl={logoUrl} companyName={clientEmail} />
-                    
-                    <Text style={[styles.sectionTitle, { fontSize: 16, borderBottomWidth: 2 }]}>Anexo: Propuesta Visual Conceptual</Text>
-                    <Text style={styles.textBlock}>
-                        Las presentes infografías han sido generadas mediante inteligencia artificial paramétrica. Tienen carácter exclusivamente conceptual y orientativo para comprender el estilo, la distribución espacial y la paleta de colores propuesta en este presupuesto. No poseen valor contractual exacto sobre elementos mobiliarios o acabados finales menores.
-                    </Text>
+            {/* --- AI VISUAL PROPOSAL PAGES (antes / después) --- */}
+            {renderPages.map((pageRenders, pageIdx) => (
+                <Page key={`renders-${pageIdx}`} size="A4" style={styles.page}>
+                    <Header budgetNumber={budgetNumber} date={date} logoUrl={logoUrl} company={company} totalAmount={costBreakdown.total} />
 
-                    <View style={{ marginTop: 20, flex: 1, flexDirection: 'column', gap: 20 }}>
-                        {renders.filter(r => r.includeInPdf).slice(0, 2).map((render, idx) => (
-                            <View key={idx} style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8, border: 1, borderColor: '#E2E8F0' }}>
+                    {pageIdx === 0 && (
+                        <>
+                            <Text style={[styles.sectionTitle, { fontSize: 16, borderBottomWidth: 2 }]}>Anexo: Propuesta Visual Conceptual</Text>
+                            <Text style={styles.textBlock}>
+                                Las siguientes infografías han sido generadas mediante inteligencia artificial paramétrica. Tienen carácter exclusivamente conceptual y orientativo para comprender el estilo, la distribución espacial y la paleta de colores propuestos. No poseen valor contractual sobre mobiliario o acabados finales.
+                            </Text>
+                        </>
+                    )}
+
+                    <View style={{ marginTop: pageIdx === 0 ? 20 : 0, flex: 1, flexDirection: 'column', gap: 20 }}>
+                        {pageRenders.map((render: any, idx: number) => (
+                            <View key={render.id || idx} style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8, border: 1, borderColor: '#E2E8F0' }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                                    <Text style={[styles.bold, { fontSize: 10 }]}>{render.roomType} - Estilo {render.style}</Text>
-                                    <Text style={{ fontSize: 8, color: '#64748B' }}>Dochevi AI Render Engine</Text>
+                                    <Text style={[styles.bold, { fontSize: 10 }]}>{render.roomType} · {render.style}</Text>
                                 </View>
-                                {/* Limit height to fit 2 images perfectly per page */}
-                                <Image src={render.url} style={{ width: '100%', height: 260, objectFit: 'cover', borderRadius: 4 }} />
+                                {render.originalUrl ? (
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 7, color: '#64748B', marginBottom: 3, textTransform: 'uppercase' }}>Antes</Text>
+                                            <Image src={render.originalUrl} style={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 4 }} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 7, color: '#64748B', marginBottom: 3, textTransform: 'uppercase' }}>Después</Text>
+                                            <Image src={render.url} style={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 4 }} />
+                                        </View>
+                                    </View>
+                                ) : (
+                                    <Image src={render.url} style={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 4 }} />
+                                )}
                                 {render.prompt && (
                                     <Text style={{ fontSize: 7, color: '#94A3B8', marginTop: 6, fontStyle: 'italic', textAlign: 'center' }}>
                                         {render.prompt}
@@ -518,17 +607,9 @@ export const BudgetDocument = ({
                         ))}
                     </View>
 
-                    {renders.filter(r => r.includeInPdf).length > 2 && (
-                         <View style={{ marginTop: 10 }}>
-                             <Text style={{ fontSize: 8, color: '#64748B', textAlign: 'center' }}>
-                                 * Se han omitido imágenes adicionales. Solicite el Anexo Visual Completo si desea mayor detalle.
-                             </Text>
-                         </View>
-                    )}
-
-                    <Footer pageNumber={3} companyName={clientEmail} cif={clientEmail ? "Generado desde Basis" : undefined} address={clientEmail ? "Presupuesto" : undefined} />
+                    <Footer pageNumber={3 + pageIdx} company={company} />
                 </Page>
-            )}
+            ))}
         </Document>
     );
 };

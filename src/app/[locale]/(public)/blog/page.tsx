@@ -4,10 +4,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from '@/i18n/navigation';
 import { ArrowRight } from 'lucide-react';
-import { blogPosts } from '@/lib/blog-posts';
 import type { Metadata } from 'next';
 import { constructMetadata } from '@/i18n/seo-utils';
 import { WebPageJsonLd, BreadcrumbJsonLd } from '@/components/seo/json-ld';
+import { blogPostService } from '@/backend/marketing/application/blog-post-service';
+import type { BlogLocale } from '@/backend/marketing/domain/blog-post';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
+
+export const revalidate = 300; // ISR 5 min
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
@@ -26,13 +30,16 @@ export default async function BlogPage({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   const dict = await getDictionary(locale as any);
   const t = dict.blog;
+  const company = await companyConfigService.get();
+
+  const posts = await blogPostService.listPublishedAll(locale as BlogLocale, 30);
 
   return (
     <>
       <WebPageJsonLd
         name={t.title}
         description={t.subtitle}
-        url={`https://gruporg.es/${locale}/blog`}
+        url={`${company.web}/${locale}/blog`}
         type="CollectionPage"
       />
       <BreadcrumbJsonLd items={[
@@ -52,31 +59,39 @@ export default async function BlogPage({ params }: { params: Promise<{ locale: s
 
       <section className="w-full py-20 md:py-28 bg-background">
         <div className="container-limited">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {blogPosts.map((post) => (
-              <Card key={post.id} className="group overflow-hidden flex flex-col h-full hover:shadow-xl transition-all duration-300">
-                <div className="relative h-56 w-full">
-                  <Image
-                    src={post.image}
-                    alt={post.title}
-                    fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    data-ai-hint={post.imageHint}
-                  />
-                </div>
-                <CardContent className="p-6 flex-grow flex flex-col">
-                  <p className="text-sm text-primary font-semibold mb-2">{post.category}</p>
-                  <h3 className="font-headline text-xl font-bold mb-2 flex-grow">{post.title}</h3>
-                  <p className="text-muted-foreground text-sm mb-4">{post.excerpt}</p>
-                  <Button asChild variant="link" className="p-0 h-auto mt-auto self-start">
-                    <Link href={{ pathname: '/blog/[slug]', params: { slug: post.slug } }} className="font-bold">
-                      {t.readMore} <ArrowRight className="ml-2" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          {posts.length === 0 ? (
+            <p className="text-center text-muted-foreground py-12">
+              Aún no hemos publicado artículos. Vuelve pronto.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+              {posts.map((post) => (
+                <Card key={post.id} className="group overflow-hidden flex flex-col h-full hover:shadow-xl transition-all duration-300">
+                  {post.heroImageUrl && (
+                    <div className="relative h-56 w-full">
+                      <Image
+                        src={post.heroImageUrl}
+                        alt={post.title}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        unoptimized={post.heroImageUrl.startsWith('http')}
+                      />
+                    </div>
+                  )}
+                  <CardContent className="p-6 flex-grow flex flex-col">
+                    {post.tags?.[0] && <p className="text-sm text-primary font-semibold mb-2">{post.tags[0]}</p>}
+                    <h3 className="font-headline text-xl font-bold mb-2 flex-grow">{post.title}</h3>
+                    <p className="text-muted-foreground text-sm mb-4">{post.metaDescription}</p>
+                    <Button asChild variant="link" className="p-0 h-auto mt-auto self-start">
+                      <Link href={{ pathname: '/blog/[slug]', params: { slug: post.slug } }} className="font-bold">
+                        {t.readMore} <ArrowRight className="ml-2" />
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

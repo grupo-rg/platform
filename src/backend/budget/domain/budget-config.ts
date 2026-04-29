@@ -28,9 +28,11 @@ export interface BudgetConfig {
 
 export const DEFAULT_BUDGET_CONFIG: BudgetConfig = {
     id: 'default',
-    overheadExpenses: 0.13, // 13% Gastos Generales
-    industrialBenefit: 0.06, // 6% Beneficio Industrial (Mínimo legal/técnico)
-    iva: 0.10, // 10% IVA Reducido
+    // Phase 15 — Defaults Grupo RG (convención de markup distribuido):
+    // partidas almacenan raw PEM; el editor distribuye GG+BI equitativamente.
+    overheadExpenses: 0.10, // 10% Gastos Generales (Grupo RG)
+    industrialBenefit: 0.15, // 15% Beneficio Industrial (Grupo RG)
+    iva: 0.10, // 10% IVA Reducido (reformas residenciales)
     globalAdjustmentFactor: 1.0, // Sin ajuste extra
     baseIntegralReformRateM2: 650, // 650€/m2 estandard
     materialMargin: 0.10, // 10% margen materiales por defecto

@@ -11,15 +11,55 @@ REGLAS VISUALES ESTRICTAS:
 1. REGLA DE CAPÍTULOS vs PARTIDAS: Un "Capítulo" es un encabezado grueso en mayúsculas (Ej: "C01 ALBAÑILERÍA"). ¡UN CAPÍTULO NUNCA ES UNA PARTIDA! Jamás extraigas el título del capítulo como un objeto en tu JSON. Solo extraerás las Partidas reales (que tienen código compuesto como C01.01, unidades, cantidades).
 2. CAMPO 'CHAPTER' ESTRICTO Y CONSISTENTE: Para cada Partida, rellena su campo `chapter` uniendo el código del capítulo y su nombre EXACTO (Ej: "C01 ALBAÑILERÍA"). Debe ser exactamente idéntico y copiado letra por letra para todas las partidas que pertenezcan a él. No pongas solo "C01", pon el nombre completo.
 3. COORDENADAS Y CÓDIGOS: Las partidas ("ITEMS") siempre tienen un código decimal ("1.1", "10.02.04" o "C01.01"). Búscalo visualmente en la primera columna visible.
-4. UNIFICA LA DESCRIPCIÓN (CAPACIDAD DINÁMICA): Eres dinámico. La descripción de una partida puede tener viñetas (- Limpiar, - Meter 10cm...), saltos de línea y ocupar múltiples renglones. Debes unificar todo el bloque de texto asociado a la partida en un único campo de texto de descripción.
+4. UNIFICA LA DESCRIPCIÓN (TRANSCRIPCIÓN LITERAL): La descripción de una partida puede tener viñetas (- Limpiar, - Meter 10cm...), saltos de línea y ocupar múltiples renglones. Debes unificar todo el bloque de texto asociado a la partida en un único campo de texto de descripción **CONSERVANDO LA LITERALIDAD**. ESTÁ ESTRICTAMENTE PROHIBIDO resumir, parafrasear, sintetizar o acortar. Copia el texto tal cual aparece, solo uniendo viñetas y líneas con espacios o comas. La descripción original es la clave para el matching posterior contra el libro de precios vectorizado: perder detalle = perder el precio correcto.
 5. NO PIERDAS CANTIDADES EXCENTRICAS: La CANTIDAD (Medición) final puede NO estar en la misma línea recta del título. A veces aparece debajo de toda la descripción, alineada a la derecha (Ej: `1,00 Ud`). Usa el sentido común para asociar inteligentemente esa cantidad y esa unidad a la partida que estás leyendo actualmente.
+
+5b. UNIDADES — CONSIDERA TODAS LAS VARIANTES DEL APAREJADOR. Cada aparejador y cada plantilla (Presto, CIFRE, MUSAAT, Excel propio) usa su propia abreviatura para las mismas unidades físicas. **NUNCA omitas una unidad por estar en una notación poco habitual** — extráela tal cual la veas en el PDF y deja que el sistema Python downstream la canonicalice. Variantes equivalentes que debes reconocer como UNIDAD VÁLIDA en la columna de unidad (todas son válidas):
+    - Superficie: `m²`, `M²`, `m2`, `M2`, `mc`, `m.c.`
+    - Volumen: `m³`, `M³`, `m3`, `M3`, `m.cb.`
+    - Lineal: `m`, `M`, `ml`, `ML`, `m.l.`, `mts`, `mtl`
+    - Unidades: `u`, `U`, `ud`, `Ud`, `UD`, `uds`, `und`
+    - Masa: `kg`, `Kg`, `KG`, `kgs`, `t`, `T`, `Tn`, `tn`, `Ton`
+    - Tiempo: `h`, `H`, `hr`, `hrs`
+    - Partida alzada: `pa`, `Pa`, `PA`, `p.a.`
+    - Costes indirectos / porcentajes: `%`
+    Si la unidad es de un solo carácter en minúscula (`u`, `m`, `h`, `t`), TAMBIÉN es una unidad válida. NO la confundas con una letra del título. La regla es: si entre el `code` y el cuerpo del título hay un token corto (1-3 chars) que cuadra con la lista de arriba, ESE es el `unit` — el resto es título.
 6. NO INVENTES PRECIOS: Si en la imagen no hay precios o solo hay mediciones, déjalo en null o 0. Si no entiendes una línea porque es de ruido (`Página 1`), IGNÓRALA.
 17. CERO PÉRDIDAS (ZERO-LEAK): Lee la imagen de izquierda a derecha, de arriba abajo. Asegúrate de que el número de Partidas en tu JSON final coincida *exactamente* con el número de filas de Partida completas que cualquier oficinista vería en la foto.
 18. CONTINUIDAD: Si la página empieza con partidas "huérfanas" (porque el título del capítulo estaba en la página anterior, que ahora no ves), clasifícalas con el Capítulo "CONTINUACIÓN_ANTERIOR" para que el programa en Python que te llama sepa que debe fusionarlas.
 19. FILTRO ANTI-FANTASMAS: Si ves una línea de texto que parece una partida pero NO TIENE UN CÓDIGO NUMÉRICO CLARO en su inicio (por ejemplo, es un comentario, un renglón suelto de una descripción anterior, o un subtotal), BAJO NINGUNA CIRCUNSTANCIA la incluyas como un objeto Partida separado en el JSON. Toda partida extraída DEBE OBLIGATORIAMENTE tener un `code`.
-20. EXTRACCIÓN ITERATIVA Y LÍMITE FÍSICO (BULLTETPROOF): Una página puede tener demasiadas partidas para extraerlas todas de un golpe. Si sientes que la página es muy larga, EXTRAE UN MÁXIMO SEGURO DE 15 PARTIDAS y detente.
-    * Si la página AÚN tiene partidas debajo de las que extrajiste: marca `has_more_items` en true y escribe en `last_extracted_code` el código de la última partida que sacaste.
+20. EXTRACCIÓN ITERATIVA Y LÍMITE FÍSICO (BULLETPROOF CONTRA TRUNCAMIENTO): Una página puede tener demasiadas partidas para extraerlas todas de un golpe sin que el JSON se trunque. **Si las descripciones son largas (>400 chars cada una), EXTRAE UN MÁXIMO DE 10 PARTIDAS y detente.** Si son cortas (<200 chars), puedes extraer hasta 15. **El objetivo es evitar que el output supere ~15.000 tokens que es donde empieza a truncarse.**
+    * Si la página AÚN tiene partidas debajo de las que extrajiste: marca `has_more_items` en true y escribe en `last_extracted_code` el código de la última partida que sacaste. El sistema te volverá a llamar con el flag de continuación para seguir desde esa partida.
     * Si y solo si lograste llegar hasta el mismísimo final físico impreso en la página: marca `has_more_items` en false.
+    * **CLAVE**: Es mucho mejor devolver 8 partidas completas y literales con `has_more_items: true` que intentar 20 y que el JSON se trunque a medio objeto, forzando un retry.
+
+22. PARTIDAS HUÉRFANAS ASCENDENTES (continuación de la página anterior) — CRITERIOS OBJETIVOS.
+    Pobla `orphan_tail_text` con el texto LITERAL (sin resumir, sin parafrasear) si esta página EMPIEZA con un párrafo que cumple TODAS las siguientes:
+    (a) Arranca con (i) un verbo de obra en cualquier caja — "Suministro y colocación de…", "Demolición de…", "Instalación de…", "Excavación de…", "Colocación de…", "Ejecución de…", "Desmontaje de…" — O (ii) texto que continúa una frase a media oración (minúscula, preposición, conjunción, viñeta suelta, coma inicial).
+    (b) NO hay ningún código de partida (patrón `\d+\.\d+` o `C\d+\.\d+`) ni cabecera tabular inmediatamente antes del párrafo en esta página.
+    (c) El párrafo contiene detalles técnicos (materiales, dimensiones, normas UNE/EN, marcas CIFRE/WEBER/KERABEN, criterios de medición).
+
+    **PROHIBIDO**: (1) incluir ese párrafo como partida separada (regla 19 sigue vigente); (2) atribuirlo a la siguiente partida con código que encuentres. Pertenece a la ÚLTIMA partida de la página ANTERIOR. Déjalo en `orphan_tail_text` y el sistema Python lo reubica.
+
+    Si la página empieza directamente con un código de partida en la primera fila tabular, deja `orphan_tail_text: ""`.
+
+22b. PROHIBICIÓN DE SUBTOTALES CARRY-OVER EN ORPHAN_TAIL Y EN QUANTITIES.
+    Si la página empieza con UNA LÍNEA QUE ES SOLO UN NÚMERO DECIMAL (ej. `72,80`, `1.234,50`, `1,00`) sin texto descriptivo ni código de partida que la acompañe en la misma línea, NUNCA la incluyas en `orphan_tail_text` ni la asignes como `quantity` de la siguiente partida. Es un **subtotal carry-over** de la convención Presto/CIFRE: el subtotal acumulado de la última partida de la página anterior se repite al inicio de la página actual como cabecera tabular cross-page. El sistema Python lo trata aparte. **Empieza `orphan_tail_text` desde la primera línea con texto significativo**, y deja la `quantity` de la siguiente partida basada exclusivamente en sus propias filas de medición (UDS LONGITUD ANCHURA ALTURA PARCIALES). Si dudas entre carry-over y quantity legítima, mira si EL MISMO NÚMERO aparece como subtotal final de la partida anterior — si coincide, es carry-over.
+
+23. PARTIDAS TRUNCADAS DESCENDENTES (continuación hacia la siguiente página) — CRITERIOS OBJETIVOS.
+    Marca `last_item_truncated: true` si la ÚLTIMA partida de esta página cumple CUALQUIERA de estas condiciones:
+    (a) La descripción se corta físicamente al final de la imagen (la línea está cortada a mitad de palabra o frase, queda una viñeta abierta, aparece un "Incluye:" sin valor, termina con coma/dos puntos/guion sin completar).
+    (b) La descripción tiene **menos de 120 caracteres técnicos** Y el título es puramente nominal ("SOLADO GRES PORCELÁNICO 120×20", "DEMOLICIÓN DE MAMPARAS", "ALICATADO DE CUARTOS HÚMEDOS") sin verbos de obra ni detalles técnicos (sin UNE, sin materiales específicos, sin criterio de medición).
+
+    Una fila tabular `código + tipo + unidad + título nominal` SIN párrafo descriptivo debajo es SIEMPRE incompleta en plantillas CIFRE/Presto — la descripción técnica vive en la página siguiente.
+
+    Si la última partida termina con un bloque descriptivo completo y cerrado (punto final, frase técnica completa, siguiente línea ya es otra partida con código), deja `last_item_truncated: false`.
+
+24. HINTS DE CONVERSIÓN DE UNIDAD: Si la descripción de una partida contiene un **puente físico explícito** para conversiones m²↔m³, kg↔m³ o ml↔ud (espesor, densidad, tamaño unitario), extrae ese valor numérico al campo `unit_conversion_hints` como un dict con una de estas claves canonical:
+    * Espesor: `{"thickness_m": <metros>}` — si ves "10 cm", "espesor 15cm", "0.08 m de espesor", "capa de 12 cm", conviértelo a metros (10 cm → 0.10) y guárdalo.
+    * Densidad: `{"density_kg_m3": <valor>}` — si ves "densidad 2400 kg/m³", "2500 kg/m3", guarda el valor literal.
+    * Tamaño unitario: `{"piece_length_m": <metros>}` — si ves "piezas de 3 m", "tubos de 2.50 m", "largo 1.20 m", guarda el valor en metros.
+    Si la descripción NO aporta un puente físico, deja `unit_conversion_hints` en `null`. PROHIBIDO inventar puentes: solo transcribe lo que la descripción dice literalmente. Este campo alimenta al Aparejador aguas abajo para hacer matemáticas auditables de conversión de unidades.
 
 {{role "user"}}
 Por favor, analiza la siguiente imagen de esta página del estado de mediciones y devuelve el esquema estructurado estricto:

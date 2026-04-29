@@ -59,6 +59,22 @@ export class BudgetRepositoryFirestore implements BudgetRepository {
     return snapshot.docs.map(doc => this.mapDocToBudget(doc, []));
   }
 
+  async findByAcceptanceToken(token: string): Promise<Budget | null> {
+    if (!token) return null;
+    const snapshot = await this.collection
+      .where('acceptanceToken', '==', token)
+      .limit(1)
+      .get();
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    // Chapters no necesarios para la página de aceptación (sólo total +
+    // breakdown), pero los cargamos por consistencia con findById si la
+    // página los quisiera mostrar más adelante.
+    const chaptersSnap = await doc.ref.collection('chapters').orderBy('order', 'asc').get();
+    const chapters = chaptersSnap.docs.map(c => c.data());
+    return this.mapDocToBudget(doc, chapters);
+  }
+
   async findAll(): Promise<Budget[]> {
     const snapshot = await this.collection.orderBy('createdAt', 'desc').get();
     // For list views, we do not fetch chapters.

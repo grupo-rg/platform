@@ -87,32 +87,51 @@ export const clientRequirementsFlow = ai.defineFlow(
         const analysisPrompt = `
       You are an expert Data Extractor for a Construction Budget system.
       Tu único objetivo es extraer los requerimientos técnicos descritos por el usuario en el chat y guardarlos en el esquema JSON, sin hacer tú de Arquitecto.
-      
+
       Current Requirements State: ${JSON.stringify(currentRequirements, null, 2)}
-      
+
       User's latest message: "${userMessage}"
       Attachments (PDF/Images): ${attachments.length > 0 ? JSON.stringify(attachments) : 'None'}
       Conversation History: ${JSON.stringify(history)}
-      
+
+      🛑 REGLA PRIMORDIAL — NO REPITAS PREGUNTAS QUE YA TIENEN RESPUESTA:
+      Antes de formular CUALQUIER pregunta, revisa exhaustivamente \`Current Requirements State\`
+      y la \`Conversation History\`. Si el dato que ibas a pedir ya existe ahí, NO lo preguntes —
+      acknowledge lo que ya sabes y pregunta SÓLO lo siguiente que falte.
+
+      Específicamente:
+      - Si \`specs.propertyType\` está poblado → NUNCA preguntes "¿qué tipo de inmueble es?".
+      - Si \`specs.interventionType\` está poblado → NUNCA preguntes "¿qué tipo de trabajo desea?".
+      - Si \`specs.totalArea\` está poblado → NUNCA preguntes "¿cuál es la superficie?".
+      - Si \`specs.qualityLevel\` está poblado → NUNCA preguntes "¿qué calidad?".
+      - Si el usuario ya describió materiales, demoliciones, plazo, etc. en mensajes previos
+        (incluido el primer brief), úsalos como contexto y NO los pidas otra vez.
+
+      Si todos los campos críticos ya están poblados, pasa al siguiente nivel: pregunta por
+      detalles más finos (m² por estancia, materiales específicos, calidades por estancia) o
+      marca \`isComplete: true\` si el brief ya es suficiente para arrancar el motor.
+
       BEHAVIOR GUIDELINES:
       - **SILENT EXTRACTION**: Tú NO eres el Arquitecto. Tú SOLO extraes entidades y pides clarificaciones críticas.
+      - **ACKNOWLEDGE ANTES DE PREGUNTAR**: Resume en una frase corta lo que ya sabes ("Veo que es una vivienda de 117m² con calidad básica…") y formula la siguiente pregunta partiendo de ahí.
       - **EXTRACCIÓN EXHAUSTIVA DETALLADA**: DEBES leer cada adjetivo del usuario (ej. "acabados de lujo", "aislamientos gruesos", "terreno de roca viva", "acceso complicado") y convertir CADA UNO en un objeto separado dentro de \`detectedNeeds\`. ¡NO TE DEJES NINGÚN DETALLE!
-      - **MANDATO DE OBRA NUEVA**: Si detectas que es una "Obra Nueva" (\`new_build\`), es **CRÍTICO Y OBLIGATORIO** conocer el \`terrainType\` y \`machineryAccess\`. Si el usuario no lo ha dicho todo, DEBES poner \`isComplete: false\` y hacer la pregunta. 
+      - **MANDATO DE OBRA NUEVA**: Si detectas que es una "Obra Nueva" (\`new_build\`), es **CRÍTICO Y OBLIGATORIO** conocer el \`terrainType\` y \`machineryAccess\`. Si el usuario no lo ha dicho todo, DEBES poner \`isComplete: false\` y hacer la pregunta.
       - **NO HAGAS OTRAS PREGUNTAS**: Para reformas parciales, asume valores estándar y pon \`isComplete: true\`.
-      
+
       Task:
       1. Analyze the user's message and history.
-      2. Extract new inputs mapping to the schema.
+      2. Extract new inputs mapping to the schema. PRESERVA TODO LO QUE YA ESTÁ EN \`Current Requirements State\` — sólo añades nueva información.
       3. CRITICAL: MAPPING RULES:
          - "Obra nueva", "Construir vivienda", "terreno" -> interventionType: 'new_build', category: 'ESTRUCTURA_OBRA_MAYOR'.
          - "Reforma integral" -> interventionType: 'total'
+         - "vivienda", "piso", "casa", "chalet" -> propertyType según corresponda ('flat', 'house').
          - Extrae las áreas en m2 siempre que existan.
       4. REGLA DE DETECTED NEEDS: Cualquier material específico explícito, acabado (ej. "lujo"), complicación del terreno ("roca") o aislamiento, DEBE registrarse como un objeto independiente en \`detectedNeeds\` con su \`category\` apropiada, \`description\` detallada, y el \`requestedMaterial\` extraído exactamente.
       5. Si es Obra Mayor, SIEMPRE añade un \`detectedNeed\` con category "ESTRUCTURA_OBRA_MAYOR" describiendo el reto principal.
-      
+
       CRITICAL OUTPUT INSTRUCTIONS:
       - Output a single flat JSON object meeting the exact schema structure.
-      - DEBES incluir OBLIGATORIAMENTE la clave "response" en la raíz del JSON con tu respuesta conversacional (menos de 40 palabras).
+      - DEBES incluir OBLIGATORIAMENTE la clave "response" en la raíz del JSON con tu respuesta conversacional (menos de 40 palabras). La respuesta debe RECONOCER lo que ya sabes y avanzar.
       - **REGLA DE BLOQUEO (\`isComplete\`)**: Esta clave ES OBLIGATORIA SIEMPRE. Si es \`interventionType: new_build\` Y falta \`terrainType\` o \`machineryAccess\` o \`totalArea\`, ENTONCES \`isComplete\` DEBE SER \`false\` y debes formular la \`nextQuestion\`. De lo contrario, \`isComplete: true\`. ¡Incluso si una herramienta (Tool) falla, NUNCA olvides omitir la clave \`isComplete\`!
     `;
 

@@ -3,6 +3,21 @@ import { PersonalInfo } from '@/backend/lead/domain/lead';
 
 export type BudgetLineItemType = 'PARTIDA' | 'MATERIAL';
 
+/**
+ * Fase 5.E — trazabilidad auditable del Judge v005.
+ * `bridge` es un dict abierto porque las claves canonical dependen del tipo de
+ * conversión: `thickness_m`, `density_kg_m3`, `piece_length_m`.
+ */
+export type MatchKind = '1:1' | '1:N' | 'from_scratch';
+
+export interface UnitConversionRecord {
+  value: number;          // cantidad original (en la unidad de partida)
+  from_unit: string;      // canonical: m2 / ml / kg / ...
+  to_unit: string;        // canonical del candidato
+  bridge: Record<string, number>; // {"thickness_m": 0.10} | {"density_kg_m3": 2400}
+  result: number;         // resultado de la conversión (en to_unit)
+}
+
 export interface BudgetPartida {
   type: 'PARTIDA';
   id: string;
@@ -32,6 +47,11 @@ export interface BudgetPartida {
     unitPrice: number;
     url?: string;
   };
+  // Fase 5.E — v005 trace fields (Optional; ausentes en presupuestos históricos).
+  match_kind?: MatchKind;
+  unit_conversion_applied?: UnitConversionRecord;
+  // Fase 6.D — v006: IDs de HeuristicFragments inyectados al Pro al tasar.
+  applied_fragments?: string[];
 }
 
 export interface BudgetBreakdownComponent {
@@ -165,6 +185,18 @@ export interface Budget {
     extractionConfidence?: number;
   };
 
+  /**
+   * Phase 15 — versión de calibración con que fue producido este budget.
+   * - 'phase14' o undefined: partidas almacenan precios all-in (markup baked-in
+   *   por calibración). El editor debe forzar GG=BI=0 al renderizar para no
+   *   double-countar.
+   * - 'phase15': partidas almacenan raw PEM. El editor distribuye GG+BI según
+   *   `config` para producir precios all-in al cliente.
+   *
+   * Nuevos budgets generados por la IA tras Phase 15 se stampean 'phase15'.
+   */
+  calibrationVersion?: 'phase14' | 'phase15';
+
   // Quick Consultation Response
   quickQuote?: {
     price: number;
@@ -177,6 +209,42 @@ export interface Budget {
 
   // AI Telemetry & Traceability
   telemetry?: BudgetTelemetry;
+
+  // F6 — Cuando el admin envía el presupuesto al cliente.
+  /** PDF subido a Storage cuando se envió al cliente final. */
+  pdfUrl?: string;
+  /** Timestamp del envío al cliente (transición approved → sent). */
+  sentAt?: Date;
+
+  // F7.B — Aceptación pública con token.
+  /**
+   * Token random opaque que el cliente recibe en el email de envío del
+   * presupuesto. Permite acceder a la página pública de aceptación sin
+   * autenticación. Se regenera si el admin reenvía el presupuesto.
+   */
+  acceptanceToken?: string;
+  acceptanceTokenIssuedAt?: Date;
+  /**
+   * Aceptación firmada del cliente. Una vez registrada, el deal asociado
+   * se mueve a CLOSED_WON. La firma es legalmente "electrónica simple"
+   * (nombre + IP + timestamp) — suficiente para acuerdo comercial pero
+   * no equivale a firma cualificada.
+   */
+  acceptance?: {
+    acceptedAt: Date;
+    signatureName: string;
+    ipAddress?: string;
+    userAgent?: string;
+  };
+  /**
+   * Solicitudes de cambios del cliente desde la página pública. Cada
+   * entrada vuelve el budget a `pending_review` y notifica al admin.
+   */
+  changeRequests?: {
+    requestedAt: Date;
+    comment: string;
+    ipAddress?: string;
+  }[];
 }
 
 export interface BudgetRender {
@@ -197,6 +265,8 @@ export interface BudgetRepository {
   findById(id: string): Promise<Budget | null>;
   findByLeadId(leadId: string): Promise<Budget[]>;
   findAll(): Promise<Budget[]>;
+  /** Devuelve el budget asociado a un acceptanceToken activo, o null. */
+  findByAcceptanceToken(token: string): Promise<Budget | null>;
   save(budget: Budget): Promise<void>;
   delete(id: string): Promise<void>;
 }

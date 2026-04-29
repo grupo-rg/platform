@@ -11,14 +11,14 @@ export class MoveDealStageUseCase implements EventHandler<BookingConfirmedEvent>
     constructor(private readonly dealRepo: DealRepository) {}
 
     async handle(event: BookingConfirmedEvent): Promise<void> {
-        console.log(`[CRM] Interceptado BookingConfirmedEvent para Lead: \${event.leadId}`);
+        console.log(`[CRM] Interceptado BookingConfirmedEvent para Lead: ${event.leadId}`);
         if (!event.leadId) return;
 
         // 1. Obtener la oportunidad activa
         const deal = await this.dealRepo.findByLeadId(event.leadId);
         if (deal) {
             // Mover ficha en el tablero
-            deal.moveToStage('SALES_CALL_SCHEDULED');
+            deal.moveToStage(PipelineStage.SALES_CALL_SCHEDULED);
             
             // Adjuntar metadata de agenda al deal
             if (!deal.metadata) deal.metadata = {};

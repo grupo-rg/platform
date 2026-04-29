@@ -24,9 +24,14 @@ import { SummaryStep } from './budget-request/steps/SummaryStep';
 import { ProjectDefinitionStep } from './budget-request/steps/ProjectDefinitionStep';
 import { WorkAreaStep } from './budget-request/steps/WorkAreaStep';
 import { motion, AnimatePresence } from 'framer-motion';
-import { submitBudgetRequest, SubmitBudgetResult } from '@/app/[locale]/budget/actions';
+import { createBudgetAction } from '@/actions/budget/create-budget.action';
 import { BudgetGenerationLoading } from './budget-request/BudgetGenerationLoading';
-import { ProvisionalBudgetView } from './budget-request/ProvisionalBudgetView';
+import type { QualificationDecision } from '@/backend/lead/domain/lead';
+
+type SubmissionOutcome = {
+  leadId?: string;
+  decision?: QualificationDecision;
+};
 
 export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: { t: any, services: any, onBack: () => void, isWidget?: boolean }) {
   const { toast } = useToast();
@@ -34,7 +39,7 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [direction, setDirection] = useState(1);
-  const [submissionResult, setSubmissionResult] = useState<SubmitBudgetResult | null>(null);
+  const [submissionResult, setSubmissionResult] = useState<SubmissionOutcome | null>(null);
   const progressContainerRef = useRef<HTMLDivElement>(null);
 
   const form = useForm<DetailedFormValues>({
@@ -162,16 +167,16 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
   const handleFormSubmit = async (values: DetailedFormValues) => {
     setIsLoading(true);
     try {
-      const result = await submitBudgetRequest(values);
+      const result = await createBudgetAction('renovation', values);
       if (result.success) {
-        setSubmissionResult(result);
+        setSubmissionResult({ leadId: result.leadId, decision: result.decision });
         setIsSubmitted(true);
         toast({
           title: t.budgetRequest.form.toast.success.title,
           description: t.budgetRequest.form.toast.success.description,
         });
       } else {
-        throw new Error(result.message || 'Error desconocido');
+        throw new Error(result.error || 'Error desconocido');
       }
     } catch (error) {
       console.error(error);
@@ -192,181 +197,6 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
     setCurrentStep(0);
     setIsSubmitted(false);
     setSubmissionResult(null);
-  }
-
-  const generateFakeData = () => {
-    // Random helpers
-    const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-    const coin = () => Math.random() > 0.5;
-    const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-
-    // Scenario variations
-    const scenarios = [
-      {
-        propertyType: 'residential' as const,
-        projectScope: 'integral' as const,
-        partialScope: [] as string[],
-      },
-      {
-        propertyType: 'residential' as const,
-        projectScope: 'partial' as const,
-        partialScope: ['demolition', 'bathroom', 'kitchen'] as string[],
-      },
-      {
-        propertyType: 'residential' as const,
-        projectScope: 'partial' as const,
-        partialScope: ['bathroom', 'carpentry', 'painting'] as string[],
-      },
-      {
-        propertyType: 'commercial' as const,
-        projectScope: 'integral' as const,
-        partialScope: [] as string[],
-      },
-      {
-        propertyType: 'office' as const,
-        projectScope: 'partial' as const,
-        partialScope: ['demolition', 'workArea', 'electricity'] as string[],
-      },
-    ];
-
-    const scenario = pick(scenarios);
-    const area = rand(40, 150);
-    const rooms = rand(1, 4);
-    const bathrooms = rand(1, 3);
-
-    // Build data based on scenario
-    const fakeData: Partial<DetailedFormValues> = {
-      // Contact
-      name: `Cliente Test ${rand(100, 999)}`,
-      email: `test${rand(100, 999)}@example.com`,
-      phone: `6${rand(10000000, 99999999)}`,
-      address: `Calle Prueba ${rand(1, 100)}, Madrid`,
-
-      // Project
-      propertyType: scenario.propertyType,
-      projectScope: scenario.projectScope,
-      totalAreaM2: area,
-      partialScope: scenario.partialScope,
-    };
-
-    // Residential-specific
-    if (scenario.propertyType === 'residential') {
-      fakeData.numberOfRooms = rooms;
-      fakeData.numberOfBathrooms = bathrooms;
-
-      // Bathrooms
-      fakeData.bathrooms = Array(bathrooms).fill(null).map(() => ({
-        quality: pick(['basic', 'medium', 'premium'] as const),
-        wallTilesM2: rand(15, 35),
-        floorM2: rand(4, 12),
-        installShowerTray: coin(),
-        installShowerScreen: coin(),
-        plumbing: coin(),
-      }));
-
-      // Kitchen (only if in scope)
-      if (scenario.partialScope.length === 0 || scenario.partialScope.includes('kitchen')) {
-        fakeData.kitchen = {
-          renovate: true,
-          quality: pick(['basic', 'medium', 'premium'] as const),
-          demolition: coin(),
-          wallTilesM2: rand(20, 40),
-          floorM2: rand(8, 15),
-          plumbing: coin(),
-        };
-      }
-    }
-
-    // Commercial/Office-specific
-    if (scenario.propertyType === 'commercial' || scenario.propertyType === 'office') {
-      fakeData.workstations = rand(5, 30);
-      fakeData.meetingRooms = rand(1, 5);
-    }
-
-    // Demolition (if in scope)
-    if (scenario.partialScope.length === 0 || scenario.partialScope.includes('demolition')) {
-      fakeData.demolishPartitions = true;
-      fakeData.demolishPartitionsM2 = rand(10, 50);
-      fakeData.wallThickness = pick(['thin', 'thick'] as const);
-      fakeData.removeDoors = coin();
-      if (fakeData.removeDoors) {
-        fakeData.removeDoorsAmount = rand(1, 5);
-      }
-      fakeData.hasElevator = coin();
-      fakeData.furnitureRemoval = coin();
-    }
-
-    // Ceilings
-    fakeData.installFalseCeiling = coin();
-    if (fakeData.installFalseCeiling) {
-      fakeData.falseCeilingM2 = rand(area / 2, area);
-    }
-    fakeData.soundproofRoom = coin();
-    if (fakeData.soundproofRoom) {
-      fakeData.soundproofRoomM2 = rand(10, 30);
-    }
-
-    // Electricity
-    if (scenario.propertyType === 'residential') {
-      fakeData.electricalLivingRoom = { sockets: rand(4, 8), lights: rand(1, 3), tv: coin() };
-      fakeData.electricalKitchen = { sockets: rand(6, 10), lights: rand(1, 2) };
-      fakeData.electricalBedrooms = Array(rooms).fill(null).map(() => ({
-        sockets: rand(3, 6),
-        lights: rand(1, 2),
-      }));
-    }
-    fakeData.installAirConditioning = coin();
-    if (fakeData.installAirConditioning) {
-      fakeData.hvacCount = rand(1, 4);
-      fakeData.hvacType = pick(['split', 'ducts'] as const);
-    }
-
-    // Carpentry (if in scope)
-    if (scenario.partialScope.length === 0 || scenario.partialScope.includes('carpentry')) {
-      fakeData.floorType = pick(['parquet', 'tile', 'microcement'] as const);
-      fakeData.skirtingBoardLinearMeters = rand(area, area * 2);
-
-      fakeData.renovateInteriorDoors = coin();
-      if (fakeData.renovateInteriorDoors) {
-        fakeData.interiorDoorsAmount = rand(3, 8);
-        fakeData.doorsMaterial = pick(['lacquered', 'wood'] as const);
-      }
-
-      fakeData.installSlidingDoor = coin();
-      if (fakeData.installSlidingDoor) {
-        fakeData.slidingDoorAmount = rand(1, 3);
-      }
-
-      fakeData.renovateExteriorCarpentry = coin();
-      if (fakeData.renovateExteriorCarpentry) {
-        fakeData.externalWindowsCount = rand(2, 8);
-      }
-    }
-
-    // Painting (often in carpentry step)
-    if (scenario.partialScope.length === 0 || scenario.partialScope.includes('carpentry') || scenario.partialScope.includes('painting')) {
-      fakeData.paintWalls = coin();
-      if (fakeData.paintWalls) {
-        fakeData.paintWallsM2 = rand(area * 2, area * 4);
-        fakeData.paintType = pick(['white', 'color'] as const);
-      }
-
-      fakeData.paintCeilings = coin();
-      if (fakeData.paintCeilings) {
-        fakeData.paintCeilingsM2 = rand(area, area * 1.5);
-      }
-
-      fakeData.removeGotele = coin();
-      if (fakeData.removeGotele) {
-        fakeData.removeGoteleM2 = rand(area * 2, area * 4);
-      }
-    }
-
-    reset(fakeData as DetailedFormValues);
-    toast({
-      title: '🎲 Datos de prueba generados',
-      description: `${scenario.propertyType} - ${scenario.projectScope}`,
-    });
   }
 
   const stepVariants = {
@@ -425,6 +255,17 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
   }
 
   if (isSubmitted) {
+    const wasRejected = submissionResult?.decision === 'rejected';
+    const headerTitle = wasRejected
+      ? 'Gracias por contactarnos'
+      : t.budgetRequest.confirmation.title;
+    const headerDescription = wasRejected
+      ? 'Hemos recibido tu solicitud, pero por el momento esta obra queda fuera del alcance de los proyectos que aborda Grupo RG.'
+      : t.budgetRequest.confirmation.description;
+    const bodyMessage = wasRejected
+      ? 'Si crees que se trata de un error o quieres ampliar información, escríbenos directamente y un asesor revisará tu caso.'
+      : 'He recopilado tus datos. Nuestro equipo revisará tu solicitud y te contactará en breve para preparar tu presupuesto.';
+
     return (
       <div className="text-center max-w-2xl mx-auto space-y-6">
         <Card className="animate-in zoom-in-50 duration-500">
@@ -432,11 +273,11 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
             <div className='mx-auto bg-green-100 p-4 rounded-full w-fit mb-4'>
               <MailCheck className='w-12 h-12 text-green-600' />
             </div>
-            <CardTitle className="font-headline text-3xl">{t.budgetRequest.confirmation.title}</CardTitle>
-            <CardDescription className="text-lg">{t.budgetRequest.confirmation.description}</CardDescription>
+            <CardTitle className="font-headline text-3xl">{headerTitle}</CardTitle>
+            <CardDescription className="text-lg">{headerDescription}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <p className="text-muted-foreground text-lg">He recopilado tus datos. Nuestro equipo generará el presupuesto y te contactará en breve.</p>
+            <p className="text-muted-foreground text-lg">{bodyMessage}</p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-2">
               <Button asChild>
@@ -456,18 +297,6 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
   return (
     <div className={isWidget ? 'w-full' : 'w-full max-w-5xl mx-auto'}>
       <div ref={progressContainerRef} className="scroll-mt-24">
-        {/* Debug Button */}
-        <div className="flex justify-end mb-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={generateFakeData}
-            className="text-xs opacity-40 hover:opacity-100 transition-opacity"
-          >
-            🎲 Generar datos de prueba
-          </Button>
-        </div>
         <Progress value={((currentStep + 1) / activeSteps.length) * 100} className={cn("w-full mb-8 mx-auto", isWidget ? "" : "max-w-5xl")} />
       </div>
       <Form {...form}>

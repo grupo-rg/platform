@@ -1,32 +1,32 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, BrainCircuit, Calculator, Coins, FileText } from 'lucide-react';
+import { ShieldCheck, ClipboardList, Send, CheckCircle2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 const LOADING_STAGES = [
     {
         id: 1,
-        label: "Analizando geometría y superficies...",
-        icon: <BrainCircuit className="w-8 h-8 text-purple-500" />,
-        duration: 1500
+        label: "Recibiendo tu solicitud...",
+        icon: <ClipboardList className="w-8 h-8 text-purple-500" />,
+        duration: 1100
     },
     {
         id: 2,
-        label: "Calculando demoliciones y desescombro...",
-        icon: <Calculator className="w-8 h-8 text-blue-500" />,
-        duration: 1200
+        label: "Validando los datos del proyecto...",
+        icon: <ShieldCheck className="w-8 h-8 text-blue-500" />,
+        duration: 1100
     },
     {
         id: 3,
-        label: "Consultando base de precios de mercado...",
-        icon: <Coins className="w-8 h-8 text-yellow-500" />,
-        duration: 1500
+        label: "Notificando al equipo de Grupo RG...",
+        icon: <Send className="w-8 h-8 text-amber-500" />,
+        duration: 1100
     },
     {
         id: 4,
-        label: "Redactando partidas presupuestarias...",
-        icon: <FileText className="w-8 h-8 text-green-500" />,
-        duration: 1000
+        label: "¡Listo! Confirmamos la recepción.",
+        icon: <CheckCircle2 className="w-8 h-8 text-green-500" />,
+        duration: 800
     }
 ];
 

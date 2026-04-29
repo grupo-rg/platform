@@ -13,7 +13,8 @@ export async function getAvailabilityConfigAction(): Promise<AvailabilityConfig>
         weekSchedule: config.weekSchedule,
         slotDurationMinutes: config.slotDurationMinutes,
         bufferMinutes: config.bufferMinutes,
-        updatedAt: config.updatedAt
+        updatedAt: config.updatedAt,
+        autoProposeBooking: config.autoProposeBooking,
     } as AvailabilityConfig;
 }
 
@@ -21,7 +22,8 @@ export async function updateAvailabilityConfigAction(
     data: {
         weekSchedule: AvailabilityConfig['weekSchedule'],
         slotDurationMinutes: number,
-        bufferMinutes: number
+        bufferMinutes: number,
+        autoProposeBooking?: boolean,
     }
 ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -31,7 +33,8 @@ export async function updateAvailabilityConfigAction(
             data.weekSchedule,
             data.slotDurationMinutes,
             data.bufferMinutes,
-            new Date()
+            new Date(),
+            data.autoProposeBooking !== undefined ? data.autoProposeBooking : current.autoProposeBooking
         );
         await availabilityRepo.save(updated);
         return { success: true };

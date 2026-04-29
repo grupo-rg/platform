@@ -27,6 +27,7 @@ import { BudgetRequestWizard } from '@/components/budget-request-wizard';
 import { services } from '@/lib/services';
 import { SmartTriggerContainer } from '@/components/smart-trigger/smart-trigger-container';
 import { BudgetWizardChat } from '@/components/budget/wizard/BudgetWizardChat';
+import { PublicCommercialChat } from '@/components/chat/PublicCommercialChat';
 
 // Temporary mock for t translations
 const mockT = {
@@ -294,7 +295,10 @@ export function SmartBudgetModal({ dictionary }: { dictionary?: any }) {
             return <BudgetRequestWizard t={t} services={services} onBack={() => openWidget('general')} isWidget={true} />;
         }
         if (activeMode === 'chat') {
-            return <BudgetWizardChat mode="public" />;
+            // Chat público comercial: cualifica leads y persiste la conversación
+            // (chatSessionId en sessionStorage). Cuando el agente decide hacer
+            // handoff, la conversación se vincula al lead real en el dashboard.
+            return <PublicCommercialChat />;
         }
         // Fallback for Quick Budget or others
         return <QuickBudgetForm t={t} onBack={() => openWidget('general')} />;
@@ -304,53 +308,98 @@ export function SmartBudgetModal({ dictionary }: { dictionary?: any }) {
         ? t.budgetRequest.modal.headers[activeMode === 'wizard' ? 'wizard' : activeMode === 'new-build' ? 'newBuild' : 'fast']
         : { title: '', desc: '' };
 
+    // Los formularios largos (wizard detallado, obra nueva, chat) se muestran a
+    // pantalla completa para aprovechar el espacio. Los más cortos (quick,
+    // selector general) se mantienen centrados con un ancho cómodo de lectura.
+    const isFullscreen = activeMode === 'wizard' || activeMode === 'new-build';
+    const isChatFullscreen = activeMode === 'chat';
+
     if (isDesktop) {
         return (
             <Dialog open={isOpen} onOpenChange={closeWidget}>
                 <DialogContent className={cn(
-                    "transition-all duration-300",
-                    activeMode === 'chat' ? "overflow-hidden" : "overflow-y-auto",
+                    "transition-all duration-300 overflow-hidden",
                     activeMode === 'general'
-                        ? "sm:max-w-[850px] p-0 bg-[#FBFBFB] border-none shadow-2xl rounded-3xl"
-                        : activeMode === 'chat'
-                            ? "w-[95vw] h-[90vh] sm:max-w-none p-0 bg-transparent border-none shadow-none" // Full screen for chat
-                            : "sm:max-w-4xl max-h-[90vh] bg-background border-border"
+                        ? "sm:max-w-[850px] p-0 bg-[#FBFBFB] border-none shadow-2xl rounded-3xl overflow-y-auto"
+                        : isChatFullscreen
+                            ? "!w-screen !h-screen !max-w-none !left-0 !top-0 !translate-x-0 !translate-y-0 !rounded-none !border-0 !p-0 bg-background flex flex-col"
+                            : isFullscreen
+                                ? "!w-screen !h-screen !max-w-none !left-0 !top-0 !translate-x-0 !translate-y-0 !rounded-none !border-0 !p-0 bg-background flex flex-col"
+                                : "sm:max-w-2xl max-h-[90vh] bg-background border-border overflow-y-auto"
                 )}>
-                    <DialogHeader className={cn((activeMode === 'general' || activeMode === 'chat') && "sr-only")}>
-                        <DialogTitle className="font-headline text-3xl">
-                            {activeMode === 'general' || activeMode === 'chat' ? "Asistente Dochevi" : header.title}
-                        </DialogTitle>
-                        <DialogDescription className="text-lg">
-                            {activeMode === 'general' || activeMode === 'chat' ? "Solicitud de presupuesto y asistencia" : header.desc}
-                        </DialogDescription>
-                    </DialogHeader>
+                    {isFullscreen ? (
+                        <>
+                            <DialogHeader className="shrink-0 sticky top-0 z-20 border-b border-border bg-background px-6 py-4">
+                                <DialogTitle className="font-headline text-xl md:text-2xl tracking-tight text-foreground">
+                                    {header.title}
+                                </DialogTitle>
+                                <DialogDescription className="text-sm text-muted-foreground">
+                                    {header.desc}
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="flex-1 overflow-y-auto">
+                                <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
+                                    {renderContent()}
+                                </div>
+                            </div>
+                        </>
+                    ) : isChatFullscreen ? (
+                        <>
+                            <DialogHeader className="sr-only">
+                                <DialogTitle>Asistente Grupo RG</DialogTitle>
+                                <DialogDescription>Chat con el asistente comercial</DialogDescription>
+                            </DialogHeader>
+                            <div className="flex-1 min-h-0 overflow-hidden">
+                                {renderContent()}
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <DialogHeader className={cn(activeMode === 'general' && "sr-only")}>
+                                <DialogTitle className="font-headline text-3xl">
+                                    {activeMode === 'general' ? "Asistente Grupo RG" : header.title}
+                                </DialogTitle>
+                                <DialogDescription className="text-lg">
+                                    {activeMode === 'general' ? "Solicitud de presupuesto y asistencia" : header.desc}
+                                </DialogDescription>
+                            </DialogHeader>
 
-                    <div className={cn(activeMode === 'general' ? "" : "pt-6 px-2", activeMode === 'chat' ? "h-[90vh]" : "h-full")}>
-                        {renderContent()}
-                    </div>
+                            <div className={cn(activeMode === 'general' ? "" : "pt-6 px-2", "h-full")}>
+                                {renderContent()}
+                            </div>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         );
     }
 
     // ... mobile drawer implementation ...
+    const isFullscreenMobile = isFullscreen || isChatFullscreen;
     return (
         <Drawer open={isOpen} onOpenChange={closeWidget}>
-            <DrawerContent className="max-h-[95vh] flex flex-col bg-[#FBFBFB]">
-                <DrawerHeader className={cn("text-left shrink-0", (activeMode === 'general' || activeMode === 'chat') && "sr-only")}>
+            <DrawerContent
+                className={cn(
+                    "flex flex-col bg-[#FBFBFB]",
+                    isFullscreenMobile
+                        ? "h-[100dvh] !max-h-[100dvh] rounded-none"
+                        : "max-h-[95vh]"
+                )}
+            >
+                <DrawerHeader className={cn("text-left shrink-0", (activeMode === 'general' || isChatFullscreen) && "sr-only")}>
                     <DrawerTitle className="font-headline text-2xl">
-                        {activeMode === 'general' || activeMode === 'chat' ? "Asistente Dochevi" : header.title}
+                        {activeMode === 'general' || isChatFullscreen ? "Asistente Grupo RG" : header.title}
                     </DrawerTitle>
                     <DrawerDescription>
-                        {activeMode === 'general' || activeMode === 'chat' ? "Solicitud de presupuesto y asistencia" : header.desc}
+                        {activeMode === 'general' || isChatFullscreen ? "Solicitud de presupuesto y asistencia" : header.desc}
                     </DrawerDescription>
                 </DrawerHeader>
 
-                <div className={cn("overflow-y-auto flex-1", activeMode === 'general' ? "p-0" : "p-4")}>
+                <div className={cn("overflow-y-auto flex-1", activeMode === 'general' || isChatFullscreen ? "p-0" : "p-4")}>
                     {renderContent()}
                 </div>
 
-                {activeMode !== 'general' && (
+                {activeMode !== 'general' && !isFullscreenMobile && (
                     <DrawerFooter className="pt-2 shrink-0">
                         <DrawerClose asChild>
                             <Button variant="outline">Cancelar</Button>

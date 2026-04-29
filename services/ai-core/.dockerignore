@@ -1,18 +1,59 @@
+# Python runtime / cache
 venv/
-.pytest_cache/
+.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Test + dev directories (no se ejecutan en producción)
+tests/
+scripts/
+evals/
+docs/
+tmp-lab/
+backups/
+run_ai_pipeline.py
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# Entornos y credenciales (se inyectan vía Cloud Run env vars / Secret Manager)
 .env
-env.yaml
 .env.example
-*.md
+env.yaml
+*.env
+*.env.yaml
+*service-account*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
+
+# Documentación. NO usar `*.md` global porque excluye prompts/rules/*.md
+# (markdown que el runtime carga al boot vía load_rules()). Excluir solo
+# los markdown de documentación raíz conocidos.
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE.md
+*.pdf
+*.log
+
+# Git / Docker / GCloud — CRÍTICO excluir .git para no inflar la imagen
+.git/
+.gitignore
+.gitattributes
 Dockerfile
 .dockerignore
 .gcloudignore
-tests/
-scripts/
-docs/
-*.pdf
-tmp-lab/
-run_ai_pipeline.py
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
 

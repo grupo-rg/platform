@@ -2,6 +2,7 @@ import { getDictionary } from '@/lib/dictionaries';
 import { Building2, Hammer, Wrench, Palette, Zap, FileCheck } from 'lucide-react';
 import { constructMetadata } from '@/i18n/seo-utils';
 import { OrganizationJsonLd, FAQJsonLd } from '@/components/seo/json-ld';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
 
 // New Modular Components
 import { HeroHybrid as Hero } from '@/components/home/sections/hero-hybrid'; // Using HeroHybrid V3
@@ -34,9 +35,10 @@ const serviceIcons: Record<string, React.ReactNode> = {
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const dict = await getDictionary(locale as any);
+  const company = await companyConfigService.get();
 
   return constructMetadata({
-    title: 'Grupo RG - Construcción y Reformas en Mallorca',
+    title: `${company.name} - Construcción y Reformas en Mallorca`,
     description: dict.home.hero.description || 'Reformas integrales de alta gama en Mallorca.',
     path: '/',
     locale
@@ -47,6 +49,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   const { locale } = await params;
   const dict = await getDictionary(locale as any);
   const t = dict.home;
+  const company = await companyConfigService.get();
 
   // Clean data for props (remove HTML from strings if possible manually here or use raw strings)
   // For V2, we assume the translations are clean strings. If they have HTML, we strip it or handle it.
@@ -78,7 +81,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
         <PhilosophySection
           quote={t.philosophy?.quote || "Construimos sueños, no solo paredes."}
-          author="Grupo RG"
+          author={company.name}
           description={t.philosophy?.description}
           label={t.philosophy?.label}
         />

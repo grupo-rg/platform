@@ -1,10 +1,56 @@
+# Filtra qué se sube a Cloud Build cuando `gcloud run deploy --source .` se ejecuta.
+# IMPORTANTE: usa exclusiones específicas en lugar de `*.md` global, porque
+# `prompts/rules/coaatmca_2025_rules.md` es código de runtime — el servicio
+# no arranca sin él (load_rules() en dependencies.py:79).
+
+# Python runtime / cache
 venv/
-.pytest_cache/
+.venv/
 __pycache__/
-*.pyc
-.env
-env.yaml
-.env.example
-*.md
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Test + dev directories
 tests/
 scripts/
+evals/
+docs/
+tmp-lab/
+backups/
+run_ai_pipeline.py
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# Entornos y credenciales (se inyectan vía Cloud Run env vars)
+.env
+.env.example
+env.yaml
+*.env
+*.env.yaml
+*service-account*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
+
+# Documentación raíz (NO usar `*.md` global — rompe prompts/rules)
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE.md
+*.pdf
+*.log
+
+# Git / IDE / SO
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

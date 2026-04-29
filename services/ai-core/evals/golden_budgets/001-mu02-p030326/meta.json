@@ -1,0 +1,42 @@
+{
+  "golden_id": "001-mu02-p030326",
+  "flow": "INLINE",
+  "rigor": "benchmark",
+  "signed": true,
+  "source_input": "Grupo RG/test - mediciones/grupo-rg/MU02-ALBAÑILERÍA-MEDICIONES-2202.pdf",
+  "source_expected": "Grupo RG/P030326.pdf",
+  "project_name": "MU02 ALBAÑILERÍA",
+  "project_reference": "Pol.11-Parc.213",
+  "pem_total": 549636.90,
+  "chapters_count": 15,
+  "chapters": [
+    "1 ACTUACIONES PREVIAS",
+    "2 ACONDICIONAMIENTO DEL TERRENO",
+    "3 CIMENTACIONES",
+    "4 ESTRUCTURA",
+    "5 FACHADAS",
+    "6 PARTICIONES",
+    "7 IMPERMEABILIZACIONES E AISLAMIENTOS",
+    "8 CUBIERTAS",
+    "9 REMATES Y AYUDAS",
+    "10 REVESTIMIENTOS Y TRASDOSADOS",
+    "11 PISCINA",
+    "12 GESTIÓN DE RESIDUOS",
+    "13 CONTROL DE CALIDAD Y ENSAYOS",
+    "14 SEGURIDAD Y SALUD",
+    "15 VARIOS"
+  ],
+  "includes_canonical_case": true,
+  "canonical_case_note": "Partida 1.1 = 'Acondicionamiento de la entrada del solar para camiones' con conversión m²→m³ a través de thickness_m=0.10. Es el caso 'estrella del norte' del sprint.",
+  "thresholds": {
+    "recall_min": 0.85,
+    "precision_1to1_min": 0.75,
+    "price_delta_p50_max": 0.15,
+    "chapter_total_delta_mean_max": 0.20
+  },
+  "parser_fidelity": {
+    "partidas_extracted": 91,
+    "pem_recovered_pct": 97.38,
+    "note": "El parser recupera el 97.38% del PEM total. El 2.62% restante (14.393,90 €) se pierde en partidas con formato levemente distinto (subcapítulos 10.x con subtotales intermedios). La asimetría es CONSISTENTE: el eval compara pipeline vs golden sobre el mismo subset capturado, así que no sesga las métricas relativas."
+  }
+}

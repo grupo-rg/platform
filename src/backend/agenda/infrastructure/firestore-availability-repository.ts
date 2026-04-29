@@ -29,7 +29,8 @@ export class FirestoreAvailabilityRepository implements AvailabilityRepository {
             Object.keys(weekSchedule).length > 0 ? weekSchedule : AvailabilityConfig.createDefault().weekSchedule,
             data.slotDurationMinutes || 30,
             data.bufferMinutes || 0,
-            data.updatedAt?.toDate() || new Date()
+            data.updatedAt?.toDate() || new Date(),
+            data.autoProposeBooking !== false  // default true
         );
     }
 
@@ -38,7 +39,8 @@ export class FirestoreAvailabilityRepository implements AvailabilityRepository {
             weekSchedule: config.weekSchedule,
             slotDurationMinutes: config.slotDurationMinutes,
             bufferMinutes: config.bufferMinutes,
-            updatedAt: config.updatedAt
+            updatedAt: config.updatedAt,
+            autoProposeBooking: config.autoProposeBooking,
         };
     }
 

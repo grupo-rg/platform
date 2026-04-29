@@ -35,16 +35,24 @@ class RestructureBudgetUseCase:
         if self.emitter:
             self.emitter.emit_event(budget_id, event_type, data)
 
-    async def execute(self, raw_items: List[Dict[str, Any]], lead_id: str = "anonymous", budget_id: str = None, strategy: str = "INLINE") -> Budget:
+    async def execute(self, raw_items: List[Dict[str, Any]], lead_id: str = "anonymous", budget_id: str = None, strategy: str = "INLINE", pdf_bytes: Optional[bytes] = None) -> Budget:
         start_time = time.time()
         metrics = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
-        
+
         # 1. POLIMORFISMO: Seleccionar Extractor en base a metadata
         logger.info(f"Ochestrator Booting with PDF Strategy: {strategy}")
         extractor = self.annexed_extractor if strategy.upper() == "ANNEXED" else self.inline_extractor
-        
-        # Phase 1: Semantically structure messy spatial PDF chunks
-        restructured_items = await extractor.extract(raw_items, budget_id, metrics)
+
+        # Phase 1: Semantically structure messy spatial PDF chunks.
+        # Fase 9.2 — INLINE acepta `pdf_bytes` para habilitar el fast path
+        # heurístico. ANNEXED ignora el kwarg (su signature no lo declara
+        # todavía). Try/except mantiene compat sin introspección de tipos.
+        try:
+            restructured_items = await extractor.extract(
+                raw_items, budget_id, metrics, pdf_bytes=pdf_bytes,
+            )
+        except TypeError:
+            restructured_items = await extractor.extract(raw_items, budget_id, metrics)
         
         # Phase 2: Swarm Pricing (Deconstructor + Vector Search + LLM Evaluator)
         partidas = await self.pricing_service.evaluate_batch(restructured_items, budget_id, metrics)
@@ -115,7 +123,11 @@ class RestructureBudgetUseCase:
                 total=total
             ),
             totalEstimated=total,
-            telemetry=telemetry
+            telemetry=telemetry,
+            # Phase 15 — partidas almacenan raw PEM; el editor frontend distribuye
+            # GG+BI según config. Stamp explícito para diferenciar del comportamiento
+            # legacy donde partidas ya tenían markup baked-in por calibración.
+            calibrationVersion="phase15",
         )
         
         if self.repository:

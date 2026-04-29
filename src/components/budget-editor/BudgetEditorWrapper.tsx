@@ -24,6 +24,9 @@ import { Button } from '@/components/ui/button';
 import { AssignClientModal } from './AssignClientModal';
 import { getLeadPdfConfigAction } from '@/actions/lead/getLeadPdfConfigAction';
 import { saveLeadPdfConfigAction } from '@/actions/lead/saveLeadPdfConfigAction';
+import { getCompanyConfigAction } from '@/actions/platform/company-config.action';
+import type { CompanyConfig } from '@/backend/platform/domain/company-config';
+import { DEFAULT_COMPANY_CONFIG } from '@/backend/platform/domain/company-config';
 import { BudgetEditorProvider } from './BudgetEditorContext';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -60,7 +63,17 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
         setExecutionMode,
         updateConfig,
         applyMarkup
-    } = useBudgetEditor((budget as any).lineItems, budget.config);
+    } = useBudgetEditor((budget as any).lineItems, (() => {
+        // Phase 15 — backwards compat con budgets pre-Phase 15.
+        // Esos budgets almacenan precios all-in (markup baked-in por calibración
+        // accidental). Si los renderizásemos con default GG=10/BI=15 los inflariamos
+        // 25% adicional. Forzamos GG=BI=0 para preservar el comportamiento histórico.
+        if (budget.calibrationVersion !== 'phase15') {
+            const tax = budget.config?.tax ?? 10;
+            return { marginGG: 0, marginBI: 0, tax };
+        }
+        return budget.config;
+    })());
 
     const { toast } = useToast();
     const router = useRouter();
@@ -72,6 +85,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
 
     // PDF Config State
     const [pdfMeta, setPdfMeta] = React.useState<any>(null);
+    const [companyConfig, setCompanyConfig] = React.useState<CompanyConfig>(DEFAULT_COMPANY_CONFIG);
 
     React.useEffect(() => {
         const fetchPdfMeta = async () => {
@@ -84,6 +98,10 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
         };
         fetchPdfMeta();
     }, [budget.leadId]);
+
+    React.useEffect(() => {
+        getCompanyConfigAction().then(setCompanyConfig).catch(console.error);
+    }, []);
 
     const handleSavePdfSettings = async (meta: any) => {
         if (!budget.leadId || budget.leadId === 'unassigned') {
@@ -379,9 +397,9 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                             <TabsTrigger value="library">Buscar Catálogo</TabsTrigger>
                                         </TabsList>
                                         <TabsContent value="summary" className="mt-4">
-                                            <BudgetEconomicSummary 
-                                                costBreakdown={state.costBreakdown} 
-                                                budgetConfig={state.config} 
+                                            <BudgetEconomicSummary
+                                                costBreakdown={state.costBreakdown}
+                                                budgetConfig={state.config}
                                                 onUpdateConfig={updateConfig}
                                                 applyMarkup={applyMarkup}
                                                 isReadOnly={isDemoLocked}
@@ -394,6 +412,11 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                                 initialPdfMeta={pdfMeta}
                                                 onSavePdfSettings={handleSavePdfSettings}
                                                 renders={budget.renders}
+                                                company={companyConfig}
+                                                budgetId={budget.id}
+                                                budgetStatus={budget.status}
+                                                clientEmail={budget.clientSnapshot?.email}
+                                                clientAddress={budget.clientSnapshot?.address}
                                             />
                                         </TabsContent>
                                         <TabsContent value="library" className="mt-4">
@@ -539,9 +562,9 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                     <h3 className="font-bold text-slate-800 dark:text-white">Resumen Económico</h3>
                                 </div>
                                 <div className="p-4 flex-1 flex flex-col">
-                                    <BudgetEconomicSummary 
-                                        costBreakdown={state.costBreakdown} 
-                                        budgetConfig={state.config} 
+                                    <BudgetEconomicSummary
+                                        costBreakdown={state.costBreakdown}
+                                        budgetConfig={state.config}
                                         onUpdateConfig={updateConfig}
                                         applyMarkup={applyMarkup}
                                         isReadOnly={isDemoLocked}
@@ -554,6 +577,11 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                         initialPdfMeta={pdfMeta}
                                         onSavePdfSettings={handleSavePdfSettings}
                                         renders={budget.renders}
+                                        company={companyConfig}
+                                        budgetId={budget.id}
+                                        budgetStatus={budget.status}
+                                        clientEmail={budget.clientSnapshot?.email}
+                                        clientAddress={budget.clientSnapshot?.address}
                                     />
                                 </div>
                             </div>

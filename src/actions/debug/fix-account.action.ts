@@ -64,7 +64,7 @@ export async function ensureLeadProfile(userId: string) {
  * This grants them access to the Admin Dashboard.
  */
 export async function setAdminClaim(email: string, secret: string) {
-    const ADMIN_SECRET = process.env.ADMIN_SECRET || "dochevi-admin-dev-secret"; // Fallback only for dev
+    const ADMIN_SECRET = process.env.ADMIN_SECRET || "grupo-rg-admin-dev-secret"; // Fallback only for dev
 
     if (secret !== ADMIN_SECRET) {
         console.warn(`[FixAccount] Unauthorized attempt to set admin claim for ${email}`);

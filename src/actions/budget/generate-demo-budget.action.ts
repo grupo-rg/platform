@@ -12,7 +12,7 @@ import { ProjectSpecs } from '@/backend/budget/domain/project-specs';
 const budgetRepository = new BudgetRepositoryFirestore();
 const leadRepository = new FirestoreLeadRepository();
 
-export async function generateDemoBudgetAction(leadId: string, requirements: Partial<BudgetRequirement>) {
+export async function generateDemoBudgetAction(leadId: string, requirements: Partial<BudgetRequirement>, providedBudgetId?: string) {
     try {
         console.log(`[Demo] Generating Budget for Lead: ${leadId}`);
 
@@ -53,7 +53,8 @@ export async function generateDemoBudgetAction(leadId: string, requirements: Par
         const budgetResult: any = { chapters: [], costBreakdown: null, totalEstimated: 0 };
 
         // 4. Persist Budget
-        const budgetId = uuidv4();
+        // El cliente genera el budgetId para alinear el canal de telemetría.
+        const budgetId = providedBudgetId || uuidv4();
 
         // Assert complete specs for persistence, fallback to generic if AI didn't catch it
         const finalSpecs = {

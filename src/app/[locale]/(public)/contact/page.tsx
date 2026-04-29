@@ -37,7 +37,7 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
       <WebPageJsonLd
         name={t.hero.title}
         description={t.hero.description}
-        url={`${process.env.NEXT_PUBLIC_APP_URL}/${locale}/contact`}
+        url={`${process.env.NEXT_PUBLIC_SITE_URL}/${locale}/contact`}
         type="ContactPage"
       />
       <BreadcrumbJsonLd

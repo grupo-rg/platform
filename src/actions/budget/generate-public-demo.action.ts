@@ -15,7 +15,7 @@ import { emitGenerationEvent } from '@/backend/budget/events/budget-generation.e
 
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 
-export async function generatePublicDemoAction(leadId: string, requirements: BudgetRequirement, chatHistory?: { role: string, content: string }[]) {
+export async function generatePublicDemoAction(leadId: string, requirements: BudgetRequirement, chatHistory?: { role: string, content: string }[], providedBudgetId?: string) {
     try {
         console.log(`>> [PUBLIC DEMO] Starting limit validation for Lead: ${leadId}`);
 
@@ -114,8 +114,12 @@ export async function generatePublicDemoAction(leadId: string, requirements: Bud
 
         console.log(">> [PUBLIC DEMO] Processing Chapters & Tasks in PARALLEL (Fan-Out)...");
 
+        // Jobs-id para telemetría: si el cliente pasó budgetId, alineamos canales;
+        // fallback a leadId para compat con llamadas antiguas.
+        const telemetryJobId = providedBudgetId || leadId;
+
         // Notify UI that generic architecture tasks are ready (starts parallel loading bar)
-        await emitGenerationEvent(leadId, 'subtasks_extracted', {
+        await emitGenerationEvent(telemetryJobId, 'subtasks_extracted', {
             totalTasks: decomposedTasks.length
         });
 
@@ -182,7 +186,7 @@ export async function generatePublicDemoAction(leadId: string, requirements: Bud
                     const unitPrice = resolvedCandidate ? Number((resolvedCandidate as any).price_total || (resolvedCandidate as any).priceTotal || (resolvedCandidate as any).price || (resolvedCandidate as any).unitPrice || 0) : 0;
                     const qty = Number(decision.quantity) || 1;
                     
-                    emitGenerationEvent(leadId, 'item_resolved', {
+                    emitGenerationEvent(telemetryJobId, 'item_resolved', {
                         item: { code, description: desc, totalPrice: unitPrice * qty },
                         type: 'TASK'
                     }).catch(console.error);

@@ -31,6 +31,9 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
     const [conversations, setConversations] = useState<ConversationThread[]>([]);
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [isLoadingChats, setIsLoadingChats] = useState(false);
+    // v006 UX: flag dedicado para cuando estamos fetcheando mensajes de un thread
+    // concreto (distinto de `isLoadingChats` que cubre la lista de threads).
+    const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
     // We use a generic 'admin-user' ID for now, as auth is out of scope for the wizard component itself.
     const effectiveUserId = isAdmin ? 'admin-user' : (leadId || 'unknown-lead');
@@ -89,13 +92,8 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
 
         if (!id) return;
 
+        setIsLoadingMessages(true);
         try {
-            // Re-use the existing action to get messages by conversationId, but 
-            // since getConversationAction expects leadId, we have an architecture mismatch.
-            // Wait, getConversationAction expects leadId, but internally it uses GetOrCreateConversationUseCase.
-            // We need an action to get specifically the messages for a known conversationId.
-            // Let's import the specific usecase logic inline or via action later. 
-            // For now, let's load it from getConversationHistory action if it exists.
             const { getConversationHistoryAction } = await import('@/actions/chat/get-conversation-history.action');
             const result = await getConversationHistoryAction(id);
 
@@ -110,11 +108,13 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
             }
         } catch (error) {
             console.error("Error switching conversation:", error);
+        } finally {
+            setIsLoadingMessages(false);
         }
     };
 
-    const startNewConversation = async () => {
-        if (!isAdmin) return;
+    const startNewConversation = async (): Promise<string | null> => {
+        if (!isAdmin) return null;
         setIsLoadingChats(true);
         try {
             const { createAdminConversationAction } = await import('@/actions/chat/create-admin-conversation.action');
@@ -123,9 +123,12 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
                 // Refresh list and switch to new, preventing the inner switch to avoid race condition
                 await loadConversations(true);
                 switchConversation(result.conversationId);
+                return result.conversationId;
             }
+            return null;
         } catch (e) {
             console.error(e);
+            return null;
         } finally {
             setIsLoadingChats(false);
         }
@@ -145,6 +148,34 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
             setConversations(prev => prev.filter(c => c.id !== id));
         } catch (e) {
             console.error(e);
+        }
+    };
+
+    /**
+     * Renombra una conversación. Optimistic UI: actualiza el estado local
+     * antes de la respuesta del server. Si falla, revierte.
+     */
+    const renameConversation = async (id: string, newTitle: string) => {
+        if (!isAdmin) return { success: false };
+        const trimmed = (newTitle || '').trim();
+        if (!trimmed) return { success: false, error: 'Título vacío' };
+
+        const previous = conversations.find(c => c.id === id)?.title;
+        // Optimistic update
+        setConversations(prev => prev.map(c => (c.id === id ? { ...c, title: trimmed } : c)));
+        try {
+            const { renameAdminConversationAction } = await import('@/actions/chat/rename-admin-conversation.action');
+            const res = await renameAdminConversationAction(id, trimmed);
+            if (!res.success) {
+                // Revert
+                setConversations(prev => prev.map(c => (c.id === id ? { ...c, title: previous || c.title } : c)));
+                return { success: false, error: res.error };
+            }
+            return { success: true };
+        } catch (e: any) {
+            setConversations(prev => prev.map(c => (c.id === id ? { ...c, title: previous || c.title } : c)));
+            console.error(e);
+            return { success: false, error: e.message };
         }
     };
 
@@ -217,12 +248,35 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
     const processAIResponse = async (text: string, attachments: string[] = [], isHidden: boolean = false) => {
         if (!conversationId) return;
 
-        try {
-            const history = messages.map(m => ({
-                role: m.role === 'user' ? 'user' : 'model',
-                content: [{ text: m.content }]
-            }));
+        const history = messages.map(m => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            content: [{ text: m.content }],
+        }));
 
+        // Streaming real: solo para admin sin adjuntos (por simplicidad y porque
+        // el flujo del cliente tiene rate-limits y ramas que aún no están en el endpoint).
+        const canStream = isAdmin && attachments.length === 0;
+
+        if (canStream) {
+            try {
+                const ok = await streamAssistantResponse({
+                    conversationId,
+                    effectiveUserId,
+                    text,
+                    history,
+                    requirements,
+                    setMessages,
+                    setRequirements,
+                    setState,
+                });
+                if (ok) return;
+                // Si falló el streaming, caemos al fallback síncrono
+            } catch (e) {
+                console.warn('[wizard] streaming falló, fallback a acción síncrona', e);
+            }
+        }
+
+        try {
             let result;
             if (isAdmin) {
                 const { processAdminMessageAction } = await import('@/actions/budget/process-admin-message.action');
@@ -238,7 +292,7 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
                 const currentNeeds = result.data.updatedRequirements?.detectedNeeds || [];
                 const newNeeds = currentNeeds.slice(prevNeedsCount);
                 const extractedInfo = newNeeds.map((n: any) => `${n.category}: ${n.description}`);
-                
+
                 const extractedSpecs = [];
                 if (!requirements.specs?.totalArea && result.data.updatedRequirements?.specs?.totalArea) {
                     extractedSpecs.push(`Área: ${result.data.updatedRequirements.specs.totalArea}m²`);
@@ -249,7 +303,7 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
                 if (!requirements.specs?.qualityLevel && result.data.updatedRequirements?.specs?.qualityLevel) {
                     extractedSpecs.push(`Calidad: ${result.data.updatedRequirements.specs.qualityLevel}`);
                 }
-                
+
                 const allExtractedInfo = [...extractedInfo, ...extractedSpecs];
 
                 const aiMsg: Message = {
@@ -320,9 +374,148 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
         conversations,
         conversationId,
         isLoadingChats,
+        isLoadingMessages,
         startNewConversation,
         switchConversation,
         deleteConversation,
+        renameConversation,
         resetConversation
     };
 };
+
+/**
+ * Consume el endpoint SSE `/api/assistant/stream`, actualizando progresivamente
+ * el último mensaje del asistente. Persiste el mensaje final y aplica los
+ * `updatedRequirements`. Devuelve true si ha tenido éxito.
+ */
+async function streamAssistantResponse(args: {
+    conversationId: string;
+    effectiveUserId: string;
+    text: string;
+    history: Array<{ role: string; content: any[] }>;
+    requirements: Partial<BudgetRequirement>;
+    setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+    setRequirements: React.Dispatch<React.SetStateAction<Partial<BudgetRequirement>>>;
+    setState: React.Dispatch<React.SetStateAction<WizardState>>;
+}): Promise<boolean> {
+    const { conversationId, effectiveUserId, text, history, requirements, setMessages, setRequirements, setState } = args;
+
+    const placeholderId = `stream-${Date.now()}`;
+    setMessages(prev => [...prev, {
+        id: placeholderId,
+        role: 'assistant',
+        content: '',
+        createdAt: new Date(),
+    }]);
+
+    const appendToPlaceholder = (piece: string) => {
+        setMessages(prev => prev.map(m => m.id === placeholderId ? { ...m, content: m.content + piece } : m));
+    };
+    const replacePlaceholder = (finalText: string, extractedInfo?: string[]) => {
+        setMessages(prev => prev.map(m => m.id === placeholderId ? { ...m, content: finalText, extractedInfo } : m));
+    };
+
+    let response: Response;
+    try {
+        response = await fetch('/api/assistant/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: effectiveUserId,
+                userMessage: text,
+                history,
+            }),
+        });
+    } catch (e) {
+        setMessages(prev => prev.filter(m => m.id !== placeholderId));
+        return false;
+    }
+
+    if (!response.ok || !response.body) {
+        setMessages(prev => prev.filter(m => m.id !== placeholderId));
+        return false;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let finalReply = '';
+    let finalRequirements: any = null;
+    let gotError = false;
+
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        // SSE: separador de eventos es `\n\n`
+        let sepIdx;
+        while ((sepIdx = buf.indexOf('\n\n')) !== -1) {
+            const raw = buf.slice(0, sepIdx);
+            buf = buf.slice(sepIdx + 2);
+            if (!raw.trim() || raw.startsWith(':')) continue; // heartbeat
+
+            let eventName = 'message';
+            const dataLines: string[] = [];
+            for (const line of raw.split('\n')) {
+                if (line.startsWith('event:')) eventName = line.slice(6).trim();
+                else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+            }
+            const payloadStr = dataLines.join('\n');
+            if (!payloadStr) continue;
+            let payload: any;
+            try { payload = JSON.parse(payloadStr); } catch { continue; }
+
+            if (eventName === 'text' && typeof payload.text === 'string') {
+                appendToPlaceholder(payload.text);
+            } else if (eventName === 'done') {
+                finalReply = payload.reply || '';
+                finalRequirements = payload.updatedRequirements || {};
+            } else if (eventName === 'error') {
+                gotError = true;
+                console.error('[assistant:stream] error event', payload.message);
+            }
+        }
+    }
+
+    if (gotError || !finalReply) {
+        setMessages(prev => prev.filter(m => m.id !== placeholderId));
+        return false;
+    }
+
+    // Calcular chips de info extraída (mismo cálculo que la rama síncrona)
+    const prevNeedsCount = requirements.detectedNeeds?.length || 0;
+    const currentNeeds = (finalRequirements?.detectedNeeds as any[]) || [];
+    const newNeeds = currentNeeds.slice(prevNeedsCount);
+    const extractedInfo = newNeeds.map((n: any) => `${n.category}: ${n.description}`);
+    const extras: string[] = [];
+    if (!requirements.specs?.totalArea && finalRequirements?.specs?.totalArea) {
+        extras.push(`Área: ${finalRequirements.specs.totalArea}m²`);
+    }
+    if (!requirements.specs?.propertyType && finalRequirements?.specs?.propertyType) {
+        extras.push(`Propiedad: ${finalRequirements.specs.propertyType}`);
+    }
+    if (!requirements.specs?.qualityLevel && finalRequirements?.specs?.qualityLevel) {
+        extras.push(`Calidad: ${finalRequirements.specs.qualityLevel}`);
+    }
+    const allExtracted = [...extractedInfo, ...extras];
+
+    replacePlaceholder(finalReply, allExtracted.length > 0 ? allExtracted : undefined);
+    setRequirements(finalRequirements);
+
+    // Persistir el mensaje final
+    try {
+        const { sendMessageAction } = await import('@/actions/chat/send-message.action');
+        await sendMessageAction(conversationId, finalReply, 'assistant', 'system');
+    } catch (e) {
+        console.error('[wizard] failed to persist streamed assistant msg', e);
+    }
+
+    if (finalRequirements?.isReadyForGeneration) {
+        setState('review');
+    } else {
+        setState('idle');
+    }
+
+    return true;
+}

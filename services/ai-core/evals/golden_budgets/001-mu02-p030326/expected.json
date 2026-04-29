@@ -1,0 +1,1086 @@
+{
+  "golden_id": "001-mu02-p030326",
+  "source": "P030326.pdf",
+  "pem_total": 549636.9,
+  "chapters": [
+    {
+      "num": 1,
+      "name": "ACTUACIONES PREVIAS",
+      "total": 9695.0
+    },
+    {
+      "num": 2,
+      "name": "ACONDICIONAMIENTO DEL TERRENO",
+      "total": 27516.13
+    },
+    {
+      "num": 3,
+      "name": "CIMENTACIONES",
+      "total": 15857.5
+    },
+    {
+      "num": 4,
+      "name": "ESTRUCTURA",
+      "total": 101738.05
+    },
+    {
+      "num": 5,
+      "name": "FACHADAS",
+      "total": 75178.44
+    },
+    {
+      "num": 6,
+      "name": "PARTICIONES",
+      "total": 10860.94
+    },
+    {
+      "num": 7,
+      "name": "IMPERMEABILIZACIONES E AISLAMIENTOS",
+      "total": 20540.55
+    },
+    {
+      "num": 8,
+      "name": "CUBIERTAS",
+      "total": 79964.73
+    },
+    {
+      "num": 9,
+      "name": "REMATES Y AYUDAS",
+      "total": 24047.76
+    },
+    {
+      "num": 10,
+      "name": "REVESTIMIENTOS Y TRASDOSADOS",
+      "total": 136041.91
+    },
+    {
+      "num": 11,
+      "name": "PISCINA",
+      "total": 14275.89
+    },
+    {
+      "num": 12,
+      "name": "GESTIÓN DE RESIDUOS",
+      "total": 9800.0
+    },
+    {
+      "num": 13,
+      "name": "CONTROL DE CALIDAD Y ENSAYOS",
+      "total": 5350.0
+    },
+    {
+      "num": 14,
+      "name": "SEGURIDAD Y SALUD",
+      "total": 18200.0
+    },
+    {
+      "num": 15,
+      "name": "VARIOS",
+      "total": 570.0
+    }
+  ],
+  "partidas": [
+    {
+      "num": "1.1",
+      "code": "ACCESO",
+      "chapter_num": 1,
+      "unit": "Ud",
+      "description": "Acondicioanmiento de la entrada del solar para camiones. Incluye: - Limpiar superficie - Meter 10cm de grava, 40-60mm, 50m2 - Compactar Grava....",
+      "quantity": 1.0,
+      "unitPrice": 1210.0,
+      "totalPrice": 1210.0,
+      "canonical_case": true
+    },
+    {
+      "num": "1.2",
+      "code": "VALLADO",
+      "chapter_num": 1,
+      "unit": "M",
+      "description": "Vallado provisional de solar compuesto por vallas trasladables de 3,50x2,00 m, formadas por panel de malla electrosoldada de 200x100 mm de paso de malla y postes verticales de 40 mm de diámetro, acabado galvanizado, colocados sobre bases prefabricadas de hormigón fijadas al pavimento, con malla de ocultación colocada sobre las vallas. Amortizables las vallas en 5 usos y las bases en 5 usos.",
+      "quantity": 10.0,
+      "unitPrice": 35.0,
+      "totalPrice": 350.0,
+      "canonical_case": false
+    },
+    {
+      "num": "1.3",
+      "code": "GRIFOBR",
+      "chapter_num": 1,
+      "unit": "Ud",
+      "description": "Conexión de salida de agua con grifo para el uso durante la ejecución de las obras. Totalmente montado e instalado. Incluye, 4 depositos de 1m3 cada uno. También, retirada del mismo una vez finalizada la obra.",
+      "quantity": 1.0,
+      "unitPrice": 1600.0,
+      "totalPrice": 1600.0,
+      "canonical_case": false
+    },
+    {
+      "num": "1.4",
+      "code": "CUADELEC",
+      "chapter_num": 1,
+      "unit": "Ud",
+      "description": "Suministro e instalación de Cuadro eléctrico para la obra, para el uso durante la ejecución de la obra. Incl. contador de luz, totalmente montado, conexionado y probado. Incluye, trámites administrativos necesarios para su colocación y la retirada del mismo una vez finalizada la obra.",
+      "quantity": 1.0,
+      "unitPrice": 980.0,
+      "totalPrice": 980.0,
+      "canonical_case": false
+    },
+    {
+      "num": "1.5",
+      "code": "ASEO",
+      "chapter_num": 1,
+      "unit": "Ud",
+      "description": "Colocación de un aseo de obra. Inlcuye transporte, mantenimiento para su correcto funcionamiento durante toda la obra, limpieza del mismo y retirada una vez finalizada la obra. Precio por mes.",
+      "quantity": 1.0,
+      "unitPrice": 185.0,
+      "totalPrice": 185.0,
+      "canonical_case": false
+    },
+    {
+      "num": "1.6",
+      "code": "CASETA",
+      "chapter_num": 1,
+      "unit": "Ud",
+      "description": "Colocación de caseta prefabricada de obra. Incluye transporte, mantenimiento, limpieza durante toda la obra y retirada una vez finalizada la obra. Precio por mes",
+      "quantity": 1.0,
+      "unitPrice": 450.0,
+      "totalPrice": 450.0,
+      "canonical_case": false
+    },
+    {
+      "num": "1.7",
+      "code": "RPL",
+      "chapter_num": 1,
+      "unit": "Ud",
+      "description": "Replanteo general de la obra por un topógrafo en las fases de excavación, cimentación, estructuras, verificación de los niveles, etc.. por ingenieros topógrafos. Incluye el suministro por parte del contratista, de todos los equipos y materiales , tales como: es tacas, referencias, tanto permanentes como fijas, para la buena ejecución de los trabajos.",
+      "quantity": 1.0,
+      "unitPrice": 3500.0,
+      "totalPrice": 3500.0,
+      "canonical_case": false
+    },
+    {
+      "num": "1.8",
+      "code": "ANDAMIO",
+      "chapter_num": 1,
+      "unit": "Ud",
+      "description": "Alquiler mensual, de andamio tubular normalizado, tipo multidireccional, hasta 10 m de altura máxima de trabajo, para la ejecución de 100 m² de fachada durante 90 días. Incluye: transporte, instalación, revisión periódica para garantizar su estabilidad y seguridad, y retirada. y retirada. Descripción del andamio: andamio formado por estructura tubular de acero galvanizado en caliente, de 48,3 mm de diámetro y 3,2 mm de espesor, sin duplicidad de elementos verticales, compuesto por plataformas de trabajo de 60 cm de ancho, dispuestas cada 2 m de altura, escalera interior con trampilla, barandilla trasera con dos barras y rodapié, y barandilla delantera con una barra; para la ejecución de fachada de 250 m², considerando como superficie de fachada la resultante del producto de la proyección en planta del perímetro más saliente de la fachada por la altura máxima de trabajo del andamio. Incluso p/p de red flexible, tipo mosquitera monofilamento, de polietileno 100%.",
+      "quantity": 1.0,
+      "unitPrice": 1420.0,
+      "totalPrice": 1420.0,
+      "canonical_case": false
+    },
+    {
+      "num": "2.1",
+      "code": "ADL005",
+      "chapter_num": 2,
+      "unit": "M²",
+      "description": "Desbroce y limpieza del terreno, con medios mecánicos. Comprende los trabajos necesarios para retirar de las zonas previstas para la edificación o urbanización: pequeñas plantas, maleza, broza, maderas caídas, escombros, basuras o cualquier otro material existente, hasta una profundidad no menor que el espesor de la capa de tierra vegetal, considerando como mínima 25 cm. Incluso transporte de la maquinaria, acopio de los materiales excavados en solar. Incluye: Replanteo en el terreno. Remoción mecánica de los materiales de desbroce. Retirada y disposición mecánica de los materiales objeto de desbroce. Carga mecánica a camión. CASETA [A] 19,4 19,40 PISCINA [A] 61,58 61,58 ACCESO [A] 5,29 5,29",
+      "quantity": 720.0,
+      "unitPrice": 2.15,
+      "totalPrice": 1548.0,
+      "canonical_case": false
+    },
+    {
+      "num": "2.2",
+      "code": "ADE001",
+      "chapter_num": 2,
+      "unit": "M³",
+      "description": "Excavación de tierras a cielo abierto, en suelo de arcilla semidura, con medios mecánicos, hasta alcanzar la cota de profundidad indicada en el Proyecto. Incluso refinado de paramentos y fondo de excavación, extracción de tierras fuera de la excavación, acopio de las mismas para su posterior utilización. Incluye: Replanteo general y fijación de los puntos y niveles de referencia. Colocación de las camillas en las esquinas y extremos de las alineaciones. Excavación en sucesivas franjas horizontales y extracción de tierras. Refinado de fondos y laterales a mano, con extracción de las tierras. Carga a camión de las tierras excavadas. PISCINA [A*B] 1,8 38,00 68,40 0.80 cm Eje excavación vivienda [A*B] 0,8 50,00 40,00 0.80 cm Eje excavación piscina [A*B] 1,1 50,00 55,00",
+      "quantity": 445.08,
+      "unitPrice": 12.6,
+      "totalPrice": 5608.01,
+      "canonical_case": false
+    },
+    {
+      "num": "2.3",
+      "code": "ADE010",
+      "chapter_num": 2,
+      "unit": "M³",
+      "description": "Excavación de tierras a cielo abierto para formación de zanjas para cimentaciones y pasos de instalaciones hasta una profundidad de 2 m, en suelo de arcilla semidura, con medios mecánicos, hasta alcanzar la cota de profundidad indicada en el Proyecto. Incluso transporte de la maquinaria, refinado de paramentos y fondo de excavación, extracción de tierras fuera de la excavación, acopio de las mismas para su posterior utilizació. Incluye: Replanteo general y fijación de los puntos y niveles de referencia. Colocación de las camillas en las esquinas y extremos de las alineaciones. Excavación en sucesivas franjas horizontales y extracción de tierras. Refinado de fondos y laterales a mano, con extracción de las tierras. Carga a camión de las tierras excavadas. CIMENTACIÓN [A*B] 90 1,00 90,00",
+      "quantity": 98.1,
+      "unitPrice": 28.2,
+      "totalPrice": 2766.42,
+      "canonical_case": false
+    },
+    {
+      "num": "2.5",
+      "code": "ASD010b",
+      "chapter_num": 2,
+      "unit": "M",
+      "description": "Zanja drenante rellena con grava filtrante sin clasificar, en cuyo fondo se dispone un tubo ranurado de coco de doble pared, la exterior corrugada y la interior lisa, color teja RAL 8023, con ranurado a lo largo de un arco de 220°, de 200 mm de diámetro.",
+      "quantity": 60.0,
+      "unitPrice": 76.2,
+      "totalPrice": 4572.0,
+      "canonical_case": false
+    },
+    {
+      "num": "2.6",
+      "code": "ADP010",
+      "chapter_num": 2,
+      "unit": "M³",
+      "description": "Terraplenado y compactación para coronación de terraplén con tierras de la propia excavación y aportación de tierras en caso necesario, hasta alcanzar una densidad seca no inferior al 100% de la máxima obtenida en el ensayo Proctor Modificado. CASETA [A*B] 12 1,00 12,00 TERRAZAS [A*B] 60 0,10 6,00",
+      "quantity": 18.0,
+      "unitPrice": 20.15,
+      "totalPrice": 362.7,
+      "canonical_case": false
+    },
+    {
+      "num": "2.7",
+      "code": "AMC010",
+      "chapter_num": 2,
+      "unit": "M³",
+      "description": "Relleno a cielo abierto con material de la propia excavación y aporte de tierras en caso necesario, y compactación al 95% del Proctor Modificado con compactador tándem autopropulsado, en tongadas de 30 cm de espesor, hasta alcanzar una densidad seca no inferior al 95% de la máxima obtenida en el ensayo Proctor Modificado.",
+      "quantity": 100.0,
+      "unitPrice": 36.5,
+      "totalPrice": 3650.0,
+      "canonical_case": false
+    },
+    {
+      "num": "2.8",
+      "code": "ANE010",
+      "chapter_num": 2,
+      "unit": "M²",
+      "description": "Encachado de 20 cm en caja para base de solera, con aporte de grava de cantera de piedra caliza, Ø40/70 mm, y compactación mediante equipo manual con bandeja vibrante.",
+      "quantity": 180.0,
+      "unitPrice": 28.6,
+      "totalPrice": 5148.0,
+      "canonical_case": false
+    },
+    {
+      "num": "3.1",
+      "code": "CRL030",
+      "chapter_num": 3,
+      "unit": "M²",
+      "description": "Formación de capa de hormigón de limpieza y nivelado de fondos de cimentación, de 5 cm de espesor, de hormigón HL-150/B/20, fabricado en central y vertido desde camión, en el fondo de la excavación previamente realizada. Incluye: Replanteo. Colocación de toques y/o formación de maestras. Vertido y compactación del hormigón. Coronación y enrase del hormigón. Criterio de medición de proyecto: Superficie medida sobre la superficie teórica de la excavación, según documentación gráfica de Proyecto. Criterio de medición de obra: Se medirá la superficie teórica ejecutada según especificaciones de Proyecto, sin incluir los incrementos por excesos de excavación no autorizados. CIMENTACION VIVIENDA 1 85,00 1,00 85,00 ALJIBES-GARAJE 1 8,50 6,00 51,00",
+      "quantity": 240.0,
+      "unitPrice": 8.25,
+      "totalPrice": 1980.0,
+      "canonical_case": false
+    },
+    {
+      "num": "3.2",
+      "code": "CAV030",
+      "chapter_num": 3,
+      "unit": "M³",
+      "description": "Formación de viga de cimentación de hormigón armado, realizada con hormigón HA-30/B/20/IIIa fabricado en central y vertido con cubilote, y acero UNE-EN 10080 B 500 S, con una cuantía aproximada de 64,6 kg/m³. Incluso p/p de elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, separadores y curado del hormigón. Incluye: Colocación de la armadura con separadores homologados. Vertido y compactación del hormigón. Coronación y enrase. Curado del hormigón. Criterio de medición de proyecto: Volumen medido sobre las secciones teóricas de la excavación, según documentación gráfica de Proyecto. Criterio de medición de obra: Se medirá el volumen teórico ejecutado según especificaciones de Proyecto, sin incluir los incrementos por excesos de excavación no autorizados.",
+      "quantity": 35.0,
+      "unitPrice": 396.5,
+      "totalPrice": 13877.5,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.1",
+      "code": "EHS020",
+      "chapter_num": 4,
+      "unit": "M³",
+      "description": "Formación de pilar de sección rectangular o cuadrada de hormigón armado, realizado con hormigón HA-30/B/20/IIIa fabricado en central y vertido con cubilote, y acero UNE-EN 10080 B 500 S, con una cuantía aproximada de 115,2 kg/m³. Incluso p/p de replanteo, elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, separadores, y curado del hormigón. Incluido encofrado. Incluye: Replanteo. Colocación de las armaduras con separadores homologados. Vertido y compactación del hormigón. Curado del hormigón. Reparación de defectos superficiales. Criterio de medición de proyecto: Volumen medido según documentación gráfica de Proyecto. Criterio de medición de obra: Se medirá el volumen realmente ejecutado según especificaciones de Proyecto. P18 (Planta Piso)",
+      "quantity": 8.3,
+      "unitPrice": 1028.6,
+      "totalPrice": 8537.38,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.2",
+      "code": "FEF020",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "Muro de carga de 25 cm de espesor de fábrica de bloque de hormigón rellenado con hormigón tipo alemán de carga, de hormigón HA-30/B/IIIa, para revestir, color gris, 40x20x25 cm, categoría I, resistencia normalizada R10 (10 N/mm²), fabricado con grava caliza, recibida con mortero de cemento industrial, color gris, M-7,5, suministrado a granel.",
+      "quantity": 51.0,
+      "unitPrice": 106.4,
+      "totalPrice": 5426.4,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.3",
+      "code": "EHV030",
+      "chapter_num": 4,
+      "unit": "M³",
+      "description": "Formación de zuncho de hormigón armado, realizada con hormigón HA-30/B/20/IIIa fabricado en central y vertido con cubilote, y acero UNE-EN 10080 B 500 S, con una cuantía aproximada de 123,4 kg/m³. Incluso p/p de elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, separadores y curado del hormigón. Incluye: Replanteo. Encofrado de viga descolgada. Colocación de las armaduras con separadores homologados. Vertido y compactación del hormigón. Curado del hormigón. Reparación de defectos superficiales. Criterio de medición de proyecto: Volumen medido según documentación gráfica de Proyecto. Criterio de medición de obra: Se medirá el volumen realmente ejecutado según especificaciones de Proyecto.",
+      "quantity": 7.98,
+      "unitPrice": 950.3,
+      "totalPrice": 7583.39,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.4",
+      "code": "VENTSANI",
+      "chapter_num": 4,
+      "unit": "Ud",
+      "description": "Ventilación para forjado sanitario. Incluyendo: montaje de tubos de pvc diámetro 110 mm en 6 puntos diferentes del forjado sanitario, saliendo de la fachada con un codo de 90º.",
+      "quantity": 1.0,
+      "unitPrice": 360.0,
+      "totalPrice": 360.0,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.5",
+      "code": "EHU030b",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "FORJADO UNIDIRECCIONAL: horizontal, de canto 30 cm, intereje de 75 cm, realizado con hormigón HA-30/B/20/IIa fabricado en central y vertido con cubilote, con un volumen total de hormigón en forjado y vigas de 0,159 m³/m², y acero UNE-EN 10080 B 500 S, en zona de paños, vigas y zunchos, cuantía 10,9 kg/m²; montaje y desmontaje de sistema de encofrado continuo, con acabado tipo industrial para revestir; vigueta pretensada T-18 25+5; bovedilla de hormigón; capa de compresión de 5 cm de espesor, con armadura de reparto formada por malla electrosoldada ME 20x20 Ø 5-5 B 500 T 6x2,20 UNE-EN 10080; vigas planas; altura libre de planta de entre 3 y 4 m. Incluso p/p de elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, zunchos perimetrales de planta y agente filmógeno para curado de hormigones y morteros. Sin incluir repercusión de pilares. Incluye: Replanteo del sistema de encofrado. Montaje del sistema de encofrado. Replanteo de la geometría de la planta sobre el encofrado. Colocación de doble viguetas y bovedillas. Colocación de las armaduras con separadores homologados. Vertido y compactación del hormigón. Regleado y nivelación de la capa de compresión. Curado del hormigón. Desmontaje del sistema de encofrado. Reparación de defectos superficiales. Techo Planta Baja 1 45,00 45,00",
+      "quantity": 45.0,
+      "unitPrice": 185.2,
+      "totalPrice": 8334.0,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.6",
+      "code": "EHU030bb",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "FORJADO UNIDIRECCIONAL: horizontal, de canto 30 cm, intereje de 70 cm, realizado con hormigón HA-30/B/20/IIa fabricado en central y vertido con cubilote, con un volumen total de hormigón en forjado y vigas de 0,159 m³/m², y acero UNE-EN 10080 B 500 S, en zona de paños, vigas y zunchos, cuantía 10,9 kg/m²; montaje y desmontaje de sistema de encofrado continuo, con acabado tipo industrial para revestir; vigueta pretensada T-18 25+5; bovedilla de hormigón; capa de compresión de 5 cm de espesor, con armadura de reparto formada por malla electrosoldada ME 20x20 Ø 5-5 B 500 T 6x2,20 UNE-EN 10080; vigas planas; altura libre de planta de entre 3 y 4 m. Incluso p/p de elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, zunchos perimetrales de planta y agente filmógeno para curado de hormigones y morteros. Sin incluir repercusión de pilares. Incluye: Replanteo del sistema de encofrado. Montaje del sistema de encofrado. Replanteo de la geometría de la planta sobre el encofrado. Colocación de doble viguetas y bovedillas. Colocación de las armaduras con separadores homologados. Vertido y compactación del hormigón. Regleado y nivelación de la capa de compresión. Curado del hormigón. Desmontaje del sistema de encofrado. Reparación de defectos superficiales. Sanitario Vivienda 1 180,00 180,00",
+      "quantity": 180.0,
+      "unitPrice": 198.6,
+      "totalPrice": 35748.0,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.7",
+      "code": "EHL030",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "Formación de LOSA MACIZA de hormigón armado, horizontal, con altura libre de planta de entre 3 y 4 m, canto 25 cm, realizada con hormigón HA-30/B/20/IIa fabricado en central y vertido con cubilote, y acero UNE-EN 10080 B 500 S, con una cuantía aproximada de 21,1 kg/m²; montaje y desmontaje de sistema de encofrado continuo, con acabado tipo industrial para revestir, formado por: superficie encofrante de tableros de madera tratada, reforzados con varillas y perfiles, amortizables en 25 usos; estructura soporte horizontal de sopandas metálicas y accesorios de montaje, amortizables en 150 usos y estructura soporte vertical de puntales metálicos, amortizables en 150 usos. Incluso p/p de replanteo, nervios y zunchos perimetrales de planta y huecos, elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, y curado del hormigón. Sin incluir repercusión de pilares. Incluye: Replanteo del sistema de encofrado. Montaje del sistema de encofrado. Replanteo de la geometría de la planta sobre el encofrado. Colocación de armaduras con separadores homologados. Vertido y compactación del hormigón. Regleado y nivelación de la capa de compresión. Curado del hormigón. Desmontaje del sistema de encofrado. Reparación de defectos superficiales. TECHO PLANTA BAJA - Escalera 1 2,00 2,00 4,00",
+      "quantity": 4.0,
+      "unitPrice": 165.0,
+      "totalPrice": 660.0,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.8",
+      "code": "EHE010",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "Formación de LOSA DE ESCALERA de hormigón armado de 15 cm de espesor, con peldañeado de hormigón; realizada con hormigón HA-25/P/20/IIa fabricado en central, y vertido con cubilote, y acero UNE-EN 10080 B 500 S, con una cuantía aproximada de 18 kg/m²; Montaje y desmontaje de sistema de encofrado, con acabado tipo industrial para revestir en su cara inferior y laterales, en planta de hasta 3 m de altura libre, formado por: superficie encofrante de tablones de madera de pino, amortizables en 10 usos, estructura soporte horizontal de tablones de madera de pino, amortizables en 10 usos y estructura soporte vertical de puntales metálicos, amortizables en 150 usos. Incluso p/p de replanteo, elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, separadores, elementos de sustentación, fijación y apuntalamiento necesarios para la estabilidad del encofrado, aplicación de líquido desencofrante y curado del hormigón. Incluye: Replanteo y marcado de niveles de plantas y rellanos. Montaje del sistema de encofrado. Colocación de las armaduras con separadores homologados. Vertido y compactación del hormigón. Curado del hormigón. Desmontaje del sistema de encofrado. Reparación de defectos superficiales.",
+      "quantity": 10.0,
+      "unitPrice": 194.3,
+      "totalPrice": 1943.0,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.9",
+      "code": "EHV030b",
+      "chapter_num": 4,
+      "unit": "M³",
+      "description": "Formación de pórtico de hormigón armado, realizada con hormigón HA-30/B/20/IIIa fabricado en central y vertido con cubilote, y acero UNE-EN 10080 B 500 S, con una cuantía aproximada de 123,4 kg/m³. Incluso p/p de elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, separadores y curado del hormigón. Incluye: Replanteo. Encofrado de viga descolgada. Colocación de las armaduras con separadores homologados. Vertido y compactación del hormigón. Curado del hormigón. Reparación de defectos superficiales. Criterio de medición de proyecto: Volumen medido según documentación gráfica de Proyecto. Criterio de medición de obra: Se medirá el volumen realmente ejecutado según especificaciones de Proyecto.",
+      "quantity": 6.28,
+      "unitPrice": 1150.0,
+      "totalPrice": 7222.0,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.10",
+      "code": "ANS010",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "Solera de hormigón armado de 10 cm de espesor, realizada con hormigón HM-10/B/20/I fabricado en central y vertido desde camión, extendido y vibrado manual.",
+      "quantity": 55.0,
+      "unitPrice": 52.0,
+      "totalPrice": 2860.0,
+      "canonical_case": false
+    },
+    {
+      "num": "4.1.11",
+      "code": "EAS005",
+      "chapter_num": 4,
+      "unit": "Ud",
+      "description": "Placa de anclaje de acero S275JR en perfil plano, de 200x200 mm y espesor 10 mm, con 4 pernos soldados, de acero corrugado UNE-EN 10080 B 500 S de 8 mm de diámetro y 30 cm de longitud total.",
+      "quantity": 10.0,
+      "unitPrice": 145.0,
+      "totalPrice": 1450.0,
+      "canonical_case": false
+    },
+    {
+      "num": "4.2.1",
+      "code": "CSL010",
+      "chapter_num": 4,
+      "unit": "M³",
+      "description": "Losa de cimentación de hormigón armado gunitada, realizada con hormigón HA-30/F/20/IIIa fabricado en central con aditivo hidrófugo, y vertido con bomba, y acero UNE-EN 10080 B 500 S, cuantía 85 kg/m³; acabado superficial liso mediante regla vibrante, sin incluir encofrado.",
+      "quantity": 10.87,
+      "unitPrice": 580.3,
+      "totalPrice": 6307.86,
+      "canonical_case": false
+    },
+    {
+      "num": "4.2.2",
+      "code": "FEF020bb",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "Muro de carga de 15 cm de espesor de fábrica de bloque de hormigón tipo italiano, de carga, para revestir, color gris, 40x20x20 cm, categoría I, resistencia normalizada R10 (10 N/mm²), fabricado con grava caliza, recibida con mortero de cemento industrial, color gris, M-7,5, suministrado a granel. Incluido hormigonado en esquinas.",
+      "quantity": 48.51,
+      "unitPrice": 97.5,
+      "totalPrice": 4729.73,
+      "canonical_case": false
+    },
+    {
+      "num": "4.2.3",
+      "code": "EHM010",
+      "chapter_num": 4,
+      "unit": "M³",
+      "description": "Muro de hormigón armado GUNITADO, hasta 1,6 m de altura, espesor 15 cm, superficie plana, realizado con hormigón HA-30/F/20/IIIa fabricado en central con aditivo hidrófugo, y vertido con bomba, y acero UNE-EN 10080 B 500 S, 60 kg/m³.",
+      "quantity": 9.57,
+      "unitPrice": 390.5,
+      "totalPrice": 3737.09,
+      "canonical_case": false
+    },
+    {
+      "num": "4.2.4",
+      "code": "CAV030b",
+      "chapter_num": 4,
+      "unit": "M³",
+      "description": "Formación de viga de cimentación de hormigón armado, realizada con hormigón HA-30/B/20/IIIa fabricado en central y vertido con cubilote, y acero UNE-EN 10080 B 500 S, con una cuantía aproximada de 64,6 kg/m³. Incluso p/p de elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, separadores y curado del hormigón. Incluye: Colocación de la armadura con separadores homologados. Vertido y compactación del hormigón. Coronación y enrase. Curado del hormigón. Criterio de medición de proyecto: Volumen medido sobre las secciones teóricas de la excavación, según documentación gráfica de Proyecto. Criterio de medición de obra: Se medirá el volumen teórico ejecutado según especificaciones de Proyecto, sin incluir los incrementos por excesos de excavación no autorizados.",
+      "quantity": 3.8,
+      "unitPrice": 396.5,
+      "totalPrice": 1506.7,
+      "canonical_case": false
+    },
+    {
+      "num": "4.2.5",
+      "code": "EHE010b",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "Formación de losa de escalera de hormigón armado de 15 cm de espesor, con peldañeado de hormigón; realizada con hormigón HA-25/P/20/IIa fabricado en central, y vertido con cubilote, y acero UNE-EN 10080 B 500 S, con una cuantía aproximada de 18 kg/m²; Montaje y desmontaje de sistema de encofrado, con acabado tipo industrial para revestir en su cara inferior y laterales, en planta de hasta 3 m de altura libre, formado por: superficie encofrante de tablones de madera de pino, amortizables en 10 usos, estructura soporte horizontal de tablones de madera de pino, amortizables en 10 usos y estructura soporte vertical de puntales metálicos, amortizables en 150 usos. Incluso p/p de replanteo, elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, separadores, elementos de sustentación, fijación y apuntalamiento necesarios para la estabilidad del encofrado, aplicación de líquido desencofrante y curado del hormigón. Incluye: Replanteo y marcado de niveles de plantas y rellanos. Montaje del sistema de encofrado. Colocación de las armaduras con separadores homologados. Vertido y compactación del hormigón. Curado del hormigón. Desmontaje del sistema de encofrado. Reparación de defectos superficiales. Criterio de medición de proyecto: Superficie medida por su intradós en verdadera magnitud, según documentación gráfica de Proyecto. Criterio de medición de obra: Se medirá, por el intradós, la superficie realmente ejecutada según especificaciones de Proyecto.",
+      "quantity": 5.0,
+      "unitPrice": 174.3,
+      "totalPrice": 871.5,
+      "canonical_case": false
+    },
+    {
+      "num": "4.2.6",
+      "code": "EHU030d",
+      "chapter_num": 4,
+      "unit": "M²",
+      "description": "FORJADO UNIDIRECCIONAL: horizontal, de canto 30 cm, intereje de 70 cm, realizado con hormigón HA-30/B/20/IIIa fabricado en central y vertido con cubilote, con un volumen total de hormigón en forjado y vigas de 0,116 m³/m², y acero UNE-EN 10080 B 500 S, en zona de paños, vigas y zunchos, cuantía 3,8 kg/m². Montaje y desmontaje de sistema de encofrado continuo, con acabado tipo industrial para revestir. Vigueta pretensada T-18 22+5; bovedilla de hormigón; capa de compresión de 5 cm de espesor, con armadura de reparto formada por malla electrosoldada ME 20x20 Ø 5-5 B 500 T 6x2,20 UNE-EN 10080; altura libre de planta de hasta 3 m. Incluso p/p de elaboración de la ferralla (corte, doblado y conformado de elementos) en taller industrial y montaje en el lugar definitivo de su colocación en obra, zunchos perimetrales de planta y agente filmógeno para curado de hormigones y morteros. Sin incluir repercusión de pilares. Incluye: Replanteo del sistema de encofrado. Montaje del sistema de encofrado. Replanteo de la geometría de la planta sobre el encofrado. Colocación de viguetas y bovedillas. Colocación de las armaduras con separadores homologados. Vertido y compactación del hormigón. Regleado y nivelación de la capa de compresión. Curado del hormigón. Desmontaje del sistema de encofrado. Reparación de defectos superficiales.",
+      "quantity": 21.0,
+      "unitPrice": 168.0,
+      "totalPrice": 3528.0,
+      "canonical_case": false
+    },
+    {
+      "num": "5.1",
+      "code": "FFR040",
+      "chapter_num": 5,
+      "unit": "M²",
+      "description": "Hoja interior de cerramiento de fachada de 19 cm de espesor, de fábrica de bloque de termoarcilla, 30x19x19 cm, para revestir, recibida con mortero de cemento industrial; formación de dinteles mediante vigueta pretensada T-18 y anclaje mediante barillas de hierro en cada tercera junta al pilar. Además incluye la ejecución de elementos de anclaje, de acero inoxidable, para la posterior sujección de la hoja exterior en fachada.",
+      "quantity": 364.2,
+      "unitPrice": 78.2,
+      "totalPrice": 28480.44,
+      "canonical_case": false
+    },
+    {
+      "num": "5.2",
+      "code": "FFZ100",
+      "chapter_num": 5,
+      "unit": "M²",
+      "description": "Hoja exterior en cerramiento de fachada de ladrillo cerámico hueco triple H12, para revestir, 24x19x12 cm, recibida con mortero de cemento industrial, anclada al forjado y a la fábrica de termoarcilla o pilar con elementos de anclaje de acero inoxidable, ya prevismente ejecutados en la partida de la fábrica de termoarcilla. Formación de dinteles mediante obra de fábrica con armadura de acero corrugado.",
+      "quantity": 290.0,
+      "unitPrice": 44.2,
+      "totalPrice": 12818.0,
+      "canonical_case": false
+    },
+    {
+      "num": "5.3",
+      "code": "ECM010",
+      "chapter_num": 5,
+      "unit": "M³",
+      "description": "Muro de mampostería ordinaria, a una cara vista de piedra arenisca, colocada en seco. Fijada mediante hierro de 8 mm al forjado y a la fábrica de termoarcilla o pilar. Formación de dinteles mediante zuncho de hormigón y anclaje mediante barillas de hierro a la propia fábrica, a la hoja interior y pilar. MURO Terrazas 1 20,00 20,00",
+      "quantity": 128.0,
+      "unitPrice": 185.0,
+      "totalPrice": 23680.0,
+      "canonical_case": false
+    },
+    {
+      "num": "5.4",
+      "code": "ECM010b",
+      "chapter_num": 5,
+      "unit": "M",
+      "description": "Ejecución de esquinas, jambas y dinteles en Muro de mampostería ordinaria, a una cara vista de piedra arenisca, colocada en seco. ESQUINAS PARAMENTOS [A] 30 30,00",
+      "quantity": 60.0,
+      "unitPrice": 170.0,
+      "totalPrice": 10200.0,
+      "canonical_case": false
+    },
+    {
+      "num": "6.1",
+      "code": "FFQ010c",
+      "chapter_num": 6,
+      "unit": "M²",
+      "description": "Hoja de partición interior de 10 cm de espesor de fábrica, de ladrillo cerámico hueco doble Tochana H8, para revestir, 24x14x10 cm, recibida con mortero de cemento industrial, color gris, M-5, suministrado a granel. PLANTA BAJA 15 15,00",
+      "quantity": 15.0,
+      "unitPrice": 42.5,
+      "totalPrice": 637.5,
+      "canonical_case": false
+    },
+    {
+      "num": "6.2",
+      "code": "FFQ010b",
+      "chapter_num": 6,
+      "unit": "M²",
+      "description": "Hoja de partición interior de 12 cm de espesor de fábrica, de ladrillo cerámico hueco triple H12, para revestir, 24x19x12 cm, recibida con mortero de cemento industrial, color gris, M-5, suministrado a granel.",
+      "quantity": 20.0,
+      "unitPrice": 44.2,
+      "totalPrice": 884.0,
+      "canonical_case": false
+    },
+    {
+      "num": "6.3",
+      "code": "FFQ010d",
+      "chapter_num": 6,
+      "unit": "M²",
+      "description": "Hoja de partición interior de 14 cm de espesor de fábrica, de ladrillo cerámico hueco doble Tochana H8, para revestir, 24x19x14 cm, recibida con mortero de cemento industrial, color gris, M-5, suministrado a granel.",
+      "quantity": 160.4,
+      "unitPrice": 43.6,
+      "totalPrice": 6993.44,
+      "canonical_case": false
+    },
+    {
+      "num": "6.4",
+      "code": "FFQ030",
+      "chapter_num": 6,
+      "unit": "M²",
+      "description": "Hoja de partición interior de 19 cm de espesor de fábrica, de bloque de termoarcilla, 30x19x19 cm, para revestir, recibida con mortero de cemento industrial, color gris, M-5, suministrado a granel, con banda elástica en las uniones con otros elementos constructivos, de banda flexible de polietileno reticulado de celda cerrada, de 10 mm de espesor y 110 mm de ancho.",
+      "quantity": 30.0,
+      "unitPrice": 78.2,
+      "totalPrice": 2346.0,
+      "canonical_case": false
+    },
+    {
+      "num": "7.1.1",
+      "code": "IMPERBLO",
+      "chapter_num": 7,
+      "unit": "M²",
+      "description": "Immpermeabilización mediante dos manos de pintura asfáltica encima del zuncho de hormigón (forjado sanitario)",
+      "quantity": 21.25,
+      "unitPrice": 12.6,
+      "totalPrice": 267.75,
+      "canonical_case": false
+    },
+    {
+      "num": "7.1.2",
+      "code": "IMPERBLO",
+      "chapter_num": 7,
+      "unit": "M²",
+      "description": "Immpermeabilización mediante dos manos de pintura asfáltica encima en el segundo tendel del las particiones y fachadas de planta baja",
+      "quantity": 20.0,
+      "unitPrice": 12.6,
+      "totalPrice": 252.0,
+      "canonical_case": false
+    },
+    {
+      "num": "7.1.3",
+      "code": "NIM011",
+      "chapter_num": 7,
+      "unit": "M²",
+      "description": "Impermeabilización del perimétro del forjado sanitario en su cara exterior, mediante: imprimación previa con emulsión asfáltica aniónica con cargas tipo EB (rendimiento: 0,5 kg/m²), después lámina de betún modificado con elastómero SBS, LBM(SBS)-30-FP y por último lámina drenante nodular de polietileno de alta densidad (PEAD/HDPE), con nódulos de 8 mm de altura, resistencia a la compresión 150 kN/m² según UNE-EN ISO 604, capacidad de drenaje 5 l/(s·m) y masa nominal 0,5 kg/m². PERIMETRO-FORJADO SANITARIO 120 1,20 144,00",
+      "quantity": 144.0,
+      "unitPrice": 32.5,
+      "totalPrice": 4680.0,
+      "canonical_case": false
+    },
+    {
+      "num": "7.1.4",
+      "code": "NIH020",
+      "chapter_num": 7,
+      "unit": "M²",
+      "description": "Impermeabilización de soleras, compuesta impermeabilización monocapa no adherida: lámina impermeabilizante de PVC de 1,5x1,5 m, fijada en solapes y bordes mediante soldadura termoplástica. Vivienda [A] 180 180,00 Terraza [A] 60 60,00 Caseta [A] 15 15,00 Garaje [A] 50 50,00",
+      "quantity": 305.0,
+      "unitPrice": 10.2,
+      "totalPrice": 3111.0,
+      "canonical_case": false
+    },
+    {
+      "num": "7.2.1",
+      "code": "NAF02040",
+      "chapter_num": 7,
+      "unit": "M²",
+      "description": "Aislamiento térmico por el interior en fachada de doble hoja de fábrica para revestir, formado por dos placas lana de roca, de 40+40 mm de espesor.",
+      "quantity": 357.0,
+      "unitPrice": 21.6,
+      "totalPrice": 7711.2,
+      "canonical_case": false
+    },
+    {
+      "num": "7.2.2",
+      "code": "NAQ030",
+      "chapter_num": 7,
+      "unit": "M²",
+      "description": "Aislamiento por el interior sobre espacio no habitable en cubiertas inclinadas, formado por fieltro aislante de lana mineral, según UNE-EN 13162, revestido por una de sus caras con un complejo de papel kraft con polietileno que actúa como barrera de vapor, de 100 mm de espesor. CUBIERTA VIVIENDA [A] 180 180,00",
+      "quantity": 180.0,
+      "unitPrice": 18.5,
+      "totalPrice": 3330.0,
+      "canonical_case": false
+    },
+    {
+      "num": "8.1",
+      "code": "EHU030dc",
+      "chapter_num": 8,
+      "unit": "M²",
+      "description": "Forjado de viguetas laminadas de madera. 10x24, a=75cm, GL24H, con capa de compresión de 5cm, incl. mallazo, y conectores, CTL base 12/60,tecnmaria o similar. suministro y montaje. Cubierta Planta Baja 2 9,50 6,00 114,00 Cubierta Planta Piso 1 11,00 6,50 71,50",
+      "quantity": 252.7,
+      "unitPrice": 125.6,
+      "totalPrice": 31739.12,
+      "canonical_case": false
+    },
+    {
+      "num": "8.2",
+      "code": "QTT020",
+      "chapter_num": 8,
+      "unit": "M²",
+      "description": "Cubierta inclinada de tejas cerámicas, sobre espacio no habitable, con una pendiente media del 30%, compuesta de: formación de pendientes: tablero cerámico hueco machihembrado mallorquín liso, para revestir, 60x23x4 cm, con una capa de regularización de mortero de cemento, industrial, M-5, de 2 cm de espesor, sobre tabiques aligerados de 100 cm de altura media; impermeabilización monocapa: lámina impermeabilizante autoadhesiva de betún modificado con elastómero (SBS), LBA-20-PE, cobertura: teja cerámica curva, 45x19 cm, color rojo, recibida con mortero de cemento, industrial, M-2,5. Aemás, aislamiento térmico de lana de roca de 12 cm, sobre forjado unidireccional y entre los tabiques palomeros y conejero y barrera antivapor. CUBIERTA-VIVIENDA 252,7 252,70",
+      "quantity": 252.7,
+      "unitPrice": 184.3,
+      "totalPrice": 46572.61,
+      "canonical_case": false
+    },
+    {
+      "num": "8.3",
+      "code": "QAB010",
+      "chapter_num": 8,
+      "unit": "M²",
+      "description": "Cubierta plana transitable, no ventilada, con solado fijo, tipo invertida, pendiente del 1% al 5%, para tráfico peatonal privado, compuesta de: lámina antivapor, después hormigón de pendiente hasta espesor de 10 cm; doble impermeabilización monocapa adherida: doble lámina de betún modificado con elastómero SBS, LBM(SBS)-40-FP colocada con emulsión asfáltica aniónica con cargas tipo EB; aislamiento térmico: panel rígido de poliestireno extruido, de superficie lisa y mecanizado lateral a media madera, de 100 mm de espesor, resistencia a compresión >= 300 kPa; y para terminar una capa de protección: baldosas de gres rústico 4/3/-/E, 40x40 cm colocadas en capa fina con adhesivo cementoso normal, C1 gris, sobre capa de regularización de mortero de cemento, industrial, M-5, rejuntadas con mortero de juntas cementoso con resistencia elevada a la abrasión y absorción de agua reducida, CG2, para junta abierta (entre 3 y 15 mm), con la misma tonalidad de las piezas.ad de las piezas.",
+      "quantity": 10.0,
+      "unitPrice": 165.3,
+      "totalPrice": 1653.0,
+      "canonical_case": false
+    },
+    {
+      "num": "9.1",
+      "code": "HYA010",
+      "chapter_num": 9,
+      "unit": "M²",
+      "description": "TELECOMUNICACIONES Y AUDIOVISUALES Ayudas: Repercusión por m² de superficie construida de obra, de ayudas de cualquier trabajo de albañilería, necesarias para la correcta ejecución de la infraestructura de telecomunicaciones formada por: canalizaciones y registro de enlace, registro de terminación de red, canalización interior de usuario, registros de paso y registros de toma, con un grado de complejidad medio, en edificio de vivienda unifamiliar. Incluso material auxiliar para realizar todos aquellos trabajos de apertura y tapado de rozas, apertura de huecos en tabiquería, muros, forjados y losas, para paso de instalaciones, fijación de soportes, recibidos y remates precisos para el correcto montaje de la instalación. Incluye: Trabajos de apertura y tapado de rozas. Apertura de agujeros en paramentos, muros, forjados y losas, para el paso de instalaciones. Colocación de pasatubos. Colocación y recibido de cajas para elementos empotrados. Sellado de agujeros y huecos de paso de instalaciones.",
+      "quantity": 312.0,
+      "unitPrice": 9.85,
+      "totalPrice": 3073.2,
+      "canonical_case": false
+    },
+    {
+      "num": "9.2",
+      "code": "HYA010c",
+      "chapter_num": 9,
+      "unit": "M²",
+      "description": "CALEFACCIÓN Y GAS Ayudas: Repercusión por m² de superficie construida de obra, de ayudas de cualquier trabajo de albañilería, necesarias para la correcta ejecución de la instalación de calefacción y gas formada por: tuberías de distribución, y cualquier otro elemento componente de la instalación, con un grado de complejidad medio, en edificio de vivienda unifamiliar. Incluso material auxiliar para realizar todos aquellos trabajos de apertura y tapado de rozas, apertura de huecos en tabiquería, muros, forjados y losas, para paso de instalaciones, fijación de soportes, recibidos y remates precisos para el correcto montaje de la instalación. Incluye: Trabajos de apertura y tapado de rozas. Apertura de agujeros en paramentos, muros, forjados y losas, para el paso de instalaciones. Colocación de pasatubos. Colocación y recibido de cajas para elementos empotrados. Sellado de agujeros y huecos de paso de instalaciones.",
+      "quantity": 312.0,
+      "unitPrice": 12.2,
+      "totalPrice": 3806.4,
+      "canonical_case": false
+    },
+    {
+      "num": "9.3",
+      "code": "HYA010d",
+      "chapter_num": 9,
+      "unit": "M²",
+      "description": "CLIMATICACIÓN Ayudas: Repercusión por m² de superficie construida de obra,(solo segunda planta) de ayudas de cualquier trabajo de albañilería, necesarias para la correcta ejecución de la instalación de climatización formada por: conductos con sus accesorios y piezas especiales, rejillas, bocas de ventilación, compuertas, toberas, reguladores, difusores, cualquier otro elemento componente de la instalación y p/p de conexiones a las redes eléctrica, de fontanería y de salubridad, con un grado de complejidad medio, en edificio de vivienda unifamiliar. Incluso material auxiliar para realizar todos aquellos trabajos de apertura y tapado de rozas, apertura de huecos en tabiquería, muros, forjados y losas, para paso de instalaciones, fijación de soportes, recibidos y remates precisos para el correcto montaje de la instalación. Incluye: Trabajos de apertura y tapado de rozas. Apertura de agujeros en paramentos, muros, forjados y losas, para el paso de instalaciones. Colocación de pasatubos. Colocación y recibido de cajas para elementos empotrados. Sellado de agujeros y huecos de paso de instalaciones.",
+      "quantity": 312.0,
+      "unitPrice": 6.8,
+      "totalPrice": 2121.6,
+      "canonical_case": false
+    },
+    {
+      "num": "9.4",
+      "code": "HYA010e",
+      "chapter_num": 9,
+      "unit": "M²",
+      "description": "ELECTRICIDAD E ILUMINACIÓN Ayduas: Repercusión por m² de superficie construida de obra, de ayudas de cualquier trabajo de albañilería, necesarias para la correcta ejecución de la instalación eléctrica y de iluminación formada por: puesta a tierra, red de equipotencialidad, caja de protección y medida, línea general de alimentación, derivaciones individuales y red de distribución interior, puntos de luz, con un grado de complejidad medio, en edificio de vivienda unifamiliar. Incluso material auxiliar para realizar todos aquellos trabajos de apertura y tapado de rozas, apertura de huecos en tabiquería, muros, forjados y losas, para paso de instalaciones, fijación de soportes, recibidos y remates precisos para el correcto montaje de la instalación. Incluye: Trabajos de apertura y tapado de rozas. Apertura de agujeros en paramentos, muros, forjados y losas, para el paso de instalaciones. Colocación de pasatubos. Colocación y recibido de cajas para elementos empotrados. Sellado de agujeros y huecos de paso de instalaciones.",
+      "quantity": 312.0,
+      "unitPrice": 11.2,
+      "totalPrice": 3494.4,
+      "canonical_case": false
+    },
+    {
+      "num": "9.5",
+      "code": "HYA010f",
+      "chapter_num": 9,
+      "unit": "M²",
+      "description": "FONTANERIA Ayudas: Repercusión por m² de superficie construida de obra, de ayudas de cualquier trabajo de albañilería, necesarias para la correcta ejecución de la instalación de fontanería formada por: acometida, tubo de alimentación, contador individual, grupo de presión, depósito, montantes, instalación interior, cualquier otro elemento componente de la instalación, accesorios y piezas especiales, con un grado de complejidad medio, en edificio de vivienda unifamiliar. Incluso material auxiliar para realizar todos aquellos trabajos de apertura y tapado de rozas, apertura de huecos en tabiquería, muros, forjados y losas, para paso de instalaciones, fijación de soportes, recibidos y remates precisos para el correcto montaje de la instalación. Incluye: Trabajos de apertura y tapado de rozas. Apertura de agujeros en paramentos, muros, forjados y losas, para el paso de instalaciones. Colocación de pasatubos. Colocación y recibido de cajas para elementos empotrados. Sellado de agujeros y huecos de paso de instalaciones.",
+      "quantity": 312.0,
+      "unitPrice": 8.3,
+      "totalPrice": 2589.6,
+      "canonical_case": false
+    },
+    {
+      "num": "9.6",
+      "code": "HYA010g",
+      "chapter_num": 9,
+      "unit": "M²",
+      "description": "ENERGIA SOLAR Ayudas: Repercusión por m² de superficie construida de obra, de ayudas de cualquier trabajo de albañilería, necesarias para la correcta ejecución de la instalación de energía solar formada por: tuberías de distribución de agua y cualquier otro elemento componente de la instalación, con un grado de complejidad medio, en edificio de vivienda unifamiliar. Incluso material auxiliar para realizar todos aquellos trabajos de apertura y tapado de rozas, apertura de huecos en tabiquería, muros, forjados y losas, para paso de instalaciones, fijación de soportes, recibidos y remates precisos para el correcto montaje de la instalación. Incluye: Trabajos de apertura y tapado de rozas. Apertura de agujeros en paramentos, muros, forjados y losas, para el paso de instalaciones. Colocación de pasatubos. Colocación y recibido de cajas para elementos empotrados. Sellado de agujeros y huecos de paso de instalaciones.",
+      "quantity": 312.0,
+      "unitPrice": 6.3,
+      "totalPrice": 1965.6,
+      "canonical_case": false
+    },
+    {
+      "num": "9.7",
+      "code": "HYA010h",
+      "chapter_num": 9,
+      "unit": "M²",
+      "description": "SANEAMIENTO Ayudas: Repercusión por m² de superficie construida de obra, de ayudas de cualquier trabajo de albañilería, necesarias para la correcta ejecución de la instalación de salubridad formada por: sistema de evacuación (bajantes interiores y exteriores de aguas pluviales y residuales, canalones, botes sifónicos, colectores suspendidos, sistemas de elevación, derivaciones individuales y cualquier otro elemento componente de la instalación), apertura y tapado de agujeros en paramentos, muros, forjados y losas, colocación de pasatubos, cajeado y tapado de agujeros y huecos de paso de instalaciones, con un grado de complejidad medio, en edificio de vivienda unifamiliar. Incluso material auxiliar para realizar todos aquellos trabajos de apertura y tapado de rozas, apertura de huecos en tabiquería, muros, forjados y losas, para paso de instalaciones, fijación de soportes, rebajes, recibidos y remates precisos para el correcto montaje de la instalación. Incluye: Trabajos de apertura y tapado de rozas. Apertura de agujeros en paramentos, muros, forjados y losas, para el paso de instalaciones. Colocación de pasatubos. Colocación y recibido de cajas para elementos empotrados. Tapado de agujeros y huecos de paso de instalaciones.",
+      "quantity": 312.0,
+      "unitPrice": 7.98,
+      "totalPrice": 2489.76,
+      "canonical_case": false
+    },
+    {
+      "num": "9.8",
+      "code": "HYA010hb",
+      "chapter_num": 9,
+      "unit": "M²",
+      "description": "HERRERO Ayudas: Repercusión por m² de superficie construida de obra, de ayudas de cualquier trabajo de albañilería, necesarias para la correcta ejecución del montaje de barandillas y pérgolas.",
+      "quantity": 312.0,
+      "unitPrice": 10.6,
+      "totalPrice": 3307.2,
+      "canonical_case": false
+    },
+    {
+      "num": "9.9",
+      "code": "HEC020",
+      "chapter_num": 9,
+      "unit": "Ud",
+      "description": "Colocación y fijación de precerco de madera de pino, posterior a la ejecución del tabique y sin el pavimento colocado, mediante recibido al paramento de fábrica de las patillas de anclaje con mortero de cemento, industrial, con aditivo hidrófugo, M-5, para fijar posteriormente, sobre él, el marco de la carpintería exterior e interior. Incluso p/p de replanteo, apertura y tapado de huecos para los anclajes, nivelación y aplomado. Incluye: Replanteo. Apertura de huecos. Nivelación y aplomado. Tapado de huecos. Fijación definitiva del precerco.",
+      "quantity": 25.0,
+      "unitPrice": 48.0,
+      "totalPrice": 1200.0,
+      "canonical_case": false
+    },
+    {
+      "num": "10.1.1",
+      "code": "RQO010",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Formación en fachadas de revestimiento continuo de 15 mm de espesor, impermeable al agua de lluvia, con mortero monocapa para la impermeabilización y decoración de fachadas, acabado con árido proyectado, color RAL a elegir, compuesto de cementos, aditivos, resinas sintéticas y cargas minerales. Aplicado manualmente sobre una superficie de ladrillo cerámico, ladrillo o bloque de hormigón o bloque de termoarcilla. Incluso p/p de preparación de la superficie soporte, colocación de malla de fibra de vidrio antiálcalis para refuerzo de encuentros entre materiales diferentes y en los frentes de forjado, en un 20% de la superficie del paramento, formación de juntas, rincones, maestras, aristas, mochetas, jambas y dinteles, remates en los encuentros con paramentos, revestimientos u otros elementos recibidos en su superficie. Incluye: Preparación de la superficie soporte. Despiece de los paños de trabajo. Aristado y realización de juntas. Preparación del mortero monocapa. Aplicación del mortero monocapa. Regleado y alisado del revestimiento. Acabado superficial. Repasos y limpieza final.",
+      "quantity": 256.2,
+      "unitPrice": 38.8,
+      "totalPrice": 9940.56,
+      "canonical_case": false
+    },
+    {
+      "num": "10.1.2",
+      "code": "RQO010b",
+      "chapter_num": 10,
+      "unit": "M",
+      "description": "Revestimiento de mortero monocapa (descrito en la partida anterior mortero monocapa) en jambas y dinteles de ventanas, utilizando perfiles esquineros para su perfecta ejecución. PLANTA BAJA [A] 50 50,00 PLANTA PRIMERA [A] 25 25,00",
+      "quantity": 75.0,
+      "unitPrice": 26.5,
+      "totalPrice": 1987.5,
+      "canonical_case": false
+    },
+    {
+      "num": "10.1.3",
+      "code": "RCP020",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Suministro y colocación de recercado de piedra en puerta de entrada, hasta 3 m de altura, con plaquetas calibradas y biseladas de Golden Shell, acabado abujardado, recibido con mortero de cemento M-5 extendido sobre toda la cara posterior de la pieza y ajustado a punta de paleta, rellenando con el mismo mortero los huecos que pudieran quedar; todo ello previa preparación del paramento soporte con un salpicado con mortero de cemento fluido. Rejuntado con mortero de juntas especial para revestimientos de piedra natural. Incluso p/p de grapas de anclaje de acero inoxidable, cajas en muro, cortes, ingletes, juntas y piezas especiales. Incluye: Limpieza y humectación del paramento a revestir. Colocación y aplomado de miras de referencia. Tendido de hilos entre miras. Preparación de la piedra natural, salpicándola con lechada de cemento y arena por la cara interior. Colocación de grapas. Colocación de las plaquetas. Comprobación del aplomado, nivel y alineación de la hilada de plaquetas. Rejuntado. Limpieza final del paramento.",
+      "quantity": 3.32,
+      "unitPrice": 180.0,
+      "totalPrice": 597.6,
+      "canonical_case": false
+    },
+    {
+      "num": "10.2.2",
+      "code": "RSP011b",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Colocación solado de baldosas de mármol Gris Zarci, para interior, de 80x80x2 cm, acabado envejecido, recibidas con mortero de cemento M-5 y rejuntadas con mortero de juntas cementoso, CG1, para junta mínima (entre 1,5 y 3 mm), con la misma tonalidad de las piezas. PLANTA PRIMERA 1 60,00 60,00",
+      "quantity": 230.0,
+      "unitPrice": 144.3,
+      "totalPrice": 33189.0,
+      "canonical_case": false
+    },
+    {
+      "num": "10.2.3",
+      "code": "RSG020",
+      "chapter_num": 10,
+      "unit": "M",
+      "description": "Colocación de rodapié de mármol gris Zarci, abujardado y envejecido de 4 cm, recibido con adhesivo cementoso de uso exclusivo para interiores, Ci sin ninguna característica adicional, gris y rejuntado con mortero de juntas cementoso, CG1, para junta mínima (entre 1,5 y 3 mm), con la misma tonalidad de las piezas. PLANTA PRIMERA 35 35,00",
+      "quantity": 135.0,
+      "unitPrice": 48.4,
+      "totalPrice": 6534.0,
+      "canonical_case": false
+    },
+    {
+      "num": "10.2.4",
+      "code": "RSP011",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Colocación solado de baldosas de mármol Gris Zarci, para exteriores, de 60x60x2 cm, acabado abujardado y envejecido, recibidas con mortero de cemento M-5 y rejuntadas con mortero de juntas cementoso, CG1, para junta mínima (entre 1,5 y 3 mm), con la misma tonalidad de las piezas.",
+      "quantity": 76.0,
+      "unitPrice": 120.5,
+      "totalPrice": 9158.0,
+      "canonical_case": false
+    },
+    {
+      "num": "10.3.1",
+      "code": "REP010",
+      "chapter_num": 10,
+      "unit": "M",
+      "description": "Colocación de revestimiento de escalera de 100 cm de ancho mediante el montaje de los siguientes elementos: peldañeado formado por huella de mármol gris Zarci, acabado abujardado y envejecido, y tabica de mármol gris Zarci, acabado abujardado y envejecido, de 3 y 2 cm de espesor respectivamente, cara y cantos pulidos; zanquín de mármol Crema Levante de dos piezas de 37x7x2 cm, cara y cantos pulidos, colocado en un lateral, recibido todo ello con mortero de cemento M-5, sobre un peldañeado previo (incluido en este precio). Incluso solado de mesetas y rejuntado con mortero de juntas cementoso, CG1, para junta mínima (entre 1,5 y 3 mm), con la misma tonalidad de las piezas. Incluye: Replanteo y trazado de huellas, tabicas y zanquines. Corte de las piezas y formación de encajes en esquinas y rincones. Humectación del peldañeado. Colocación con mortero de la tabica y huella del primer peldaño. Tendido de cordeles. Colocación, en sentido ascendente, de tabicas y huellas. Comprobación de su planeidad y correcta posición. Colocación del zanquín. Relleno de juntas. Limpieza del tramo.",
+      "quantity": 22.0,
+      "unitPrice": 205.3,
+      "totalPrice": 4516.6,
+      "canonical_case": false
+    },
+    {
+      "num": "10.4.1",
+      "code": "RTC016g",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Suministro y montaje de falso techo continuo, situado a una altura menor de 4 m, liso D112 \"KNAUF\" (12,5+27+27), formado por una placa de yeso laminado A / UNE-EN 520 - 1200 / longitud / 12,5 / borde afinado, Standard \"KNAUF\" atornillada a una estructura metálica de acero galvanizado de maestras primarias 60/27 mm separadas cada 1000 mm entre ejes y suspendidas del forjado o elemento soporte mediante cuelgues combinados cada 950 mm, y maestras secundarias fijadas perpendicularmente a los perfiles primarios mediante caballetes y colocadas con una modulación máxima de 500 mm entre ejes, incluso p/p de fijaciones, tornillería, resolución del perímetro y puntos singulares, pasta de juntas, cinta de juntas y accesorios de montaje. Totalmente terminado y listo para imprimar y revestir.",
+      "quantity": 100.0,
+      "unitPrice": 45.2,
+      "totalPrice": 4520.0,
+      "canonical_case": false
+    },
+    {
+      "num": "10.4.2",
+      "code": "RTC021",
+      "chapter_num": 10,
+      "unit": "Ud",
+      "description": "Trampilla de registro de acero, Revo 13 GKFI, sistema D171 \"KNAUF\", de 300x300 mm, para falso techo continuo de placas de yeso laminado.",
+      "quantity": 4.0,
+      "unitPrice": 95.0,
+      "totalPrice": 380.0,
+      "canonical_case": false
+    },
+    {
+      "num": "10.4.3",
+      "code": "RTC020b",
+      "chapter_num": 10,
+      "unit": "M",
+      "description": "Formación de tabica vertical en cambio de nivel de falso techo continuo, mediante placas de yeso laminado recibidas con pasta de agarre, para cerrar un espacio de 15 cm de altura. Incluso p/p de corte, fijación con pasta de agarre, pasta de juntas y cinta de juntas.",
+      "quantity": 50.0,
+      "unitPrice": 34.2,
+      "totalPrice": 1710.0,
+      "canonical_case": false
+    },
+    {
+      "num": "10.5.1",
+      "code": "HRA010",
+      "chapter_num": 10,
+      "unit": "M",
+      "description": "Albardilla de mármol gris zarci para cubrición de muros, de hasta 50 cm de anchura y 2 cm de espesor. doble goterón. CASETA- TERMINACION CUBIERTA 17,66 17,66",
+      "quantity": 39.14,
+      "unitPrice": 115.3,
+      "totalPrice": 4512.84,
+      "canonical_case": false
+    },
+    {
+      "num": "10.5.2",
+      "code": "HRV010",
+      "chapter_num": 10,
+      "unit": "M",
+      "description": "Fiola de marmol gris zarci, de 25 cm de anchura y 3 cm de espesor. Con un goterón. PLANTA BAJA [A] 25,13 25,13 PLANTA PRIMERA [A] 20,6 20,60",
+      "quantity": 45.73,
+      "unitPrice": 65.3,
+      "totalPrice": 2986.17,
+      "canonical_case": false
+    },
+    {
+      "num": "10.6.1",
+      "code": "RPE012b",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Formación de revestimiento continuo de mortero de cemento M-5, maestreado, de 15 mm de espesor, aplicado sobre un paramento vertical interior, acabado superficial rayado, para servir de base a un posterior alicatado. Incluso p/p de preparación de la superficie soporte, colocación de malla de fibra de vidrio antiálcalis para refuerzo de encuentros entre materiales diferentes y en los frentes de forjado, en un 20% de la superficie del paramento, formación de juntas, rincones, maestras con separación entre ellas no superior a un metro, aristas, mochetas, jambas, dinteles, remates en los encuentros con paramentos, revestimientos u otros elementos recibidos en su superficie.",
+      "quantity": 128.42,
+      "unitPrice": 22.6,
+      "totalPrice": 2902.29,
+      "canonical_case": false
+    },
+    {
+      "num": "10.6.2",
+      "code": "RAG014",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Colocación de alicatado con azulejo liso, colocado sobre una superficie soporte de mortero de cemento u hormigón, en paramentos interiores, mediante adhesivo cementoso de uso exclusivo para interiores, Ci gris, sin junta (separación entre 1,5 y 3 mm); cantoneras de PVC.NO INCLUYE BALDOSA",
+      "quantity": 128.42,
+      "unitPrice": 42.5,
+      "totalPrice": 5457.85,
+      "canonical_case": false
+    },
+    {
+      "num": "10.7.1",
+      "code": "RPG011",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Enlucido de yeso de aplicación en capa fina entre 10-15 mm de espesor, C6 en una superficie previamente guarnecida, sobre paramento vertical, de mas de 3 m de altura. Incluye esquineros de PVC, en remate de arista de mas de 3 metros de altura.",
+      "quantity": 707.48,
+      "unitPrice": 18.5,
+      "totalPrice": 13088.38,
+      "canonical_case": false
+    },
+    {
+      "num": "10.7.2",
+      "code": "RPG011b",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Enlucido de yeso de aplicación en capa fina entre 10-15 mm de espesor, C6 en una superficie previamente guarnecida, sobre paramento horizontal, de mas de 3 m de altura. Incluye esquineros de PVC, en remate de arista de mas de 3 metros de altura. PLANTA PRIMERA 94,78 94,78",
+      "quantity": 225.0,
+      "unitPrice": 22.3,
+      "totalPrice": 5017.5,
+      "canonical_case": false
+    },
+    {
+      "num": "10.8.1",
+      "code": "RIP030",
+      "chapter_num": 10,
+      "unit": "M²",
+      "description": "Pintura plástica con textura lisa, color blanco, acabado mate, sobre paramentos horizontales y verticales interiores de yeso o escayola, mano de fondo y dos manos de acabado (rendimiento: 0,125 l/m² cada mano).",
+      "quantity": 932.48,
+      "unitPrice": 7.5,
+      "totalPrice": 6993.6,
+      "canonical_case": false
+    },
+    {
+      "num": "10.8.2",
+      "code": "RIP030b",
+      "chapter_num": 10,
+      "unit": "M",
+      "description": "Pintura plástica con textura lisa sobre barandilla, se aplicará una primera mano de pintura anticorrosión y dos manos de pintura color gris antioxidante. BARANDILLA V-31/V-32 [A*B] 2 8,00 16,00",
+      "quantity": 84.0,
+      "unitPrice": 48.5,
+      "totalPrice": 4074.0,
+      "canonical_case": false
+    },
+    {
+      "num": "10.8.3",
+      "code": "RIP030bb",
+      "chapter_num": 10,
+      "unit": "M",
+      "description": "Pintura plástica con textura lisa sobre pérgola, se aplicará una primera mano de pintura anticorrosión y dos manos de pintura color gris antioxidante. PÉRGOLA 01 [A] 68 68,00 PÉRGOLA 02 [A] 68 68,00 PÉRGOLA APARCAMIENTO [A] 71,52 71,52",
+      "quantity": 207.52,
+      "unitPrice": 48.5,
+      "totalPrice": 10064.72,
+      "canonical_case": false
+    },
+    {
+      "num": "11.1",
+      "code": "REP020c",
+      "chapter_num": 11,
+      "unit": "M",
+      "description": "Colocación de revestimiento de peldaño con forma recta, en escalera de 9.83 m. de ancho, mediante el montaje de los siguientes elementos: huella (30 cm.) y contrahuella (18 cm.) de gresite, y tabica de gresite, de 3 y 2 cm de espesor respectivamente, cara y cantos abujardado y envejecido, recibido todo ello con mortero de cemento y picadís M-5, colocado sobre un peldañeado previo (no incluido en este precio). Incluso rejuntado con mortero de juntas cementoso, CG1, para junta mínima (entre 1,5 y 3 mm), con la misma tonalidad de las piezas.",
+      "quantity": 16.9,
+      "unitPrice": 163.3,
+      "totalPrice": 2759.77,
+      "canonical_case": false
+    },
+    {
+      "num": "11.2",
+      "code": "NIA021",
+      "chapter_num": 11,
+      "unit": "M²",
+      "description": "Impermeabilización de piscina constituido por muro de superficie irregular de hormigón, con mortero impermeabilizante flexible monocomponente, color gris, extendido con llana en capas sucesivas sobre el soporte humedecido y regleado, hasta conseguir un espesor mínimo total de 10 mm. Sin incluir la resolución de ángulos y rincones, anclajes y empotramientos o colocación de tuberías. Incluye: Humectación del soporte. Extendido de una primera capa sobre el soporte humedecido. Secado. Humectación de la primera capa y extendido de capas sucesivas, cruzadas con respecto a la capa anterior. Repasos y limpieza final. Curado.",
+      "quantity": 70.34,
+      "unitPrice": 38.6,
+      "totalPrice": 2715.12,
+      "canonical_case": false
+    },
+    {
+      "num": "11.3",
+      "code": "UPT020",
+      "chapter_num": 11,
+      "unit": "M²",
+      "description": "Suministro y colocación de revestimiento de baldosa de gresite color azul, acabado esmaltado liso, de 25x25x6 mm en suelos y paredes de vasos de piscinas, recibidas con adhesivo cementoso normal, C2 TE, con deslizamiento reducido y tiempo abierto ampliado, color blanco, sobre enfoscado previo de mortero de cemento, industrial, con aditivo hidrófugo, M-15 y rejuntado con mortero de juntas de resinas reactivas RG, para junta abierta entre 3 y 15 mm. Incluso p/p de cortes y limpieza final. Incluye: Limpieza y humectación del paramento a revestir. Enfoscado previo del paramento. Colocación de una regla horizontal al inicio del alicatado. Replanteo de las piezas en el paramento para el despiece de las mismas. Colocación de las piezas empleando llana de goma. Rejuntado con lechada de cemento. Limpieza del paramento.",
+      "quantity": 70.34,
+      "unitPrice": 85.3,
+      "totalPrice": 6000.0,
+      "canonical_case": false
+    },
+    {
+      "num": "11.4",
+      "code": "NIS011b",
+      "chapter_num": 11,
+      "unit": "M²",
+      "description": "Formación de impermeabilización de solera en contacto con el terreno, por su cara exterior, mediante lámina de polietireno flexible, con armadura de fieltro de poliéster no tejido de 160 g/m², de superficie no protegida, totalmente adherida al soporte con soplete, previa imprimación del mismo con emulsión asfáltica aniónica con cargas tipo EB, y protegida con una capa antipunzonante de geotextil no tejido compuesto por fibras de poliéster unidas por agujeteado, con una resistencia a la tracción longitudinal de 1,88 kN/m, una resistencia a la tracción transversal de 1,49 kN/m, una apertura de cono al ensayo de perforación dinámica según UNE-EN ISO 13433 inferior a 40 mm, resistencia CBR a punzonamiento 0,3 kN y una masa superficial de 150 g/m², lista para verter el hormigón de la solera (no incluida en éste precio). Incluso p/p de ejecución del soporte formado por una capa de regularización de mortero de cemento, industrial, M-5, de 2 cm de espesor mínimo, limpieza del mismo, mermas, solapes de las láminas asfálticas y banda de lámina de betún modificado con elastómero SBS, LBM(SBS)-30-FP, de 33 cm de anchura, acabada con film plástico termofusible en ambas caras (0,5 m/m²) colocadas en todos los ángulos y encuentros de la solera con los muros. Incluye: Ejecución del soporte sobre el que ha de aplicarse la impermeabilización. Aplicación de la capa de imprimación. Colocación de la banda de refuerzo. Ejecución de la impermeabilización y colocación del geotextil separador. Tratamiento de los elementos singulares (ángulos, aristas, etc.).",
+      "quantity": 36.0,
+      "unitPrice": 16.2,
+      "totalPrice": 583.2,
+      "canonical_case": false
+    },
+    {
+      "num": "11.5",
+      "code": "BORDE",
+      "chapter_num": 11,
+      "unit": "M",
+      "description": "Colocación de Borde de piscina de marmol gris zarci abujardado. Borde Piscina 2 9,50 19,00",
+      "quantity": 26.0,
+      "unitPrice": 85.3,
+      "totalPrice": 2217.8,
+      "canonical_case": false
+    },
+    {
+      "num": "12.1",
+      "code": "GR01",
+      "chapter_num": 12,
+      "unit": "Ud",
+      "description": "Transporte de contenedor de 7 m³ de todos los residuos generados en obra clasificados según tipología, transporte a vertedero específico.",
+      "quantity": 35.0,
+      "unitPrice": 280.0,
+      "totalPrice": 9800.0,
+      "canonical_case": false
+    },
+    {
+      "num": "13.1",
+      "code": "XEH016",
+      "chapter_num": 13,
+      "unit": "Ud",
+      "description": "Ensayo sobre una muestra de hormigón con determinación de: consistencia del hormigón fresco mediante el método de asentamiento del cono de Abrams y resistencia característica a compresión del hormigón endurecido con fabricación de cinco probetas, curado, refrentado y rotura a compresión.",
+      "quantity": 15.0,
+      "unitPrice": 140.0,
+      "totalPrice": 2100.0,
+      "canonical_case": false
+    },
+    {
+      "num": "13.2",
+      "code": "XEM010",
+      "chapter_num": 13,
+      "unit": "Ud",
+      "description": "Ensayo sobre una muestra de mallas electrosoldadas con determinación de: sección media equivalente, características geométricas del corrugado, doblado/desdoblado, carga de despegue.",
+      "quantity": 10.0,
+      "unitPrice": 185.0,
+      "totalPrice": 1850.0,
+      "canonical_case": false
+    },
+    {
+      "num": "13.3",
+      "code": "XEB010",
+      "chapter_num": 13,
+      "unit": "Ud",
+      "description": "Ensayo sobre una muestra de barras de acero corrugado de un mismo lote",
+      "quantity": 10.0,
+      "unitPrice": 140.0,
+      "totalPrice": 1400.0,
+      "canonical_case": false
+    },
+    {
+      "num": "14.1",
+      "code": "SS1",
+      "chapter_num": 14,
+      "unit": "Ud",
+      "description": "Partida FIJA para el cumplimiento de las medidas de seguridad necesarias durante la ejecución del 100% de los trabajos acorde al proyecto presentado, formación de trabajadores, redacción del Plan de Seguridad, caseta de reuniones y Dirección Facultativa con mobiliario, caseta de obra, aseos y ducha según cálculo realizado en plan de seguridad, vallado de la obra, señalización, vigilancia, medidas de protección colectivas e individuales, presencia a jornada completa en la obra del Recurso Preventivo, reposición y cambio de las medidas y en definitiva todas aquellas medidas contempladas en el Estudio de seguridad y Saludo del Proyecto así como todas aquellas que surjan durante la ejecución de los trabajos en el interior de la vivienda y en los exteriores, jardines y cerramiento parcela.",
+      "quantity": 1.0,
+      "unitPrice": 18200.0,
+      "totalPrice": 18200.0,
+      "canonical_case": false
+    },
+    {
+      "num": "15.1",
+      "code": "mobra006",
+      "chapter_num": 15,
+      "unit": "H",
+      "description": "Oficial 1ª estructurista.",
+      "quantity": 10.0,
+      "unitPrice": 35.0,
+      "totalPrice": 350.0,
+      "canonical_case": false
+    },
+    {
+      "num": "15.2",
+      "code": "mobra007",
+      "chapter_num": 15,
+      "unit": "H",
+      "description": "Peón ordinario construcción.",
+      "quantity": 10.0,
+      "unitPrice": 22.0,
+      "totalPrice": 220.0,
+      "canonical_case": false
+    }
+  ],
+  "partidas_count": 91
+}

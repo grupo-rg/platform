@@ -36,7 +36,7 @@ export class AIMessagingDecorator implements MessagingService {
         // Inyectar Rutas y Enlaces Críticos (Pre-procesamiento Determinista)
         const urlParams = leadVariables.email ? `?email=\${encodeURIComponent(leadVariables.email)}&name=\${encodeURIComponent(leadVariables.name || '')}` : '';
         const agendaLink = `https://basis.consultoria.systems/es\${urlParams}#agenda`;
-        const demoPath = 'https://basis.consultoria.systems/es/dashboard/wizard';
+        const demoPath = 'https://basis.consultoria.systems/es/dashboard/asistente';
         
         const agendaBtnHtml = `\\n<a href="\${agendaLink}" style="display:inline-block; padding:12px 24px; background-color:#2563EB; color:#ffffff; font-weight:800; border-radius:6px; text-decoration:none; margin-top:8px;" target="_blank">Agendar Evaluación Gratis</a>\\n`;
         

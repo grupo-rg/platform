@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatNumberES } from '@/lib/utils';
 
 const styles = StyleSheet.create({
     page: {
@@ -308,7 +308,7 @@ export const DemoBudgetDocument = ({
                                                 return (
                                                     <View key={bIdx} style={styles.breakdownRow}>
                                                         <Text style={styles.bdCode}>{b.code || '-'}</Text>
-                                                        <Text style={styles.bdQty}>{parseFloat(qty.toString()).toLocaleString('es-ES', { minimumFractionDigits: 3 })}</Text>
+                                                        <Text style={styles.bdQty}>{formatNumberES(parseFloat(qty.toString()), 3)}</Text>
                                                         <Text style={styles.bdUnit}>{b.unit?.toLowerCase() === '%' ? 'h' : (b.unit || 'u')}</Text>
                                                         <Text style={styles.bdDesc}>{b.description}</Text>
                                                         <Text style={styles.bdPrice}>{formatCurrency(unitPrice)}</Text>

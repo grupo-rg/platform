@@ -1,0 +1,202 @@
+{
+  "file": "input.pdf",
+  "pages": 25,
+  "text_extractable": true,
+  "layout": {
+    "type": "INLINE_WITH_TITLES",
+    "confidence": 0.9,
+    "evidence": [
+      "32 partidas detectadas via regex (SANITAS=0, MU02=32)",
+      "partidas distribuidas a lo largo del documento (no concentradas en una sección)"
+    ]
+  },
+  "detected_partidas_count": 32,
+  "extracted_via_heuristics_count": 32,
+  "needs_llm_count": 0,
+  "partidas_sample": [
+    {
+      "code": "1.1",
+      "title": "Acondicioanmiento de la entrada del solar para camiones.",
+      "unit": "Ud",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "1.2",
+      "title": "Vallado provisional de solar compuesto por vallas trasladables de 3,50x2,00 m, formadas por panel de malla",
+      "unit": "M",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "1.3",
+      "title": "Conexión de salida de agua con grifo para el uso durante la ejecución de las obras. Totalmente montado e",
+      "unit": "Ud",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "1.4",
+      "title": "Suministro e instalación de Cuadro eléctrico para la obra, para el uso durante la ejecución de la obra. Incl.",
+      "unit": "Ud",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "1.5",
+      "title": "Colocación de un aseo de obra. Inlcuye transporte, mantenimiento para su correcto funcionamiento durante",
+      "unit": "Ud",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "1.6",
+      "title": "Colocación de caseta prefabricada de obra. Incluye transporte, mantenimiento, limpieza durante toda la obra y",
+      "unit": "Ud",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "1.7",
+      "title": "Replanteo general de la obra por un topógrafo en las fases de excavación, cimentación, estructuras,",
+      "unit": "Ud",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "1.8",
+      "title": "Alquiler mensual, de andamio tubular normalizado, tipo multidireccional, hasta 10 m de altura máxima de",
+      "unit": "Ud",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "2.5",
+      "title": "Zanja drenante rellena con grava filtrante sin clasificar, en cuyo fondo se dispone un tubo ranurado de coco de",
+      "unit": "M",
+      "quantity": null,
+      "description": null,
+      "page": 2,
+      "method": "regex_inline"
+    },
+    {
+      "code": "4.1.4",
+      "title": "Ventilación para forjado sanitario. Incluyendo: montaje de tubos de pvc diámetro 110 mm en 6 puntos",
+      "unit": "Ud",
+      "quantity": null,
+      "description": null,
+      "page": 5,
+      "method": "regex_inline"
+    }
+  ],
+  "chapters": [
+    {
+      "prefix": "1",
+      "name": "ACTUACIONES PREVIAS",
+      "partidas_count": 0,
+      "page_first_seen": 1
+    },
+    {
+      "prefix": "2",
+      "name": "ACONDICIONAMIENTO DEL TERRENO",
+      "partidas_count": 0,
+      "page_first_seen": 2
+    },
+    {
+      "prefix": "3",
+      "name": "CIMENTACIONES",
+      "partidas_count": 0,
+      "page_first_seen": 4
+    },
+    {
+      "prefix": "4",
+      "name": "ESTRUCTURA",
+      "partidas_count": 0,
+      "page_first_seen": 5
+    },
+    {
+      "prefix": "5",
+      "name": "FACHADAS",
+      "partidas_count": 0,
+      "page_first_seen": 10
+    },
+    {
+      "prefix": "6",
+      "name": "PARTICIONES",
+      "partidas_count": 0,
+      "page_first_seen": 11
+    },
+    {
+      "prefix": "7",
+      "name": "IMPERMEABILIZACIONES E AISLAMIENTOS",
+      "partidas_count": 0,
+      "page_first_seen": 12
+    },
+    {
+      "prefix": "8",
+      "name": "CUBIERTAS",
+      "partidas_count": 0,
+      "page_first_seen": 14
+    },
+    {
+      "prefix": "9",
+      "name": "REMATES Y AYUDAS",
+      "partidas_count": 0,
+      "page_first_seen": 15
+    },
+    {
+      "prefix": "10",
+      "name": "REVESTIMIENTOS Y TRASDOSADOS",
+      "partidas_count": 0,
+      "page_first_seen": 17
+    },
+    {
+      "prefix": "11",
+      "name": "PISCINA",
+      "partidas_count": 1,
+      "page_first_seen": 21
+    },
+    {
+      "prefix": "12",
+      "name": "GESTIÓN DE RESIDUOS",
+      "partidas_count": 1,
+      "page_first_seen": 22
+    },
+    {
+      "prefix": "13",
+      "name": "CONTROL DE CALIDAD Y ENSAYOS",
+      "partidas_count": 1,
+      "page_first_seen": 23
+    },
+    {
+      "prefix": "14",
+      "name": "SEGURIDAD Y SALUD",
+      "partidas_count": 1,
+      "page_first_seen": 24
+    },
+    {
+      "prefix": "15",
+      "name": "VARIOS",
+      "partidas_count": 1,
+      "page_first_seen": 25
+    }
+  ],
+  "cross_page_candidates": [],
+  "anomalies": []
+}

@@ -48,8 +48,11 @@ export const aparejadorOrchestratorAgent = ai.defineFlow(
         const propertyType = input.specs?.propertyType || 'unknown';
         const interventionType = input.specs?.interventionType || 'unknown';
 
+        const { companyConfigService } = await import('@/backend/platform/application/company-config-service');
+        const company = await companyConfigService.get();
+
         const prompt = `
-        You are the Master Orchestrator (Aparejador / Quantity Surveyor) for Grupo RG Construction.
+        You are the Master Orchestrator (Aparejador / Quantity Surveyor) for ${company.name} Construction.
         A user has requested a budget via Natural Language (NLP).
         
         Your job is NOT to fetch prices yet. Your job is to structure the project into logical construction Phases (Capítulos)

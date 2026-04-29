@@ -337,48 +337,11 @@ export function RenovationGallery({ budgetId, renders = [], items = [] }: Renova
                                             Ver Comparativa
                                         </Button>
                                     </div>
-                                    <div className="absolute bottom-2 right-2">
-                                        <Button
-                                            variant={render.includeInPdf ? "default" : "secondary"}
-                                            size="icon"
-                                            className="h-8 w-8 rounded-full shadow-md z-10"
-                                            onClick={async (e) => {
-                                                e.stopPropagation();
-                                                
-                                                // Optimistic update
-                                                const newValue = !render.includeInPdf;
-                                                setLocalRenders(prev => prev.map(r => r.id === render.id ? { ...r, includeInPdf: newValue } : r));
-
-                                                const { toggleRenderPdfAction } = await import('@/actions/budget/toggle-render-pdf.action');
-                                                const res = await toggleRenderPdfAction({
-                                                    budgetId,
-                                                    renderId: render.id,
-                                                    includeInPdf: newValue
-                                                });
-                                                
-                                                if (!res.success) {
-                                                    // Revert on failure
-                                                    setLocalRenders(prev => prev.map(r => r.id === render.id ? { ...r, includeInPdf: !newValue } : r));
-                                                    toast({
-                                                        title: "Error",
-                                                        description: "Fallo de conexión. No pudimos guardar la preferencia.",
-                                                        variant: "destructive"
-                                                    });
-                                                }
-                                            }}
-                                            title={render.includeInPdf ? "En el PDF" : "Añadir a PDF"}
-                                        >
-                                            <span className="text-lg leading-none">{render.includeInPdf ? '⭐' : '☆'}</span>
-                                        </Button>
-                                    </div>
                                 </div>
-                                <div className={`p-3 border-t ${render.includeInPdf ? 'bg-yellow-50/50' : ''}`}>
-                                    <div className="flex items-center gap-2 mb-1">
-                                         {render.includeInPdf && <span className="text-[10px] font-bold text-yellow-600 uppercase bg-yellow-100 px-2 py-0.5 rounded flex-shrink-0">PDF</span>}
-                                         <p className="text-xs text-slate-500 line-clamp-2 leading-tight flex-1" title={render.prompt}>
-                                            {render.prompt}
-                                         </p>
-                                    </div>
+                                <div className="p-3 border-t">
+                                    <p className="text-xs text-slate-500 line-clamp-2 leading-tight" title={render.prompt}>
+                                        {render.prompt}
+                                    </p>
                                     <p className="text-[10px] text-slate-400 mt-2 text-right">
                                         {new Date(render.createdAt).toLocaleDateString()}
                                     </p>

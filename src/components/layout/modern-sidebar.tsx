@@ -42,36 +42,50 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
     const pathname = usePathname();
     const [collapsed, setCollapsed] = useState(false);
 
+    // Asistente IA es el ítem destacado: vive fuera de cualquier grupo y se renderiza primero
+    // con un acento visual (color primario + fondo suave). Resto de módulos agrupados por función.
+    const highlightItem = {
+        href: '/dashboard/assistant' as const,
+        label: t.dashboard.nav.aiAssistant || 'Asistente IA',
+        icon: Sparkles,
+    };
+
     const navGroups = [
         {
-            label: 'Gestión',
+            label: 'Operación',
             items: [
                 { href: '/dashboard', label: t.dashboard.nav.dashboard, icon: LayoutDashboard },
+                { href: '/dashboard/admin/budgets', label: t.dashboard.nav.myBudgets, icon: FileText },
                 { href: '/dashboard/projects', label: 'Obras', icon: Building2 },
                 { href: '/dashboard/expenses', label: 'Facturas', icon: Receipt },
-                { href: '/dashboard/analytics', label: 'Analíticas', icon: BarChart3 },
-                { href: '/dashboard/admin/budgets', label: t.dashboard.nav.myBudgets, icon: FileText },
-                { href: '/dashboard/admin/messages', label: 'Mensajes', icon: MessageSquare },
             ]
         },
         {
-            label: 'Herramientas',
-            items: [
-                { href: '/dashboard/wizard', label: 'AI Budget Wizard', icon: Sparkles },
-                { href: '/dashboard/seo-generator', label: t.dashboard.nav.seoGenerator, icon: Search },
-            ]
-        },
-        {
-            label: 'CRM',
+            label: 'Ventas',
             items: [
                 { href: '/dashboard/leads', label: 'Leads', icon: Users },
                 { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays },
+            ]
+        },
+        {
+            label: 'Contenido',
+            items: [
+                { href: '/dashboard/seo-generator', label: t.dashboard.nav.seoGenerator, icon: Search },
                 { href: '/dashboard/marketing', label: 'Marketing', icon: TrendingUp },
+            ]
+        },
+        {
+            label: 'Analítica',
+            items: [
+                { href: '/dashboard/analytics', label: 'Analíticas', icon: BarChart3 },
+                { href: '/dashboard/admin/pipelines', label: 'Pipelines IA', icon: Bot },
+                { href: '/dashboard/admin/messages', label: 'Mensajes', icon: MessageSquare },
             ]
         },
         {
             label: 'Configuración',
             items: [
+                { href: '/dashboard/settings/company', label: 'Empresa', icon: Building2 },
                 { href: '/dashboard/admin/prices', label: t.dashboard.nav.priceBook, icon: Briefcase },
                 { href: '/dashboard/admin/prices?view=catalog', label: 'Catálogo', icon: Package },
                 { href: '/dashboard/settings', label: t.dashboard.nav.settings, icon: Settings },
@@ -104,8 +118,9 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                 )}
             </button>
 
-            {/* Logo Area */}
-            <div className={cn("flex items-center px-4 mb-4 mt-4 transition-all duration-300", collapsed ? "justify-center" : "")}>
+            {/* Logo Area — altura fija y contenido centrado vertical + horizontal
+                para que el logo no "baile" con el collapsed toggle. */}
+            <div className={cn("flex items-center justify-center px-4 h-14 transition-all duration-300", collapsed ? "" : "")}>
                 <AnimatePresence mode="wait">
                     {collapsed ? (
                         <motion.div
@@ -125,19 +140,52 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -10 }}
                             transition={{ duration: 0.2 }}
-                            className="relative w-full h-12 flex items-center justify-start pl-1 shrink-0"
+                            className="flex items-center justify-center"
                         >
-                            <Logo className="h-8 md:h-9 object-contain" width={140} height={36} />
+                            <Logo className="h-7 object-contain" width={110} height={28} />
                         </motion.div>
                     )}
                 </AnimatePresence>
             </div>
 
             {/* Divider */}
-            <div className="mx-3 border-t border-sidebar-border/50 mb-4" />
+            <div className="mx-3 border-t border-sidebar-border/50 my-3" />
 
             {/* Navigation */}
-            <nav className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden scrollbar-hide px-2">
+            <nav className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden custom-scrollbar px-2">
+                {/* Highlighted Asistente IA (top-level, fuera de grupos) */}
+                {(() => {
+                    const isActive = pathname === highlightItem.href || pathname.startsWith(highlightItem.href);
+                    const Icon = highlightItem.icon;
+                    return (
+                        <Link
+                            href={highlightItem.href as any}
+                            title={collapsed ? highlightItem.label : undefined}
+                            className={cn(
+                                "relative flex items-center rounded-xl font-semibold transition-all duration-200 group/item overflow-hidden border",
+                                collapsed ? "justify-center px-0 py-2.5 mx-auto w-11 h-11" : "gap-3 px-3 py-3",
+                                isActive
+                                    ? "text-primary bg-primary/15 border-primary/30 shadow-sm shadow-primary/10"
+                                    : "text-primary bg-primary/5 border-primary/10 hover:bg-primary/10 hover:border-primary/20"
+                            )}
+                        >
+                            <Icon className={cn(
+                                "shrink-0",
+                                collapsed ? "h-5 w-5" : "h-4 w-4",
+                                "text-primary"
+                            )} />
+                            {!collapsed && (
+                                <span className="truncate text-sm">{highlightItem.label}</span>
+                            )}
+                            {!collapsed && !isActive && (
+                                <span className="ml-auto text-[9px] font-bold tracking-wider uppercase bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                                    IA
+                                </span>
+                            )}
+                        </Link>
+                    );
+                })()}
+
                 {navGroups.map((group, idx) => (
                     <div key={idx} className="space-y-1">
                         {/* Group Label */}
@@ -207,12 +255,14 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                 ))}
             </nav>
 
-            {/* Footer */}
-            <div className="mt-auto border-t border-sidebar-border pt-3 pb-3 px-2 space-y-3">
+            {/* Footer — filas consistentes en alineación: cuando está expandido
+                cada fila ocupa px-3 uniforme para que tema, alertas y user queden
+                en la misma columna vertical. */}
+            <div className="mt-auto border-t border-sidebar-border pt-3 pb-3 px-2 space-y-2">
 
                 {/* Mode Toggle */}
-                <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between px-2")}>
-                    {!collapsed && <span className="text-[10px] text-muted-foreground tracking-wide">Tema</span>}
+                <div className={cn("flex items-center h-9", collapsed ? "justify-center" : "justify-between px-3")}>
+                    {!collapsed && <span className="text-xs font-medium text-muted-foreground tracking-wide">Tema</span>}
                     <ModeToggle />
                 </div>
 

@@ -9,7 +9,7 @@ import { IdentityForm } from './identity-form';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export function SmartTriggerContainer({ dictionary, intent }: { dictionary?: any; intent?: BudgetMode }) {
-    const { openWidget, setLeadId } = useWidgetContext();
+    const { openWidget, setLeadId, leadId } = useWidgetContext();
     const [selectedMode, setSelectedMode] = useState<BudgetMode | null>(intent || null);
 
     // Fallbacks
@@ -45,6 +45,14 @@ export function SmartTriggerContainer({ dictionary, intent }: { dictionary?: any
     };
 
     const handleSelect = (mode: BudgetMode) => {
+        // Si el visitante ya tiene un leadId verificado en localStorage, saltamos
+        // la verificación OTP y abrimos directamente el modo elegido. Esto unifica
+        // el comportamiento con el de los CTAs que llaman `openWidget(mode)` y evita
+        // pedir OTP dos veces a la misma persona.
+        if (leadId) {
+            openWidget(mode);
+            return;
+        }
         setSelectedMode(mode);
     };
 

@@ -1,0 +1,180 @@
+{
+  "file": "input.pdf",
+  "pages": 42,
+  "text_extractable": true,
+  "layout": {
+    "type": "INLINE_WITH_TITLES",
+    "confidence": 0.9,
+    "evidence": [
+      "64 partidas detectadas via regex (SANITAS=64, MU02=0)",
+      "partidas distribuidas a lo largo del documento (no concentradas en una sección)",
+      "cabecera tabular detectada: \"Código Nat Ud Resumen\""
+    ]
+  },
+  "detected_partidas_count": 64,
+  "extracted_via_heuristics_count": 59,
+  "needs_llm_count": 5,
+  "partidas_sample": [
+    {
+      "code": "C01.01",
+      "title": "DEMOLICIÓN DE FALSO TECHO EXISTENTE",
+      "unit": "m2",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.02",
+      "title": "DEMOLICIÓN DE TRASDOSADOS Y REVESTIMIENTOS",
+      "unit": "m2",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.03",
+      "title": "DEMOLICIÓN DE PARED PLADUR",
+      "unit": "m2",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.04",
+      "title": "DEMOLICIÓN DE PARED DE FÁBRICA",
+      "unit": "m2",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.05",
+      "title": "DEMOLICIÓN DE MAMPARAS",
+      "unit": "m2",
+      "quantity": null,
+      "description": null,
+      "page": 1,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.06",
+      "title": "DEMOLICIÓN DE PAVIMENTO",
+      "unit": "m2",
+      "quantity": null,
+      "description": null,
+      "page": 2,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.07",
+      "title": "DEMOLICIÓN Y RETIRADA DE PUERTA",
+      "unit": "ud",
+      "quantity": null,
+      "description": null,
+      "page": 2,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.08",
+      "title": "DESMONTAJE DE CARPINTERIA EXTERIOR",
+      "unit": "m2",
+      "quantity": null,
+      "description": null,
+      "page": 2,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.09",
+      "title": "DESMONTAJE DE MOBILIARIO EXISTENTE",
+      "unit": "ud",
+      "quantity": null,
+      "description": null,
+      "page": 2,
+      "method": "regex_inline"
+    },
+    {
+      "code": "C01.10",
+      "title": "DESMONTAJE DE INSTALACIÓN ELÉCTRICA Y DATOS",
+      "unit": "ud",
+      "quantity": null,
+      "description": null,
+      "page": 2,
+      "method": "regex_inline"
+    }
+  ],
+  "chapters": [
+    {
+      "prefix": "C01",
+      "name": "TRABAJOS PREVIOS, DERRIBOS Y EXTRACCIONES",
+      "partidas_count": 25,
+      "page_first_seen": 1
+    },
+    {
+      "prefix": "C02",
+      "name": "ALBAÑILERIA",
+      "partidas_count": 13,
+      "page_first_seen": 6
+    },
+    {
+      "prefix": "C03",
+      "name": "REVESTIMIENTOS",
+      "partidas_count": 7,
+      "page_first_seen": 13
+    },
+    {
+      "prefix": "C04",
+      "name": "PAVIMENTOS",
+      "partidas_count": 5,
+      "page_first_seen": 15
+    },
+    {
+      "prefix": "C05",
+      "name": "FALSOS TECHOS",
+      "partidas_count": 6,
+      "page_first_seen": 17
+    },
+    {
+      "prefix": "C08",
+      "name": "AYUDAS Y VARIOS",
+      "partidas_count": 8,
+      "page_first_seen": 19
+    }
+  ],
+  "cross_page_candidates": [
+    {
+      "partida_code": "C01.05",
+      "header_page": 1,
+      "description_page_estimated": 2,
+      "reason": "descripción inline tiene 0 chars (<50); página siguiente empieza con verbo de obra: 'Demolición de mamparas de vidrio, madera o metálicas'"
+    },
+    {
+      "partida_code": "C01.10",
+      "header_page": 2,
+      "description_page_estimated": 3,
+      "reason": "descripción inline tiene 9 chars (<50); página siguiente empieza con verbo de obra: 'Desmontaje de toda la instalación eléctrica y datos,'"
+    },
+    {
+      "partida_code": "C02.06",
+      "header_page": 10,
+      "description_page_estimated": 11,
+      "reason": "descripción inline tiene 0 chars (<50); página siguiente empieza con verbo de obra: 'Suministro y montaje de trasdosado Semidirecto sobre'"
+    },
+    {
+      "partida_code": "C04.02",
+      "header_page": 15,
+      "description_page_estimated": 16,
+      "reason": "descripción inline tiene 0 chars (<50); página siguiente empieza con verbo de obra: 'Suministro y colocación de solado de gres porcelánico'"
+    },
+    {
+      "partida_code": "C04.08",
+      "header_page": 16,
+      "description_page_estimated": 17,
+      "reason": "descripción inline tiene 0 chars (<50); página siguiente empieza con verbo de obra: 'Suministro y colocación de mortero para nivelación. En'"
+    }
+  ],
+  "anomalies": []
+}

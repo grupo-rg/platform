@@ -1,0 +1,20 @@
+{
+  "golden_id": "002-sanitas-dental",
+  "flow": "ANNEXED",
+  "rigor": "regression_guard",
+  "source_input": "Grupo RG/presupuestos/017. MED SANITAS DENTAL - ALBAÑILERIA-PLADUR-PINTURA.pdf",
+  "project_name": "Reforma de local destinado a clínica dental",
+  "location": "C. Baró de Pinopar, 9 - 07012 - Palma de Mallorca",
+  "document_type": "Mediciones anexadas (input sin verdad humana tasada)",
+  "format_description": "PDF con estructura Código + Nat + Ud + Resumen + Comentario + N (mediciones), con desglose de cantidades al final. Capítulos C01..C08 detectables en primeras páginas.",
+  "chapters_expected_minimum": [
+    "C01 TRABAJOS PREVIOS, DERRIBOS Y EXTRACCIONES"
+  ],
+  "thresholds": {
+    "partidas_extracted_min": 20,
+    "chapters_extracted_min": 5,
+    "dag_compliance_min_pct": 0.80,
+    "regression_tolerance_pct": 5.0
+  },
+  "note": "No hay verdad humana de precios. En la primera ejecución del pipeline v005 se congela `baseline_v005.json` con la salida del pipeline. En releases futuras (v006, v007) el eval compara contra ese baseline — si el count de partidas / capítulos baja en > 5%, se marca como regresión."
+}

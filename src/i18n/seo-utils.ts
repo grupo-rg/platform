@@ -38,6 +38,7 @@ export function generateAlternates(pathTemplate: string, currentLocale: string, 
 }
 
 import type { Metadata } from 'next';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
 
 type MetadataProps = {
     title: string;
@@ -49,8 +50,9 @@ type MetadataProps = {
     type?: 'website' | 'article';
 };
 
-export function constructMetadata({ title, description, image, path, locale, params, type = 'website' }: MetadataProps): Metadata {
+export async function constructMetadata({ title, description, image, path, locale, params, type = 'website' }: MetadataProps): Promise<Metadata> {
     const alternates = generateAlternates(path, locale, params);
+    const company = await companyConfigService.get();
 
     // Default Social Image if none provided
     const socialImage = image || '/images/og-default.jpg';
@@ -63,7 +65,7 @@ export function constructMetadata({ title, description, image, path, locale, par
             title,
             description,
             url: alternates.canonical,
-            siteName: 'Grupo RG',
+            siteName: company.name,
             images: [
                 {
                     url: socialImage,
@@ -80,7 +82,6 @@ export function constructMetadata({ title, description, image, path, locale, par
             title,
             description,
             images: [socialImage],
-            creator: '@ER_Mallorca', // Update with actual handle if available
         },
     };
 }
