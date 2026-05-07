@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UnifiedCatalogItem } from '@/backend/catalog/domain/catalog-item';
 import { searchCatalogAction } from '@/actions/catalog/search-catalog.action';
+import { getPriceBookBreakdown } from '@/actions/price-book/get-price-book-breakdown.action';
 import { useToast } from '@/hooks/use-toast';
 import { EditableBudgetLineItem } from '@/types/budget-editor';
 import { formatCurrency } from '@/lib/utils';
@@ -62,12 +63,46 @@ export const SemanticCatalogSidebar = ({ onAddItem }: SemanticCatalogSidebarProp
         return cPrice * cQuantity;
     };
 
-    const handleAdd = (item: UnifiedCatalogItem) => {
-        // Evaluate native chapter from original datastore OR fallback to generic
+    const handleAdd = async (item: UnifiedCatalogItem) => {
         const origin = item.originalItem as any;
         const resolvedChapter = origin?.chapter || (item.type === 'LABOR' ? 'General' : 'Materiales');
 
-        // Map UnifiedCatalogItem to EditableBudgetLineItem
+        // Phase 18 — para items LABOR (price_book v005) el descompuesto vive en
+        // docs hermanos (kind='breakdown'). Lo cargamos on-demand al añadir.
+        // Para MATERIAL (material-catalog) no aplica.
+        let rawBreakdown = origin?.breakdown;
+        if (item.type === 'LABOR' && (!rawBreakdown || rawBreakdown.length === 0)) {
+            try {
+                const result = await getPriceBookBreakdown(item.code);
+                if (result.success && result.components.length > 0) {
+                    rawBreakdown = result.components;
+                }
+            } catch (e) {
+                console.warn('[SemanticCatalogSidebar] Failed to load breakdown for', item.code, e);
+            }
+        }
+
+        // Map PriceBookComponent → BudgetBreakdownComponent (clasifica por prefijo COAATMCA).
+        const classifyType = (code: string | undefined): 'LABOR' | 'MATERIAL' | 'MACHINERY' | 'OTHER' => {
+            const c = (code || '').toLowerCase();
+            if (c.startsWith('mo')) return 'LABOR';
+            if (c.startsWith('mt')) return 'MATERIAL';
+            if (c.startsWith('mq')) return 'MACHINERY';
+            return 'OTHER';
+        };
+        const breakdown = rawBreakdown && rawBreakdown.length > 0
+            ? rawBreakdown.map((c: any) => ({
+                code: c.code,
+                concept: c.description || c.concept || c.code || '',
+                type: classifyType(c.code),
+                price: c.price ?? c.price_unit ?? c.unitPrice ?? 0,
+                unit: c.unit ?? c.unit_raw,
+                quantity: c.quantity ?? c.yield ?? 1,
+                total: (c.price ?? c.price_unit ?? c.unitPrice ?? 0) * (c.quantity ?? c.yield ?? 1),
+                is_variable: c.is_variable,
+            }))
+            : undefined;
+
         const newItem: Partial<EditableBudgetLineItem> = {
             originalTask: item.name,
             chapter: resolvedChapter,
@@ -78,20 +113,20 @@ export const SemanticCatalogSidebar = ({ onAddItem }: SemanticCatalogSidebarProp
                 quantity: 1,
                 unitPrice: item.price,
                 totalPrice: item.price,
-                breakdown: origin?.breakdown
+                breakdown,
             },
             originalState: {
                 unitPrice: item.price,
                 quantity: 1,
                 description: item.description,
-                unit: item.unit
-            }
+                unit: item.unit,
+            },
         };
 
         onAddItem(newItem);
         toast({
-            title: item.type === 'LABOR' ? "Partida añadida" : "Material añadido",
-            description: `${item.code} se ha añadido al presupuesto.`,
+            title: item.type === 'LABOR' ? 'Partida añadida' : 'Material añadido',
+            description: `${item.code} se ha añadido al presupuesto${breakdown && breakdown.length > 0 ? ` (${breakdown.length} componentes)` : ''}.`,
         });
     };
 

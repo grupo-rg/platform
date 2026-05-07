@@ -24,6 +24,7 @@ import { useState } from "react";
 import { MaterialCatalogSearch } from "./material-catalog-search";
 import { MaterialItem } from "@/backend/material-catalog/domain/material-item";
 import { Bot, Send, Replace, Loader2, CheckCircle2, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
+import { useMarkupFactor } from "@/hooks/use-markup-factor";
 
 interface BudgetBreakdownSheetProps {
     item: EditableBudgetLineItem | null;
@@ -37,6 +38,11 @@ export function BudgetBreakdownSheet({ item, open, onOpenChange, onUpdate, isAdm
     const [selectedVariableIndex, setSelectedVariableIndex] = useState<number | null>(null);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
+    // Phase 17.4 — display factor live-edit aware. Multiplica los valores stored
+    // (raw o baked-original-factor) para alinear con el unitPrice mostrado en
+    // la tabla principal y el PDF.
+    const { markupFactor } = useMarkupFactor();
+
     if (!item) return null;
 
     const breakdown = item.item?.breakdown || [];
@@ -44,6 +50,9 @@ export function BudgetBreakdownSheet({ item, open, onOpenChange, onUpdate, isAdm
 
     // Calculate total from breakdown to compare
     const calculateCompTotal = (comp: any) => {
+        // Phase 17.8 — preferir comp.total stored (autoritativo, incluye
+        // multiplicadores ocultos como dimensión × factor ICL).
+        if (typeof comp.total === 'number' && comp.total > 0) return comp.total;
         const cPrice = comp.price_unit ?? comp.unitPrice ?? comp.price ?? 0;
         const cQuantity = comp.quantity ?? comp.yield ?? 1;
         if (comp.unit === '%') {
@@ -165,7 +174,7 @@ export function BudgetBreakdownSheet({ item, open, onOpenChange, onUpdate, isAdm
                             <div className="flex flex-col">
                                 <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Precio Unitario</span>
                                 <span className="text-3xl font-bold text-slate-900 dark:text-white">
-                                    {formatCurrency(item.item?.unitPrice || 0)}
+                                    {formatCurrency((item.item?.unitPrice || 0) * markupFactor)}
                                     <span className="text-sm font-normal text-slate-400 ml-1">/ {item.item?.unit}</span>
                                 </span>
                             </div>
@@ -220,9 +229,15 @@ export function BudgetBreakdownSheet({ item, open, onOpenChange, onUpdate, isAdm
                                         <div className="col-span-1 text-right">Total</div>
                                     </div>
                                     {breakdown.map((comp: any, idx) => {
-                                        const cPrice = comp.price_unit ?? comp.unitPrice ?? comp.price ?? 0;
+                                        const cPriceRaw = comp.price_unit ?? comp.unitPrice ?? comp.price ?? 0;
+                                        const cPrice = cPriceRaw * markupFactor;
                                         const cQuantity = comp.quantity ?? comp.yield ?? 1;
-                                        const computedTotal = calculateCompTotal(comp);
+                                        // Phase 17.8 — preferir comp.total stored (autoritativo, incluye
+                                        // multiplicadores ocultos), fallback al cómputo qty × price.
+                                        const storedTotal = typeof comp.total === 'number' && comp.total > 0 ? comp.total : null;
+                                        const computedTotal = storedTotal !== null
+                                            ? storedTotal * markupFactor
+                                            : calculateCompTotal(comp) * markupFactor;
                                         const cDesc = comp.description || comp.concept || 'Sin descripción';
                                         const isVariable = comp.is_variable === true;
 
@@ -275,7 +290,7 @@ export function BudgetBreakdownSheet({ item, open, onOpenChange, onUpdate, isAdm
                                     <div className="grid grid-cols-12 text-sm pt-4 pb-2 px-2 items-center border-t-2 border-border mt-2">
                                         <div className="col-span-11 text-right text-xs font-bold text-slate-700 uppercase tracking-wider pr-4">SUMA DE COSTES</div>
                                         <div className="col-span-1 text-right text-sm font-bold text-neutral-900 dark:text-white font-mono break-words whitespace-nowrap">
-                                            {formatCurrency(breakdownTotal)}
+                                            {formatCurrency(breakdownTotal * markupFactor)}
                                         </div>
                                     </div>
                                 </div>

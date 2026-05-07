@@ -1,0 +1,6 @@
+# Phase 17.6 — Reports diagnósticos generados por scripts/diagnose_budget.py.
+# Se ignoran porque pueden contener datos de clientes y son regenerables.
+*.md
+*.json
+!.gitignore
+!README.md

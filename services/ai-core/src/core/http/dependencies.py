@@ -36,6 +36,9 @@ from src.budget.catalog.domain.construction_dag import load_construction_dag
 from src.budget.catalog.infrastructure.adapters.firestore_catalog_repository import (
     FirestoreCatalogRepository,
 )
+from src.budget.catalog.infrastructure.adapters.firestore_price_book_repository import (
+    FirestorePriceBookRepository,
+)
 from src.budget.infrastructure.adapters.ai.gemini_adapter import GoogleGenerativeAIAdapter
 from src.budget.infrastructure.adapters.databases.firestore_budget import (
     FirestoreBudgetRepository,
@@ -74,6 +77,9 @@ _firestore_repository = FirestoreBudgetRepository()
 # Catalog (v005)
 _catalog_repo = FirestoreCatalogRepository(db=_db_client)
 _catalog_lookup = CatalogLookupService(repo=_catalog_repo)
+# Phase 17.8 — repo de price_book (kind='item' + kind='breakdown') usado para
+# heredar el descompuesto del catálogo en partidas 1:1.
+_price_book_repo = FirestorePriceBookRepository(db=_db_client)
 
 # Normas + DAG (v005)
 _rules_md = load_rules()
@@ -102,6 +108,7 @@ _swarm_pricing = SwarmPricingService(
     rules=_rules_md,
     dag=_construction_dag,
     fragment_repo=_fragment_repo,
+    price_book_repo=_price_book_repo,
 )
 _architect = ArchitectService(llm_provider=_llm_adapter)
 

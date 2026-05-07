@@ -35,3 +35,13 @@ class IPriceBookRepository(ABC):
     @abstractmethod
     async def wipe_price_book(self) -> None:
         """Borra TODOS los docs de la colección. Usado por reindex --wipe."""
+
+    @abstractmethod
+    async def find_breakdowns_by_parent(
+        self, parent_code: str
+    ) -> list[PriceBookBreakdownEntry]:
+        """Phase 17.8 — Carga los componentes (kind='breakdown') hijos de un
+        item padre del catálogo. Usado para heredar el descompuesto del
+        catálogo cuando el agente devuelve un match 1:1 sin breakdown propio.
+        Retorna lista vacía si el padre no tiene breakdowns asociados.
+        """

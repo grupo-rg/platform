@@ -46,6 +46,9 @@ import {
     computePartidaTotalForMode,
     executionModeToBudgetMode,
 } from '@/lib/budget/budget-mode-calculator';
+import { detectDivergence } from '@/lib/budget/reconciliation';
+import { ReconciliationChip } from '../ReconciliationChip';
+import { useMarkupFactor } from '@/hooks/use-markup-factor';
 
 interface TableRowItemProps {
     item: EditableBudgetLineItem;
@@ -56,19 +59,20 @@ interface TableRowItemProps {
     executionMode?: ExecutionMode;
     onOpenBreakdown: (item: EditableBudgetLineItem) => void;
     onOpenMarkup: (id: string) => void;
+    /** Phase 17 — abre modal de reconciliación con foco en esta partida. */
+    onOpenReconciliation?: (partidaId: string) => void;
     isReadOnly?: boolean;
     leadId?: string;
 }
 
 export const TableRowItem = React.memo(({
-    item, onUpdate, onRemove, onDuplicate, showGhostMode, executionMode, onOpenBreakdown, onOpenMarkup, isReadOnly, leadId
+    item, onUpdate, onRemove, onDuplicate, showGhostMode, executionMode, onOpenBreakdown, onOpenMarkup, onOpenReconciliation, isReadOnly, leadId
 }: TableRowItemProps) => {
     const controls = useDragControls();
     const [isPending, startTransition] = useTransition();
     const { state } = useBudgetEditorContext();
-    // Phase 15 — markup factor (GG + BI distribuidos equitativamente sobre raw PEM)
-    // para mostrar precios all-in al usuario, consistentes con Base Imponible.
-    const markupFactor = 1 + ((state.config?.marginGG || 0) + (state.config?.marginBI || 0)) / 100;
+    // Phase 17.4 — factor de display centralizado en `useMarkupFactor`.
+    const { markupFactor, isMarkupBaked } = useMarkupFactor();
 
     // Deviation Analysis
     const currentPrice = item.item?.unitPrice || 0;
@@ -248,6 +252,16 @@ export const TableRowItem = React.memo(({
                         )}>
                             {item.item?.code || "---"}
                         </span>
+                        {isMarkupBaked && onOpenReconciliation && (() => {
+                            const div = detectDivergence(item);
+                            return div.hasDivergence ? (
+                                <ReconciliationChip
+                                    diffAmount={div.diffAmount}
+                                    diffPct={div.diffPct}
+                                    onClick={() => onOpenReconciliation(item.id)}
+                                />
+                            ) : null;
+                        })()}
                         {/* Unified Audit & Breakdown Button */}
                         <Button
                             variant="ghost"

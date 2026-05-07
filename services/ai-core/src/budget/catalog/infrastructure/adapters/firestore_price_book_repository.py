@@ -93,3 +93,25 @@ class FirestorePriceBookRepository(IPriceBookRepository):
             batch.commit()
         if deleted:
             logger.info(f"Wiped {deleted} docs from {PRICE_BOOK_COLLECTION}")
+
+    async def find_breakdowns_by_parent(
+        self, parent_code: str
+    ) -> list[PriceBookBreakdownEntry]:
+        """Phase 17.8 — Carga los componentes hijos (kind='breakdown')."""
+        if not parent_code:
+            return []
+        col = self.db.collection(PRICE_BOOK_COLLECTION)
+        query = col.where("kind", "==", "breakdown").where("parent_code", "==", parent_code)
+        results: list[PriceBookBreakdownEntry] = []
+        for snap in query.stream():
+            data = snap.to_dict() or {}
+            # Eliminar embedding (heavy) antes de construir la entity.
+            data.pop("embedding", None)
+            try:
+                results.append(PriceBookBreakdownEntry(**data))
+            except Exception as e:
+                logger.warning(
+                    f"[find_breakdowns_by_parent] doc {snap.id} no parsea como "
+                    f"PriceBookBreakdownEntry: {e}"
+                )
+        return results

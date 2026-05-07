@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetHeader, SheetDescription } from "@/components/ui/sheet";
 import { useState } from "react";
 import { PriceItemDetail } from "./PriceItemDetail";
 
@@ -84,17 +84,25 @@ export function PriceList({ items, loading }: PriceListProps) {
                                     className="border-b border-border hover:bg-muted/30 transition-colors group"
                                 >
                                     <TableCell className="font-mono text-xs text-primary font-medium py-3">
-                                        <Dialog>
-                                            <DialogTrigger asChild>
+                                        <Sheet>
+                                            <SheetTrigger asChild>
                                                 <span className="flex items-center gap-2 cursor-pointer hover:underline underline-offset-4 w-fit">
                                                     {item.code}
                                                 </span>
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-3xl bg-card border-border text-foreground p-6">
-                                                <DialogTitle className="sr-only">Detalle de partida {item.code}</DialogTitle>
+                                            </SheetTrigger>
+                                            <SheetContent
+                                                side="right"
+                                                className="w-full sm:max-w-2xl lg:max-w-3xl xl:max-w-4xl bg-card border-l border-border text-foreground p-6 overflow-y-auto"
+                                            >
+                                                <SheetHeader className="sr-only">
+                                                    <SheetTitle>Detalle de partida {item.code}</SheetTitle>
+                                                    <SheetDescription>
+                                                        Descompuesto y precios del catálogo COAATMCA para la partida {item.code}.
+                                                    </SheetDescription>
+                                                </SheetHeader>
                                                 <PriceItemDetail item={item} />
-                                            </DialogContent>
-                                        </Dialog>
+                                            </SheetContent>
+                                        </Sheet>
                                     </TableCell>
                                     <TableCell className="text-xs text-muted-foreground py-3 uppercase tracking-tight">
                                         {item.chapter ? item.chapter.substring(0, 15) : '-'}

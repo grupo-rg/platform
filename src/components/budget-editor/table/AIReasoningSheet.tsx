@@ -17,15 +17,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { 
-    Sparkles, AlertTriangle, ListTree, FileText, 
-    TrendingUp, ChevronDown, ChevronUp, Bot, Send, Package, PlusCircle, Settings2, Trash2
+import {
+    Sparkles, AlertTriangle, ListTree, FileText,
+    TrendingUp, ChevronDown, ChevronUp, Bot, Send, Package, PlusCircle, Settings2, Trash2,
+    ChevronRight,
 } from "lucide-react";
+import { ComponentSubBreakdown } from './ComponentSubBreakdown';
 import { EditableBudgetLineItem } from "@/types/budget-editor";
 import { sileo } from 'sileo';
 import { SemanticCatalogSidebar } from '../SemanticCatalogSidebar';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
 import { MatchKindChip, UnitConversionApplied, CandidateMetaBadges, AppliedFragmentsBadge } from './audit-v005';
+import { useMarkupFactor } from '@/hooks/use-markup-factor';
 
 interface AIReasoningSheetProps {
     open: boolean;
@@ -39,6 +42,25 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
     const [selectedVariableIndex, setSelectedVariableIndex] = useState<number | null>(null);
     const [isAddingNewBreakdown, setIsAddingNewBreakdown] = useState<boolean>(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
+    // Phase 17.4 — factor de display version-aware. Phase17 con live-edit GG/BI:
+    // los componentes baked se ajustan visualmente. Phase15 legacy: factor = currentFactor
+    // (raw → PVP). El input de precio del componente persiste en su scale stored
+    // (dividir por markupFactor antes de delegar al handler).
+    const { markupFactor } = useMarkupFactor();
+    const safeFactor = markupFactor || 1;
+
+    // Phase 17.5 — expand/collapse del sub-descompuesto del catálogo COAATMCA
+    // por componente (Set de índices expandidos). Lazy-fetch en el subcomponente.
+    const [expandedSubBreakdowns, setExpandedSubBreakdowns] = useState<Set<number>>(new Set());
+    const toggleSubBreakdown = (idx: number) => {
+        setExpandedSubBreakdowns((prev) => {
+            const next = new Set(prev);
+            if (next.has(idx)) next.delete(idx);
+            else next.add(idx);
+            return next;
+        });
+    };
 
     // Fase 6.B — captura de correcciones humanas (price/unit changes → dialog).
     // Guardamos el snapshot inicial del item al abrirse; las ediciones posteriores
@@ -94,6 +116,9 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
     const hasBreakdown = activeBreakdown.length > 0;
 
     const calculateCompTotal = (comp: any) => {
+        // Phase 17.8 — preferir comp.total stored (autoritativo, puede incluir
+        // multiplicadores ocultos como dimensión × factor ICL embedded por el agente).
+        if (typeof comp.total === 'number' && comp.total > 0) return comp.total;
         const cPrice = comp.price_unit ?? comp.unitPrice ?? comp.price ?? 0;
         const cQuantity = comp.quantity ?? comp.yield ?? 1;
         if (comp.unit === '%') return cPrice * (cQuantity / 100);
@@ -348,14 +373,14 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                             <div className="flex flex-col pl-6">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">P. Unitario</span>
                                 <span className="text-xl font-bold text-slate-700 dark:text-slate-200 tabular-nums">
-                                    {formatCurrency(item.item.unitPrice || 0)}
+                                    {formatCurrency((item.item.unitPrice || 0) * markupFactor)}
                                 </span>
                             </div>
 
                             <div className="flex flex-col pl-6">
                                 <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> P. Total</span>
                                 <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight">
-                                    {formatCurrency((item.item.unitPrice || 0) * (item.item.quantity || 1))}
+                                    {formatCurrency((item.item.unitPrice || 0) * (item.item.quantity || 1) * markupFactor)}
                                 </span>
                             </div>
                         </div>
@@ -366,7 +391,7 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                 <span>Distribución Costes Unitarios</span>
                                 {hasBreakdown && breakdownTotal > 0 && (
                                     <span className="text-slate-600 dark:text-slate-300 font-mono">
-                                        Total Bruto: {formatCurrency(breakdownTotal)}
+                                        Total Bruto: {formatCurrency(breakdownTotal * markupFactor)}
                                     </span>
                                 )}
                             </div>
@@ -377,16 +402,16 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                         <div
                                             className="bg-blue-500 hover:bg-blue-400 transition-all duration-300 hover:scale-y-150 origin-left border-r border-white/20 dark:border-black/20"
                                             style={{ width: `${(calcLabor / breakdownTotal) * 100}%` }}
-                                            title={`Mano de Obra: ${formatCurrency(calcLabor)} (${((calcLabor / breakdownTotal) * 100).toFixed(0)}%)`}
+                                            title={`Mano de Obra: ${formatCurrency(calcLabor * markupFactor)} (${((calcLabor / breakdownTotal) * 100).toFixed(0)}%)`}
                                         />
                                         <div
                                             className="bg-amber-500 hover:bg-amber-400 transition-all duration-300 hover:scale-y-150 origin-right border-r border-white/20 dark:border-black/20"
                                             style={{ width: `${(calcMaterial / breakdownTotal) * 100}%` }}
-                                            title={`Materiales: ${formatCurrency(calcMaterial)} (${((calcMaterial / breakdownTotal) * 100).toFixed(0)}%)`}
+                                            title={`Materiales: ${formatCurrency(calcMaterial * markupFactor)} (${((calcMaterial / breakdownTotal) * 100).toFixed(0)}%)`}
                                         />
                                         <div
                                             className="bg-emerald-500 flex-1 hover:bg-emerald-400 transition-all duration-300 hover:scale-y-150 origin-right"
-                                            title={`Maquinaria/Resto: ${formatCurrency(calcOther)} (${((calcOther / breakdownTotal) * 100).toFixed(0)}%)`}
+                                            title={`Maquinaria/Resto: ${formatCurrency(calcOther * markupFactor)} (${((calcOther / breakdownTotal) * 100).toFixed(0)}%)`}
                                         />
                                     </div>
                                     <div className="flex justify-between text-[9px] font-medium text-slate-500 dark:text-slate-400 tracking-wider">
@@ -417,7 +442,7 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                     <div>
                                         <p className="font-semibold mb-0.5">Divergencia de sumatorios detectada</p>
                                         <p className="opacity-80 leading-relaxed text-[11px]">
-                                            El sumatorio del descompuesto ({formatCurrency(breakdownTotal)}) difiere del precio oficial de la base ({formatCurrency(itemTotal)}).
+                                            El sumatorio del descompuesto ({formatCurrency(breakdownTotal * markupFactor)}) difiere del precio oficial de la base ({formatCurrency(itemTotal * markupFactor)}).
                                         </p>
                                     </div>
                                 </div>
@@ -462,26 +487,50 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                 <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform duration-300 opacity-50" />
                             </summary>
                             <div className="border-t border-slate-200 dark:border-white/10">
-                                <div className="grid grid-cols-[1fr_90px_100px_40px] gap-2 p-3 bg-slate-50 dark:bg-black/40 border-b border-slate-100 dark:border-white/5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                <div className="grid grid-cols-[1fr_90px_100px_120px_40px] gap-3 p-3 bg-slate-50 dark:bg-black/40 border-b border-slate-100 dark:border-white/5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                                     <div>Concepto</div>
                                     <div className="text-right">Rend. / Uds</div>
                                     <div className="text-right">Precio Ud.</div>
+                                    <div className="text-right">Total</div>
                                     <div></div>
                                 </div>
                                 <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
                                     {activeBreakdown.map((b: any, idx: number) => {
                                         const qty = b.quantity || b.yield || 1;
-                                        const price = b.price || b.unitPrice || 0;
-                                        const total = qty * price;
+                                        const storedPrice = b.price || b.unitPrice || 0;
+                                        // Phase 17.4 — display con markupFactor. El input edita en
+                                        // valor mostrado (PVP); on edit dividimos para almacenar.
+                                        const displayPrice = storedPrice * markupFactor;
+                                        // Phase 17.8 — `total` stored es autoritativo (puede incluir
+                                        // multiplicadores ocultos × dimensión × ICL embedded).
+                                        // Preferir b.total cuando esté presente y > 0; fallback a qty × price.
+                                        const storedTotal = typeof b.total === 'number' && b.total > 0 ? b.total : null;
+                                        const total = storedTotal !== null
+                                            ? storedTotal * markupFactor
+                                            : qty * displayPrice;
                                         const isVar = b.is_variable === true || b.is_variable === 'true' || b.isVariable === true;
-                                        
+                                        const isExpanded = expandedSubBreakdowns.has(idx);
+
                                         return (
-                                            <div key={idx} className={cn(
-                                                "grid grid-cols-[1fr_90px_100px_40px] gap-2 px-3 py-2 items-center group transition-colors",
+                                            <React.Fragment key={idx}>
+                                            <div className={cn(
+                                                "grid grid-cols-[1fr_90px_100px_120px_40px] gap-3 px-3 py-2.5 items-center group transition-colors",
                                                 isVar ? "bg-amber-50/50 hover:bg-amber-100/50 dark:bg-amber-900/10 dark:hover:bg-amber-900/20" : "hover:bg-slate-50 dark:hover:bg-white/5"
                                             )}>
                                                 <div className="flex flex-col gap-1 pr-2 min-w-0">
                                                     <div className="flex items-center gap-2">
+                                                        {/* Phase 17.5 — expand toggle del sub-descompuesto del catálogo */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleSubBreakdown(idx)}
+                                                            title={isExpanded ? 'Ocultar descomposición catálogo' : 'Ver descomposición catálogo'}
+                                                            className={cn(
+                                                                "shrink-0 w-4 h-4 flex items-center justify-center rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors",
+                                                                isExpanded && "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30"
+                                                            )}
+                                                        >
+                                                            <ChevronRight className={cn("w-3 h-3 transition-transform", isExpanded && "rotate-90")} />
+                                                        </button>
                                                         <Badge variant="outline" className="font-mono text-[9px] bg-slate-50 dark:bg-black/40 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10">
                                                             {b.code || 'S/C'}
                                                         </Badge>
@@ -489,11 +538,13 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                                             <Badge variant="outline" className="text-[8px] tracking-widest text-amber-600 bg-amber-100 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700">MARCAJE</Badge>
                                                         )}
                                                     </div>
-                                                    <input 
+                                                    <input
                                                         type="text"
-                                                        value={b.description} 
-                                                        onChange={(e) => handleBreakdownEdit(idx, 'description', e.target.value)}
-                                                        className="text-xs font-medium text-slate-700 dark:text-slate-300 bg-transparent border-dashed border-b border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-indigo-500 truncate w-full transition-colors"
+                                                        value={b.concept ?? b.description ?? ''}
+                                                        onChange={(e) => handleBreakdownEdit(idx, 'concept', e.target.value)}
+                                                        placeholder="Descripción del componente…"
+                                                        title={b.concept ?? b.description ?? ''}
+                                                        className="text-xs font-medium text-slate-700 dark:text-slate-300 bg-transparent border-dashed border-b border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:outline-none focus:border-indigo-500 truncate w-full transition-colors placeholder:text-slate-400 placeholder:italic"
                                                     />
                                                 </div>
                                                 <div className="flex items-center justify-end">
@@ -506,15 +557,31 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                                     />
                                                     <span className="ml-1 text-[10px] text-slate-400">{b.unit || 'ud'}</span>
                                                 </div>
-                                                <div className="flex flex-col items-end">
-                                                    <input 
-                                                        type="number" 
-                                                        value={price}
-                                                        onChange={(e) => handleBreakdownEdit(idx, 'price', e.target.value)}
-                                                        className="w-20 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums bg-transparent border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" 
-                                                        step="0.01" 
+                                                <div className="flex items-center justify-end">
+                                                    <input
+                                                        type="number"
+                                                        value={Number(displayPrice.toFixed(2))}
+                                                        onChange={(e) => {
+                                                            // El admin edita el valor PVP. Almacenamos el equivalente
+                                                            // dividiendo por markupFactor para mantener invariante stored.
+                                                            const typed = parseFloat(e.target.value) || 0;
+                                                            const stored = typed / safeFactor;
+                                                            handleBreakdownEdit(idx, 'price', String(stored));
+                                                        }}
+                                                        className="w-20 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums bg-transparent border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                        step="0.01"
                                                     />
-                                                    <span className="text-[9px] font-bold text-indigo-500 tabular-nums mt-0.5" title="Total derivado (Cantidad × Precio Ud)">= {formatCurrency(total)}</span>
+                                                </div>
+                                                {/* Phase 17.8 — Total prominente como columna propia (no más hint pequeño). */}
+                                                <div className="flex flex-col items-end justify-center" title="Total = yield × price (incluye multiplicadores ocultos del agente)">
+                                                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 tabular-nums">
+                                                        {formatCurrency(total)}
+                                                    </span>
+                                                    {storedTotal !== null && Math.abs(total - qty * displayPrice) > 0.01 && (
+                                                        <span className="text-[9px] text-indigo-500 tabular-nums" title="El total stored incluye multiplicadores propagados desde el cálculo del agente">
+                                                            ≠ {(qty).toLocaleString('es-ES', { maximumFractionDigits: 3 })} × {formatCurrency(displayPrice)}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="flex justify-end gap-1">
                                                     {isAdmin && isVar && (
@@ -528,9 +595,9 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                                             <Package className="h-4 w-4" />
                                                         </Button>
                                                     )}
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
                                                         className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                                                         onClick={() => handleRemoveBreakdownRow(idx)}
                                                         title="Eliminar concepto del descompuesto"
@@ -539,6 +606,11 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                                     </Button>
                                                 </div>
                                             </div>
+                                            {/* Phase 17.5 — sub-descompuesto del catálogo COAATMCA (lazy). */}
+                                            {isExpanded && (
+                                                <ComponentSubBreakdown parentCode={b.code} />
+                                            )}
+                                            </React.Fragment>
                                         );
                                     })}
                                 </div>

@@ -168,8 +168,10 @@ const styles = StyleSheet.create({
     bdCode: { width: '15%', fontSize: 7, color: '#475569' },
     bdQty: { width: '10%', fontSize: 7, color: '#475569', textAlign: 'right', paddingRight: 5 },
     bdUnit: { width: '5%', fontSize: 7, color: '#475569' },
-    bdDesc: { width: '45%', fontSize: 7, color: '#475569', paddingRight: 5 },
-    bdPrice: { width: '12%', fontSize: 7, color: '#475569', textAlign: 'right' },
+    // Phase 17.9 — `bdDesc` absorbe el 12% que liberó `bdPrice` (eliminada).
+    // Cliente final ve solo CÓD | CANT | UD | DESCRIPCIÓN | TOTAL para evitar
+    // ambigüedad con multiplicadores ICL embedded en `total`.
+    bdDesc: { width: '57%', fontSize: 7, color: '#475569', paddingRight: 5 },
     bdTotal: { width: '13%', fontSize: 7, color: '#475569', textAlign: 'right' },
 
     totalSection: {
@@ -247,6 +249,14 @@ interface BudgetDocumentProps {
     logoUrl?: string;
     notes?: string;
     budgetConfig?: { tax: number; marginGG: number; marginBI: number };
+    /** Phase 17 — controla si el PDF multiplica por markupFactor (legacy
+     * 'phase15') o lee precios as-is (nuevo 'phase17-markup-baked'). */
+    calibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked';
+    /** Phase 17.3 — snapshot del config con que se bakearon las partidas en
+     * backend. Necesario para soportar live-edit de GG/BI: el PDF aplica
+     * displayFactor = current/baked y refleja los cambios del admin sin
+     * regenerar el budget desde IA. */
+    bakedConfig?: { tax: number; marginGG: number; marginBI: number };
     executionMode?: 'complete' | 'execution' | 'labor';
     renders?: any[];
     /** IDs de renders seleccionados para incluir en el anexo visual. Vacío/undefined = sin anexo. */
@@ -313,6 +323,8 @@ export const BudgetDocument = ({
     logoUrl,
     notes,
     budgetConfig,
+    calibrationVersion,
+    bakedConfig,
     executionMode = 'complete',
     renders = [],
     selectedRenderIds,
@@ -389,10 +401,20 @@ export const BudgetDocument = ({
                                 bTotal = Math.max(0, laborCost * qTotal);
                             }
 
-                            // Phase 15 — distribuir GG+BI equitativamente sobre partidas para PDF.
-                            // El cliente ve precios all-in por partida; sus sumas matchean el Base Imponible.
-                            // Los componentes internos (breakdown) siguen mostrando raw para auditabilidad.
-                            const markupFactor = 1 + ((budgetConfig?.marginGG || 0) + (budgetConfig?.marginBI || 0)) / 100;
+                            // Phase 17.3 — display factor version-aware con soporte live-edit.
+                            //   phase17: factor = currentFactor / bakedFactor.
+                            //     - Sin cambios de GG/BI: factor = 1 (precios baked tal cual).
+                            //     - Con edición de GG/BI: factor != 1 → PDF refleja el cambio.
+                            //   phase15 (legacy): factor = currentFactor (asimetría histórica resuelta
+                            //     porque ahora aplicamos también a componentes).
+                            const isMarkupBaked = calibrationVersion === 'phase17-markup-baked';
+                            const currentFactor = 1 + ((budgetConfig?.marginGG || 0) + (budgetConfig?.marginBI || 0)) / 100;
+                            const bakedFactor = isMarkupBaked
+                                ? 1 + ((bakedConfig?.marginGG || 0) + (bakedConfig?.marginBI || 0)) / 100
+                                : 1;
+                            const markupFactor = isMarkupBaked
+                                ? (bakedFactor > 0 ? currentFactor / bakedFactor : 1)
+                                : currentFactor;
                             const bTotalAllIn = bTotal * markupFactor;
 
                             // Prevent duplicating title into description if they are implicitly the same 
@@ -425,9 +447,18 @@ export const BudgetDocument = ({
                                             {activeBreakdown.map((b: any, bIdx: number) => {
                                                 if (executionMode === 'execution' && (b.is_variable === true || b.is_variable === 'true' || b.isVariable === true)) return null;
                                                 if (executionMode === 'labor' && !(b.code && String(b.code).toLowerCase().startsWith('mo'))) return null;
-                                                const unitPrice = b.price || 0;
+                                                // Phase 17 — aplicar markupFactor también a componentes para que
+                                                // sumen el unit_price total. En phase17 markupFactor=1 (no-op porque
+                                                // ya viene baked); en phase15 multiplica igual que el header (fix asimetría).
+                                                const unitPrice = (b.price || 0) * markupFactor;
                                                 const qty = b.quantity || 1;
-                                                const lineTotal = unitPrice * qty;
+                                                // Phase 17.8 — preferir b.total stored (autoritativo) sobre qty × unitPrice.
+                                                // El agente puede haber embedded multiplicadores ocultos (× dimensión × ICL)
+                                                // en `total`. Sin esto, el PDF muestra suma desajustada vs unit_price.
+                                                const storedTotal = typeof b.total === 'number' && b.total > 0 ? b.total : null;
+                                                const lineTotal = storedTotal !== null
+                                                    ? storedTotal * markupFactor
+                                                    : unitPrice * qty;
 
                                                 return (
                                                     <View key={bIdx} style={styles.breakdownRow}>
@@ -435,7 +466,9 @@ export const BudgetDocument = ({
                                                         <Text style={styles.bdQty}>{formatNumberES(parseFloat(qty.toString()), 3)}</Text>
                                                         <Text style={styles.bdUnit}>{b.unit?.toLowerCase() === '%' ? 'h' : (b.unit || 'u')}</Text>
                                                         <Text style={styles.bdDesc}>{b.description || b.concept}</Text>
-                                                        <Text style={styles.bdPrice}>{formatNumberES(unitPrice, 2)}</Text>
+                                                        {/* Phase 17.9 — columna PRECIO eliminada del PDF cliente.
+                                                            Multiplicadores ICL embedded en `total` causaban "1×58,93≠90,33"
+                                                            visualmente confuso. Admin ve PRECIO en el editor. */}
                                                         <Text style={styles.bdTotal}>{formatNumberES(lineTotal, 2)}</Text>
                                                     </View>
                                                 );

@@ -5,6 +5,7 @@ import { useBudgetEditor } from '@/hooks/use-budget-editor';
 import { BudgetEditorTable } from './BudgetEditorTable';
 import { BudgetEditorToolbar } from './BudgetEditorToolbar';
 import { updateBudgetAction } from '@/actions/budget/update-budget.action';
+import { rebakePartidasIfFactorChanged } from '@/lib/budget/markup-rebake';
 import { Budget } from '@/backend/budget/domain/budget';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -64,6 +65,12 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
         updateConfig,
         applyMarkup
     } = useBudgetEditor((budget as any).lineItems, (() => {
+        // Phase 17 — budgets con markup baked en backend. Los precios ya incluyen
+        // GG+BI, el editor NO multiplica. Mantenemos el config visible para que
+        // el admin pueda ver qué % se aplicó en generación.
+        if (budget.calibrationVersion === 'phase17-markup-baked') {
+            return budget.config ?? { marginGG: 10, marginBI: 15, tax: 10 };
+        }
         // Phase 15 — backwards compat con budgets pre-Phase 15.
         // Esos budgets almacenan precios all-in (markup baked-in por calibración
         // accidental). Si los renderizásemos con default GG=10/BI=15 los inflariamos
@@ -73,7 +80,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
             return { marginGG: 0, marginBI: 0, tax };
         }
         return budget.config;
-    })());
+    })(), budget.calibrationVersion);
 
     const { toast } = useToast();
     const router = useRouter();
@@ -176,7 +183,20 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                         matchConfidence: editorItem.item?.matchConfidence,
                         ai_resolution: editorItem.item?.aiResolution,
                         alternativeCandidates: editorItem.item?.alternativeCandidates,
-                        needsHumanReview: editorItem.item?.needsHumanReview
+                        needsHumanReview: editorItem.item?.needsHumanReview,
+                        // Phase 17.8 — Bug A/B/C diagnóstico: estos campos venían del backend
+                        // y se borraban en cada save porque el map no los incluía. Restauración
+                        // garantiza que match_kind, unit_conversion, fragments, divergence flags
+                        // persisten cross-edit.
+                        match_kind: (editorItem.item as any)?.match_kind,
+                        unit_conversion_applied: (editorItem.item as any)?.unit_conversion_applied,
+                        applied_fragments: (editorItem.item as any)?.applied_fragments,
+                        needs_reconciliation: (editorItem.item as any)?.needs_reconciliation,
+                        divergence_pct: (editorItem.item as any)?.divergence_pct,
+                        divergence_amount: (editorItem.item as any)?.divergence_amount,
+                        last_reconciled_at: (editorItem.item as any)?.last_reconciled_at,
+                        reconciled_by: (editorItem.item as any)?.reconciled_by,
+                        original_unit_price_before_reconciliation: (editorItem.item as any)?.original_unit_price_before_reconciliation,
                     };
                 });
 
@@ -196,8 +216,17 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
             // Track rough edit time for telemetry
             const msSinceLoad = Date.now() - (state.lastSavedAt?.getTime() || Date.now());
 
+            // Phase 17.3 — re-bake partidas si admin cambió GG/BI live. Mantiene
+            // el invariante phase17 (Firestore.partidas baked al budget.config persistido).
+            const persistChapters = rebakePartidasIfFactorChanged(
+                domainChapters,
+                state.calibrationVersion,
+                state.config,
+                state.bakedConfig,
+            );
+
             const finalJson = {
-                chapters: domainChapters,
+                chapters: persistChapters,
                 costBreakdown: state.costBreakdown,
                 totalEstimated: state.costBreakdown.total,
                 financialSummary: {
@@ -400,6 +429,8 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                             <BudgetEconomicSummary
                                                 costBreakdown={state.costBreakdown}
                                                 budgetConfig={state.config}
+                                                calibrationVersion={state.calibrationVersion}
+                                                bakedConfig={state.bakedConfig}
                                                 onUpdateConfig={updateConfig}
                                                 applyMarkup={applyMarkup}
                                                 isReadOnly={isDemoLocked}
@@ -499,7 +530,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                 )}
 
                                 <TabsContent value="editor" className="space-y-8">
-                                    <BudgetEditorTable />
+                                    <BudgetEditorTable budgetId={budget.id} />
                                 </TabsContent>
 
                                 {isAdmin && (
@@ -565,6 +596,8 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                     <BudgetEconomicSummary
                                         costBreakdown={state.costBreakdown}
                                         budgetConfig={state.config}
+                                        calibrationVersion={state.calibrationVersion}
+                                        bakedConfig={state.bakedConfig}
                                         onUpdateConfig={updateConfig}
                                         applyMarkup={applyMarkup}
                                         isReadOnly={isDemoLocked}

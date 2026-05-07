@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EditableBudgetLineItem } from '@/types/budget-editor';
 import { searchPriceBookAction } from '@/actions/price-book/search-items.action';
+import { getPriceBookBreakdown } from '@/actions/price-book/get-price-book-breakdown.action';
 import { PriceBookItem } from '@/backend/price-book/domain/price-book-item';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/lib/utils';
@@ -55,22 +56,56 @@ export const BudgetLibrarySidebar = ({ onAddItem, leadId, isReadOnly }: BudgetLi
         return () => clearTimeout(timer);
     }, [search, toast]);
 
-    const handleAdd = (dbItem: PriceBookItem) => {
-        // Map PriceBookItem to EditableBudgetLineItem structure
-        // Heuristic to determine type
-        // If it has a breakdown, it's a PARTIDA (composed).
-        // If it has only material price and no labor, it's likely a MATERIAL or simple supply.
-        // If unit is 'h', it's LABOR.
-        let inferredType: 'PARTIDA' | 'MATERIAL' = 'PARTIDA';
+    const handleAdd = async (dbItem: PriceBookItem) => {
+        // Phase 18 — el catálogo v005 ya no embebe `breakdown` en el item.
+        // Si el item viene sin breakdown, lo cargamos on-demand desde docs hermanos
+        // (kind='breakdown') antes de añadir al editor. Así la partida se añade
+        // con su descompuesto completo y el aparejador puede auditarlo o editarlo.
+        let breakdown = dbItem.breakdown;
+        if (!breakdown || breakdown.length === 0) {
+            try {
+                const result = await getPriceBookBreakdown(dbItem.code);
+                if (result.success && result.components.length > 0) {
+                    breakdown = result.components;
+                }
+            } catch (e) {
+                console.warn('[BudgetLibrarySidebar] Failed to load breakdown for', dbItem.code, e);
+            }
+        }
 
-        if ((dbItem.priceMaterial || 0) > 0 && (dbItem.priceLabor || 0) === 0 && (!dbItem.breakdown || dbItem.breakdown.length === 0)) {
+        // Map PriceBookComponent → BudgetBreakdownComponent (clasifica type por prefijo COAATMCA).
+        const classifyType = (code: string | undefined): 'LABOR' | 'MATERIAL' | 'MACHINERY' | 'OTHER' => {
+            const c = (code || '').toLowerCase();
+            if (c.startsWith('mo')) return 'LABOR';
+            if (c.startsWith('mt')) return 'MATERIAL';
+            if (c.startsWith('mq')) return 'MACHINERY';
+            return 'OTHER';
+        };
+        const mappedBreakdown = breakdown && breakdown.length > 0
+            ? breakdown.map((c) => ({
+                code: c.code,
+                concept: c.description || c.code || '',
+                type: classifyType(c.code),
+                price: c.price,
+                unit: c.unit,
+                quantity: c.quantity,
+                total: (c.price || 0) * (c.quantity || 1),
+                is_variable: c.is_variable,
+            }))
+            : undefined;
+
+        // Inferencia de tipo: si no tiene breakdown ni precio total > 0 con descomposición, es MATERIAL.
+        // Con v005 todos los items de price_book son partidas (LABOR/composición); MATERIAL viene
+        // de material-catalog (otra ruta). Mantenemos heurística defensiva por si llega algún legacy.
+        let inferredType: 'PARTIDA' | 'MATERIAL' = 'PARTIDA';
+        if ((dbItem.priceMaterial || 0) > 0 && (dbItem.priceLabor || 0) === 0 && (!mappedBreakdown || mappedBreakdown.length === 0)) {
             inferredType = 'MATERIAL';
         }
 
         const newItem: Partial<EditableBudgetLineItem> = {
             originalTask: dbItem.description.substring(0, 50) + (dbItem.description.length > 50 ? '...' : ''),
             chapter: 'General',
-            type: inferredType, // Set the inferred type
+            type: inferredType,
             item: {
                 description: dbItem.description,
                 unit: dbItem.unit,
@@ -78,19 +113,20 @@ export const BudgetLibrarySidebar = ({ onAddItem, leadId, isReadOnly }: BudgetLi
                 unitPrice: dbItem.priceTotal,
                 totalPrice: dbItem.priceTotal,
                 code: dbItem.code,
-                matchConfidence: 100 // It's from the catalog
+                matchConfidence: 100,
+                breakdown: mappedBreakdown,
             },
             originalState: {
                 unitPrice: dbItem.priceTotal,
                 quantity: 1,
                 description: dbItem.description,
-                unit: dbItem.unit
-            }
+                unit: dbItem.unit,
+            },
         };
         onAddItem(newItem);
         toast({
-            title: "Partida añadida",
-            description: `${dbItem.code} se ha añadido al presupuesto.`,
+            title: 'Partida añadida',
+            description: `${dbItem.code} se ha añadido al presupuesto${mappedBreakdown && mappedBreakdown.length > 0 ? ` (${mappedBreakdown.length} componentes)` : ''}.`,
         });
     };
 

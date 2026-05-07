@@ -18,6 +18,10 @@ interface BudgetEconomicSummaryProps {
     costBreakdown: BudgetCostBreakdown;
     executionMode: ExecutionMode;
     budgetConfig?: BudgetConfig;
+    /** Phase 17 — propaga al PDF para que decida si multiplica markupFactor. */
+    calibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked';
+    /** Phase 17.3 — snapshot config baked para soporte live-edit GG/BI en PDF. */
+    bakedConfig?: BudgetConfig;
     onUpdateConfig?: (config: { marginGG?: number; marginBI?: number; tax?: number; }) => void;
     applyMarkup?: (scope: 'global' | 'chapter' | 'item', percentage: number, targetId?: string) => void;
     isReadOnly?: boolean;
@@ -42,6 +46,8 @@ export const BudgetEconomicSummary = ({
     costBreakdown,
     executionMode,
     budgetConfig,
+    calibrationVersion,
+    bakedConfig,
     onUpdateConfig,
     applyMarkup,
     isReadOnly,
@@ -302,6 +308,8 @@ export const BudgetEconomicSummary = ({
                             renders={renders}
                             selectedRenderIds={includeRenders ? selectedRenderIds : []}
                             budgetConfig={budgetConfig}
+                            calibrationVersion={calibrationVersion}
+                            bakedConfig={bakedConfig}
                         />
                     </div>
                 )}
@@ -444,6 +452,8 @@ export const BudgetEconomicSummary = ({
                                                 costBreakdown={costBreakdown}
                                                 date={new Date().toLocaleDateString('es-ES')}
                                                 budgetConfig={budgetConfig}
+                                                calibrationVersion={calibrationVersion}
+                                                bakedConfig={bakedConfig}
                                                 executionMode={executionMode}
                                                 renders={renders}
                                                 selectedRenderIds={includeRenders ? selectedRenderIds : []}

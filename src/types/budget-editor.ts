@@ -34,6 +34,13 @@ export interface EditableBudgetLineItem {
         unit_conversion_applied?: UnitConversionRecord;
         // Fase 6.D — v006 trace: fragments históricos inyectados al Pro.
         applied_fragments?: string[];
+        // Phase 17 — flags de reconciliación marcadas por el backend.
+        needs_reconciliation?: boolean;
+        divergence_pct?: number;
+        divergence_amount?: number;
+        last_reconciled_at?: string | null;
+        reconciled_by?: string | null;
+        original_unit_price_before_reconciliation?: number | null;
     };
 
     // Editor State
@@ -72,6 +79,16 @@ export interface BudgetEditorState {
     chapters: string[]; // List of chapter names in order
     executionMode: ExecutionMode; // Toggle for Execution modes
     config: BudgetConfig;
+    // Phase 17 — controla si el editor multiplica por markupFactor (legacy
+    // 'phase15') o lee precios as-is (nuevo 'phase17-markup-baked'). Para
+    // budgets sin stamp se asume legacy (compat con históricos pre-Phase 15).
+    calibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked';
+    // Phase 17.3 — snapshot inmutable del config con el que las partidas
+    // fueron baked en backend. Permite live-edit de GG/BI:
+    //   displayFactor = (1 + currentGG+BI/100) / (1 + bakedGG+BI/100)
+    // Solo se asigna al INIT_STATE para budgets phase17. Para legacy queda
+    // undefined (rama legacy ignora este campo).
+    bakedConfig?: BudgetConfig;
 }
 
 export type BudgetEditorAction =

@@ -13,6 +13,7 @@ import { ChevronDown, ChevronUp, MoreHorizontal, Percent } from "lucide-react";
 import { Reorder } from "framer-motion";
 import { TableRowItem } from './TableRowItem';
 import { useBudgetEditorContext } from '../BudgetEditorContext';
+import { useMarkupFactor } from '@/hooks/use-markup-factor';
 
 interface ChapterSectionProps {
     chapterName: string;
@@ -20,6 +21,8 @@ interface ChapterSectionProps {
     showGhostMode?: boolean;
     onOpenBreakdown: (item: any) => void;
     onOpenMarkup: (chapterName: string) => void;
+    /** Phase 17 — abre modal de reconciliación con foco en una partida. */
+    onOpenReconciliation?: (partidaId: string) => void;
 }
 
 export const ChapterSection = ({
@@ -27,7 +30,8 @@ export const ChapterSection = ({
     items,
     showGhostMode,
     onOpenBreakdown,
-    onOpenMarkup
+    onOpenMarkup,
+    onOpenReconciliation,
 }: ChapterSectionProps) => {
     const { 
         state,
@@ -53,10 +57,8 @@ export const ChapterSection = ({
         setIsEditingName(false);
     };
 
-    // Phase 15 — markup factor distribuido equitativamente sobre partidas
-    // (GG + BI sobre raw PEM). El total del capítulo mostrado al usuario
-    // refleja precios all-in coherentes con el Resumen Económico (Base Imponible).
-    const markupFactor = 1 + ((state.config?.marginGG || 0) + (state.config?.marginBI || 0)) / 100;
+    // Phase 17.4 — factor de display centralizado en `useMarkupFactor`.
+    const { markupFactor } = useMarkupFactor();
 
     const totalChapterRaw = items.reduce((acc: number, i: any) => {
         let total = i.item?.totalPrice || 0;
@@ -186,6 +188,7 @@ export const ChapterSection = ({
                             executionMode={executionMode}
                             onOpenBreakdown={onOpenBreakdown}
                             onOpenMarkup={onOpenMarkup}
+                            onOpenReconciliation={onOpenReconciliation}
                             isReadOnly={isReadOnly}
                             leadId={leadId}
                         />

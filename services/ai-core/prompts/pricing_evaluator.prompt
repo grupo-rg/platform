@@ -38,6 +38,36 @@ MANUAL DEL APAREJADOR (REGLAS CRÍTICAS DE CONVERSIÓN Y VALORACIÓN):
 
 14d. **SEMÁNTICA DE `calculated_unit_price` — RAW PEM SIN MARKUP COMERCIAL** (Fase 15): El precio que emites es **PEM crudo** alineado al catálogo COAATMCA + ajustes sectoriales por overhead técnico (acceso, jornada parcial, mobilización, dificultad de igualación, etc.). **NO incluyas margen comercial** (Beneficio Industrial) ni Gastos Generales — el sistema los aplica como markup posterior, configurable por el aparejador en el editor. Cuando un fragment ICL especifica un multiplicador (ej. ×1,42 falso techo, ×2,04 yeso PA, suelo 184 €/ml estructural), ese multiplicador es para corregir subvaluación del catálogo en casos sectoriales — overhead **técnico**, no comercial. Si un fragment menciona en su `[Calibración tenant]` ambos números (all-in observado del PDF humano Y el raw PEM correspondiente tras dividir por el factor de markup tenant), aplica **siempre el raw PEM**, no el all-in. Los fragments calibrados según Phase 15 llevan tag `calibration:phase15_raw_pem`.
 
+14e. **INVARIANTE DEL BREAKDOWN — `yield × price = total`** (Fase 17.8): Para CADA componente del array `breakdown[]` la invariante matemática DEBE cumplirse:
+
+  ```
+  yield (cantidad)  ×  price (precio unitario del componente)  =  total
+  ```
+
+  Si aplicas multiplicadores ocultos (dimensionamiento oculto + factor ICL), DESCOMPÓN los multiplicadores en `yield`, NO los embebas silenciosamente solo en `total`. El campo `price` debe ser el precio unitario del catálogo COAATMCA (raw, per €/m², €/h, etc.), inmodificado.
+
+  **Ejemplo correcto** — partida "1 ud picado y tendido yeso" que cubre 9 m² con factor ICL ×2,04:
+  ```json
+  {
+    "code": "DRT010",
+    "price": 11.51,        // €/m² del catálogo (raw, sin tocar)
+    "yield": 18.36,        // = 9 m² × 2.04 ICL (TODA la dimensión + multiplicador)
+    "total": 211.32        // = 11.51 × 18.36 (la invariante se cumple)
+  }
+  ```
+
+  **Ejemplo INCORRECTO** — el patrón que ROMPE el editor:
+  ```json
+  {
+    "code": "DRT010",
+    "price": 11.51,
+    "yield": 1,            // ❌ no refleja los multiplicadores
+    "total": 211.32        // 11.51 × 1 ≠ 211.32 — el aparejador ve descompuesto desajustado
+  }
+  ```
+
+  **Verificación previa al output**: antes de emitir, recalcula mentalmente `yield × price` para cada componente y confirma que ≈ `total` (±1%). Si no cumple, corrige `yield` a `total / price`. El sistema tiene un normalizer post-LLM que arregla casos residuales, pero la consistencia se construye aquí, en tu output.
+
 {{role "user"}}
 AQUÍ TIENES LOS EJEMPLOS HISTÓRICOS DE APRENDIZAJE (IN-CONTEXT LEARNING):
 {{golden_examples}}

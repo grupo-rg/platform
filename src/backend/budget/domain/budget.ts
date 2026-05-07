@@ -52,6 +52,15 @@ export interface BudgetPartida {
   unit_conversion_applied?: UnitConversionRecord;
   // Fase 6.D — v006: IDs de HeuristicFragments inyectados al Pro al tasar.
   applied_fragments?: string[];
+  // Phase 17 — flags de reconciliación. Marcadas por el backend cuando el LLM
+  // devuelve breakdown con divergencia >= 2% del unit_price (no auto-fixable).
+  // El editor frontend muestra chip ⚠️ + banner para revisión humana.
+  needs_reconciliation?: boolean;
+  divergence_pct?: number;        // ratio absoluto (0.05 = 5%)
+  divergence_amount?: number;     // diff en € (sum_breakdown - unit_price)
+  last_reconciled_at?: Date | string | null;
+  reconciled_by?: string | null;
+  original_unit_price_before_reconciliation?: number | null;
 }
 
 export interface BudgetBreakdownComponent {
@@ -68,6 +77,10 @@ export interface BudgetBreakdownComponent {
   is_variable?: boolean; // Flag para el modo Sólo Ejecución
   isSubstituted?: boolean; // True if this component was swapped by AI
   alternativeComponents?: any[]; // Unselected semantic candidates to swap this ingredient manually
+  // Phase 17 — snapshot raw PEM antes de bakear GG+BI. Permite recalcular
+  // con margen distinto sin perder fidelidad al catálogo COAATMCA.
+  rawPrice?: number;
+  rawTotal?: number;
 }
 
 export interface BudgetMaterial {
@@ -194,8 +207,13 @@ export interface Budget {
    *   `config` para producir precios all-in al cliente.
    *
    * Nuevos budgets generados por la IA tras Phase 15 se stampean 'phase15'.
+   *
+   * Phase 17 — 'phase17-markup-baked': partidas almacenan PVP all-in (markup
+   * GG+BI ya distribuido en backend). El editor NO debe multiplicar por
+   * markupFactor. Snapshot raw preservado en aiResolution.calculated_unit_price_raw
+   * y breakdown[].rawPrice/rawTotal.
    */
-  calibrationVersion?: 'phase14' | 'phase15';
+  calibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked';
 
   // Quick Consultation Response
   quickQuote?: {

@@ -6,6 +6,7 @@ import { MaterialPicker } from "./MaterialPicker";
 import { MaterialItem } from "@/backend/material-catalog/domain/material-item";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useMarkupFactor } from "@/hooks/use-markup-factor";
 
 interface BudgetPartidaBreakdownProps {
     breakdown: BudgetBreakdownComponent[];
@@ -18,10 +19,14 @@ export function BudgetPartidaBreakdown({ breakdown, isRealCost, note, onBreakdow
     const [pickerOpen, setPickerOpen] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
+    // Phase 17.4 — display factor live-edit aware. Componentes baked se muestran
+    // con el ajuste actual de GG/BI; suma cuadra con el unitPrice del partida.
+    const { markupFactor } = useMarkupFactor();
+
     if (!breakdown || breakdown.length === 0) return null;
 
-    const laborTotal = breakdown.filter(c => c.type === 'LABOR' || c.type === 'MACHINERY').reduce((acc, c) => acc + c.total, 0);
-    const materialTotal = breakdown.filter(c => c.type === 'MATERIAL').reduce((acc, c) => acc + c.total, 0);
+    const laborTotal = breakdown.filter(c => c.type === 'LABOR' || c.type === 'MACHINERY').reduce((acc, c) => acc + c.total, 0) * markupFactor;
+    const materialTotal = breakdown.filter(c => c.type === 'MATERIAL').reduce((acc, c) => acc + c.total, 0) * markupFactor;
     // const total = laborTotal + materialTotal; // Unused variable
 
     const handleSwapClick = (index: number) => {
@@ -156,7 +161,7 @@ export function BudgetPartidaBreakdown({ breakdown, isRealCost, note, onBreakdow
                         {/* Price */}
                         <div className="text-right w-24">
                             <div className="text-[10px] text-slate-400 uppercase">Precio</div>
-                            <div className="font-mono">{formatCurrency(comp.price)}</div>
+                            <div className="font-mono">{formatCurrency((comp.price || 0) * markupFactor)}</div>
                         </div>
 
                         {/* Rendimiento */}
@@ -181,7 +186,7 @@ export function BudgetPartidaBreakdown({ breakdown, isRealCost, note, onBreakdow
                         <div className="text-right w-24">
                             <div className="text-[10px] text-slate-400 uppercase">Total</div>
                             <div className="font-bold font-mono text-slate-700 dark:text-white">
-                                {formatCurrency(comp.total)}
+                                {formatCurrency((comp.total || 0) * markupFactor)}
                             </div>
                         </div>
                     </div>

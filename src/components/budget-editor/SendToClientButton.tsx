@@ -35,6 +35,10 @@ interface SendToClientButtonProps {
     renders?: BudgetRender[];
     selectedRenderIds?: string[];
     budgetConfig?: { marginGG: number; marginBI: number; tax: number };
+    /** Phase 17 — propaga al PDF para que decida si multiplica markupFactor. */
+    calibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked';
+    /** Phase 17.3 — snapshot config baked para soporte live-edit GG/BI en PDF. */
+    bakedConfig?: { marginGG: number; marginBI: number; tax: number };
     /** Callback opcional cuando el envío se confirma con éxito. */
     onSent?: () => void;
 }
@@ -53,6 +57,8 @@ export function SendToClientButton({
     renders = [],
     selectedRenderIds = [],
     budgetConfig,
+    calibrationVersion,
+    bakedConfig,
     onSent,
 }: SendToClientButtonProps) {
     const [open, setOpen] = useState(false);
@@ -80,6 +86,8 @@ export function SendToClientButton({
                     renders={renders}
                     selectedRenderIds={selectedRenderIds}
                     budgetConfig={budgetConfig}
+                    calibrationVersion={calibrationVersion}
+                    bakedConfig={bakedConfig}
                 />
             ).toBlob();
 

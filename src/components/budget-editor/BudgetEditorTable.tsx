@@ -15,30 +15,37 @@ import { EditableBudgetLineItem } from "@/types/budget-editor";
 import { AIReasoningSheet } from './table/AIReasoningSheet';
 import { ChapterSection } from './table/ChapterSection';
 import { useBudgetEditorContext } from './BudgetEditorContext';
+import { ReconciliationBanner } from './ReconciliationBanner';
+import { ReconciliationDiffModal } from './ReconciliationDiffModal';
 
 interface BudgetEditorTableProps {
     showGhostMode?: boolean; // Dejamos esto como prop opcional si depende del Toolbar en el futuro, o lo leemos.
+    /** Phase 17 — necesario para el server action de reconciliación. */
+    budgetId?: string;
 }
 
-export function BudgetEditorTable({ showGhostMode }: BudgetEditorTableProps) {
-    const { 
-        state, 
-        updateItem, 
-        removeItem, 
-        duplicateItem, 
-        addChapter, 
-        removeChapter, 
-        renameChapter, 
-        reorderChapters, 
-        applyMarkup, 
-        isAdmin, 
-        isReadOnly, 
+export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTableProps) {
+    const {
+        state,
+        updateItem,
+        removeItem,
+        duplicateItem,
+        addChapter,
+        removeChapter,
+        renameChapter,
+        reorderChapters,
+        applyMarkup,
+        isAdmin,
+        isReadOnly,
         leadId,
         reorderItems
     } = useBudgetEditorContext();
 
     const [breakdownItem, setBreakdownItem] = useState<EditableBudgetLineItem | null>(null);
     const [breakdownOpen, setBreakdownOpen] = useState(false);
+
+    // Phase 17 — modal per-partida (chip click → focus single)
+    const [reconcileFocusedId, setReconcileFocusedId] = useState<string | null>(null);
 
     // Markup Dialog State
     const [markupState, setMarkupState] = useState<{ open: boolean; scope: 'global' | 'chapter' | 'item'; targetId?: string; percentage: number }>({ open: false, scope: 'global', percentage: 0 });
@@ -50,6 +57,22 @@ export function BudgetEditorTable({ showGhostMode }: BudgetEditorTableProps) {
 
     return (
         <div className="w-full bg-white dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden auto-cols-auto overflow-x-auto">
+            {budgetId && (
+                <ReconciliationBanner
+                    items={state.items}
+                    budgetId={budgetId}
+                    calibrationVersion={state.calibrationVersion}
+                />
+            )}
+            {budgetId && (
+                <ReconciliationDiffModal
+                    open={reconcileFocusedId !== null}
+                    onOpenChange={(o) => !o && setReconcileFocusedId(null)}
+                    items={state.items}
+                    budgetId={budgetId}
+                    focusedPartidaId={reconcileFocusedId}
+                />
+            )}
             <div className="flex flex-col min-w-[800px]">
                 {/* Header Grid */}
                 <div className="flex bg-slate-50/50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-sm font-medium text-slate-500">
@@ -71,6 +94,7 @@ export function BudgetEditorTable({ showGhostMode }: BudgetEditorTableProps) {
                             showGhostMode={showGhostMode}
                             onOpenBreakdown={handleOpenBreakdown}
                             onOpenMarkup={(chapterName: string) => setMarkupState({ open: true, scope: 'chapter', targetId: chapterName, percentage: 0 })}
+                            onOpenReconciliation={budgetId ? (partidaId: string) => setReconcileFocusedId(partidaId) : undefined}
                         />
                 ))}
             </div>

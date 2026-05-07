@@ -9,8 +9,11 @@ from pydantic import BaseModel, Field
 from src.budget.application.ports.ports import ILLMProvider, IVectorSearch, IGenerationEmitter
 from src.budget.application.services.pdf_extractor_service import RestructuredItem
 from src.budget.catalog.application.services.catalog_lookup_service import CatalogLookupService
+from src.budget.catalog.application.ports.price_book_repository import IPriceBookRepository
 from src.budget.catalog.domain.construction_dag import ConstructionDag
 from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem, BudgetBreakdownComponent, HeuristicFragment
+from src.budget.application.services.reconciliation import reconcile_breakdown
+from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
 from src.budget.learning.application.ports.heuristic_fragment_repository import IHeuristicFragmentRepository
 
 # -------------------------------------------------------------------------------------------------
@@ -381,6 +384,7 @@ class SwarmPricingService:
         rules: Optional[str] = None,
         dag: Optional[ConstructionDag] = None,
         fragment_repo: Optional[IHeuristicFragmentRepository] = None,
+        price_book_repo: Optional[IPriceBookRepository] = None,
     ):
         self.llm = llm_provider
         self.vector_search = vector_search
@@ -394,6 +398,10 @@ class SwarmPricingService:
         # Dependencia v006 (Fase 6.C) — retrieval de HeuristicFragments para
         # el loop de aprendizaje. Opcional: si falta, el Pro opera sin ICL.
         self.fragment_repo = fragment_repo
+        # Phase 17.8 — Frente D: heredar breakdown del catálogo en match 1:1
+        # cuando val.breakdown está vacío. Opcional para backward-compat con
+        # tests; si ausente, no se hereda.
+        self.price_book_repo = price_book_repo
 
     async def _rerank_candidates(
         self,
@@ -985,6 +993,79 @@ class SwarmPricingService:
                                 is_variable=b.is_variable,
                             ))
 
+                    # Phase 17.8 — Frente D: si match_kind=='1:1' y el agente NO devolvió
+                    # breakdown propio, heredamos el descompuesto del candidato del catálogo.
+                    # Esto evita el caso 02.02 (Pintura plástica matched RFP010 sin breakdown).
+                    if (
+                        not breakdown_domain
+                        and val.match_kind == '1:1'
+                        and self.price_book_repo is not None
+                    ):
+                        # Localizar el candidato seleccionado para obtener su code (no `id`).
+                        cand_data = next((c for c in candidates if c.get('id') == sel_id_flat), None)
+                        cand_code = (cand_data or {}).get('code') or sel_id_flat
+                        try:
+                            if cand_code:
+                                catalog_breakdowns = await self.price_book_repo.find_breakdowns_by_parent(cand_code)
+                                if catalog_breakdowns:
+                                    for bk in catalog_breakdowns:
+                                        breakdown_domain.append(BudgetBreakdownComponent(
+                                            code=bk.code,
+                                            concept=bk.description,
+                                            type="OTHER",
+                                            price=bk.price_unit,
+                                            yield_amount=bk.quantity,
+                                            total=bk.price,  # bk.price = price_unit × quantity (catálogo lo precomputa)
+                                            isSubstituted=False,
+                                            alternativeComponents=[],
+                                            is_variable=bk.is_variable,
+                                        ))
+                                    self._emit(budget_id, 'breakdown_inherited_1to1', {
+                                        "code": safe_code,
+                                        "candidate_code": cand_code,
+                                        "n_components": len(catalog_breakdowns),
+                                    })
+                        except Exception as inherit_err:
+                            logger.warning(
+                                f"[inherit-1:1] {safe_code}: error cargando breakdown del catálogo "
+                                f"({cand_code or '?'}): {inherit_err}"
+                            )
+
+                    # Phase 17.8 — normalizar yield_amount para que cumpla la invariante
+                    # quantity × price ≈ total ANTES de reconciliar. Cubre el caso de
+                    # dimensionamiento oculto donde el agente persiste total con
+                    # multiplicadores embedded (× dim × ICL) sin propagar al yield.
+                    norm = normalize_breakdown_quantities(breakdown_domain)
+                    if norm.fixed_count > 0:
+                        logger.info(
+                            f"[normalize] Partida {safe_code}: {norm.fixed_count} componente(s) "
+                            f"con yield derivado de total/price. Códigos: {norm.suspicious_codes}"
+                        )
+                        self._emit(budget_id, 'breakdown_quantity_derived', {
+                            "code": safe_code,
+                            "fixed_count": norm.fixed_count,
+                            "suspicious_codes": norm.suspicious_codes,
+                        })
+
+                    # Phase 17 — reconciliación post-LLM. Si la divergencia entre
+                    # sum(breakdown.total) y final_price es < 2%, escalamos
+                    # silenciosamente (rounding/ruido del LLM). Si es >= 2%,
+                    # persistimos raw + flag para revisión humana en el editor.
+                    recon = reconcile_breakdown(final_price, breakdown_domain)
+                    breakdown_domain = recon.breakdown
+                    if recon.needs_review:
+                        logger.warning(
+                            f"[reconcile] Partida {safe_code} divergence "
+                            f"{recon.divergence_pct:.2%} (€{recon.divergence_amount:+.2f})"
+                        )
+                        self._emit(budget_id, 'partida_needs_reconciliation', {
+                            "code": safe_code,
+                            "divergence_pct": round(recon.divergence_pct, 4),
+                            "divergence_amount": round(recon.divergence_amount, 2),
+                            "unit_price": final_price,
+                            "sum_breakdown": round(final_price + recon.divergence_amount, 2),
+                        })
+
                     original_item_obj = OriginalItem(
                         code=safe_code, description=safe_description, quantity=safe_quantity,
                         unit=safe_unit, chapter=safe_chapter, raw_table_data="Basis Swarm AI Extracted"
@@ -1042,6 +1123,10 @@ class SwarmPricingService:
                         match_kind=val.match_kind,
                         unit_conversion_applied=conversion_payload,
                         applied_fragments=fragment_ids,
+                        # Phase 17 — flags de reconciliación.
+                        needs_reconciliation=recon.needs_review,
+                        divergence_pct=recon.divergence_pct if recon.needs_review else None,
+                        divergence_amount=recon.divergence_amount if recon.needs_review else None,
                     )
                     priced_partidas.append(partida)
 

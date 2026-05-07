@@ -25,9 +25,15 @@ from src.budget.application.services.architect_service import (
 from src.budget.application.services.pdf_extractor_service import RestructuredItem
 from src.budget.application.services.swarm_pricing_service import SwarmPricingService
 from src.budget.catalog.domain.unit import Unit
+from src.budget.application.services.markup_distributor import (
+    bake_markup_into_budget,
+    DEFAULT_GG_PCT,
+    DEFAULT_BI_PCT,
+)
 from src.budget.domain.entities import (
     Budget,
     BudgetChapter,
+    BudgetConfig,
     BudgetCostBreakdown,
     BudgetTelemetry,
     BudgetTelemetryMetrics,
@@ -129,7 +135,6 @@ class GenerateBudgetFromNlUseCase:
             bucket["total"] += p.totalPrice
 
         final_chapters: List[BudgetChapter] = []
-        subtotal = 0.0
         for idx, (ch_name, data) in enumerate(chapters_dict.items(), start=1):
             final_chapters.append(
                 BudgetChapter(
@@ -137,17 +142,35 @@ class GenerateBudgetFromNlUseCase:
                     name=ch_name,
                     order=idx,
                     items=data["items"],
-                    totalPrice=data["total"],
+                    totalPrice=data["total"],  # raw PEM, será sobreescrito por bake_markup
                 )
             )
-            subtotal += data["total"]
 
-        # Márgenes estandarizados (alineados con restructure_budget_uc y Node)
-        gg = subtotal * 0.13
-        bi = subtotal * 0.06
-        pem = subtotal + gg + bi
-        iva = pem * 0.21
-        total = pem + iva
+        # Phase 17 — bakear GG+BI directamente en partidas y componentes.
+        temp_budget = Budget(
+            id=budget_id,
+            leadId=lead_id,
+            clientSnapshot=PersonalInfo(),
+            status="draft",
+            createdAt=datetime.utcnow(),
+            updatedAt=datetime.utcnow(),
+            version=1,
+            specs=ProjectSpecs(),
+            chapters=final_chapters,
+            costBreakdown=BudgetCostBreakdown(
+                materialExecutionPrice=0.0, overheadExpenses=0.0,
+                industrialBenefit=0.0, tax=0.0, globalAdjustment=0.0, total=0.0,
+            ),
+            totalEstimated=0.0,
+        )
+        temp_budget, factor = bake_markup_into_budget(temp_budget)
+
+        subtotal_baked = sum(c.totalPrice for c in temp_budget.chapters)
+        subtotal_raw = subtotal_baked / factor if factor > 0 else subtotal_baked
+        gg = round(subtotal_raw * (DEFAULT_GG_PCT / 100), 2)
+        bi = round(subtotal_raw * (DEFAULT_BI_PCT / 100), 2)
+        iva = round(subtotal_baked * 0.21, 2)
+        total = round(subtotal_baked + iva, 2)
 
         duration_ms = (time.time() - start_time) * 1000
         telemetry = BudgetTelemetry(
@@ -174,19 +197,26 @@ class GenerateBudgetFromNlUseCase:
             updatedAt=datetime.utcnow(),
             version=1,
             specs=ProjectSpecs(),
-            chapters=final_chapters,
+            chapters=temp_budget.chapters,
             costBreakdown=BudgetCostBreakdown(
-                materialExecutionPrice=subtotal,
+                # Phase 17 — `materialExecutionPrice` = PEM raw para audit;
+                # GG/BI son derivados. Las partidas tienen markup baked.
+                materialExecutionPrice=round(subtotal_raw, 2),
                 overheadExpenses=gg,
                 industrialBenefit=bi,
                 tax=iva,
                 globalAdjustment=0.0,
                 total=total,
             ),
+            config=BudgetConfig(
+                marginGG=DEFAULT_GG_PCT,
+                marginBI=DEFAULT_BI_PCT,
+                tax=21.0,
+            ),
             totalEstimated=total,
             telemetry=telemetry,
-            # Phase 15 — raw PEM en partidas; markup distribuido por el editor.
-            calibrationVersion="phase15",
+            # Phase 17 — markup distribuido en backend, frontend NO multiplica.
+            calibrationVersion=temp_budget.calibrationVersion,
         )
 
         if self.repository:

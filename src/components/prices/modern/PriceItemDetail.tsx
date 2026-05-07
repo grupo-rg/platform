@@ -1,15 +1,38 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { PriceBookItem, PriceBookComponent } from "@/backend/price-book/domain/price-book-item";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Replace, Loader2, CheckCircle2, TrendingUp, Send, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { searchPriceBookAction } from '@/actions/search-price-book.action';
+import { getPriceBookBreakdown } from '@/actions/price-book/get-price-book-breakdown.action';
 
 interface BreakdownItem extends PriceBookComponent {
     price: number;
+}
+
+const formatCurrency = (n: number | undefined | null) =>
+    new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })
+        .format(typeof n === 'number' && Number.isFinite(n) ? n : 0);
+
+/**
+ * Phase 18 — Clasificación de componentes por prefijo COAATMCA.
+ *   mo*  → Mano de obra
+ *   mt*  → Material
+ *   mq*  → Maquinaria
+ *   %    → Costes indirectos
+ *   resto → otros
+ * Sustituye al `priceLabor / priceMaterial` agregado del schema legacy
+ * (que v005 ya no calcula).
+ */
+function classifyByCode(code: string | undefined | null): 'labor' | 'material' | 'machinery' | 'other' {
+    const c = (code || '').toLowerCase();
+    if (c.startsWith('mo')) return 'labor';
+    if (c.startsWith('mt')) return 'material';
+    if (c.startsWith('mq')) return 'machinery';
+    return 'other';
 }
 
 export function PriceItemDetail({ item }: { item: PriceBookItem }) {
@@ -17,15 +40,46 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
     const [semanticAlternatives, setSemanticAlternatives] = useState<PriceBookItem[]>([]);
     const [isSearching, setIsSearching] = useState(false);
 
+    // Phase 18 — el breakdown del catálogo v005 vive en docs hermanos. Si el
+    // item no trae `breakdown` embebido (formato legacy), lo cargamos
+    // on-demand al abrir el detalle.
+    const [breakdown, setBreakdown] = useState<PriceBookComponent[] | null>(
+        Array.isArray(item.breakdown) && item.breakdown.length > 0 ? item.breakdown : null
+    );
+    const [isLoadingBreakdown, setIsLoadingBreakdown] = useState(false);
+
+    useEffect(() => {
+        // Si el item ya viene con breakdown embebido (legacy), no fetcheamos.
+        if (Array.isArray(item.breakdown) && item.breakdown.length > 0) {
+            setBreakdown(item.breakdown);
+            return;
+        }
+        let cancelled = false;
+        setIsLoadingBreakdown(true);
+        getPriceBookBreakdown(item.code)
+            .then((result) => {
+                if (cancelled) return;
+                setBreakdown(result.success ? result.components : []);
+            })
+            .catch((e) => {
+                console.error('Failed to load breakdown', e);
+                if (!cancelled) setBreakdown([]);
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoadingBreakdown(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [item.code, item.breakdown]);
+
     useEffect(() => {
         if (!selectedVariableItem?.description) return;
 
         const fetchAlternatives = async () => {
             setIsSearching(true);
             try {
-                // Pass the current year context if available, defaulting to 2025 since it has vectors
                 const results = await searchPriceBookAction(selectedVariableItem.description!, item.year || 2025);
-                // Filter out the exact same item just in case, and limit to top 3 for UI
                 setSemanticAlternatives(results.filter(r => r.code !== selectedVariableItem.code).slice(0, 3));
             } catch (e) {
                 console.error("Failed to find semantic alternatives", e);
@@ -37,7 +91,7 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
         fetchAlternatives();
     }, [selectedVariableItem, item.year]);
 
-    // Helper to calculate totals
+    // Helper to calculate component total honoring '%' unit semantics.
     const calculateTotal = (comp: any) => {
         const cPrice = comp.price_unit ?? comp.unitPrice ?? comp.price ?? 0;
         const cQuantity = comp.quantity ?? comp.yield ?? 1;
@@ -47,6 +101,29 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
         return cQuantity * cPrice;
     };
 
+    // Phase 18 — distribución derivada del breakdown (sustituye priceLabor/priceMaterial).
+    const distribution = useMemo(() => {
+        if (!breakdown || breakdown.length === 0) return null;
+        let labor = 0, material = 0, machinery = 0, other = 0;
+        for (const c of breakdown) {
+            const total = calculateTotal(c);
+            switch (classifyByCode(c.code)) {
+                case 'labor': labor += total; break;
+                case 'material': material += total; break;
+                case 'machinery': machinery += total; break;
+                default: other += total;
+            }
+        }
+        const sum = labor + material + machinery + other;
+        if (sum <= 0) return null;
+        return {
+            labor: { value: labor, pct: (labor / sum) * 100 },
+            material: { value: material, pct: (material / sum) * 100 },
+            machinery: { value: machinery, pct: (machinery / sum) * 100 },
+            other: { value: other, pct: (other / sum) * 100 },
+        };
+    }, [breakdown]);
+
     return (
         <div className="space-y-6">
             <div className="space-y-4">
@@ -55,17 +132,17 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">
                             <span>{item.code}</span>
                             <span>•</span>
-                            <span>{item.chapter} / {item.section}</span>
+                            <span>{item.chapter || '—'} {item.section ? ` / ${item.section}` : ''}</span>
                         </div>
 
                         <h2 className="text-4xl font-light tracking-tight text-foreground flex items-baseline">
-                            {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(item.priceTotal)}
-                            <span className="text-lg text-muted-foreground ml-2 font-normal">/ {item.unit}</span>
+                            {formatCurrency(item.priceTotal)}
+                            <span className="text-lg text-muted-foreground ml-2 font-normal">/ {item.unit || 'ud'}</span>
                         </h2>
                     </div>
 
-                    {/* Cost Optimization Thermometer */}
-                    {(item.priceLabor !== undefined && item.priceMaterial !== undefined) && (
+                    {/* Cost Distribution — Phase 18: derivado del breakdown clasificado por prefijo COAATMCA. */}
+                    {distribution && (
                         <div className="flex flex-col items-end gap-1">
                             <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider flex items-center gap-1">
                                 <TrendingUp className="w-3 h-3" /> Cost Distribution
@@ -73,22 +150,29 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
                             <div className="flex h-2 w-32 rounded-full overflow-hidden bg-muted">
                                 <div
                                     className="bg-blue-500 hover:bg-blue-400 transition-all hover:scale-y-150 origin-left"
-                                    style={{ width: `${(item.priceLabor / item.priceTotal) * 100}%` }}
-                                    title={`Labor: ${(item.priceLabor / item.priceTotal * 100).toFixed(0)}%`}
+                                    style={{ width: `${distribution.labor.pct}%` }}
+                                    title={`Mano de obra: ${distribution.labor.pct.toFixed(0)}% (${formatCurrency(distribution.labor.value)})`}
                                 />
                                 <div
-                                    className="bg-amber-500 hover:bg-amber-400 transition-all hover:scale-y-150 origin-right"
-                                    style={{ width: `${(item.priceMaterial / item.priceTotal) * 100}%` }}
-                                    title={`Material: ${(item.priceMaterial / item.priceTotal * 100).toFixed(0)}%`}
+                                    className="bg-amber-500 hover:bg-amber-400 transition-all hover:scale-y-150"
+                                    style={{ width: `${distribution.material.pct}%` }}
+                                    title={`Material: ${distribution.material.pct.toFixed(0)}% (${formatCurrency(distribution.material.value)})`}
                                 />
                                 <div
-                                    className="bg-emerald-500 flex-1 hover:bg-emerald-400 transition-all hover:scale-y-150"
-                                    title="Machinery/Other"
+                                    className="bg-emerald-500 hover:bg-emerald-400 transition-all hover:scale-y-150"
+                                    style={{ width: `${distribution.machinery.pct}%` }}
+                                    title={`Maquinaria: ${distribution.machinery.pct.toFixed(0)}% (${formatCurrency(distribution.machinery.value)})`}
+                                />
+                                <div
+                                    className="bg-slate-400 hover:bg-slate-300 transition-all hover:scale-y-150 origin-right"
+                                    style={{ width: `${distribution.other.pct}%` }}
+                                    title={`Otros / costes indirectos: ${distribution.other.pct.toFixed(0)}% (${formatCurrency(distribution.other.value)})`}
                                 />
                             </div>
                             <div className="flex justify-between w-32 text-[9px] text-muted-foreground mt-0.5 px-0.5">
-                                <span>Mano Obra</span>
-                                <span>Material</span>
+                                <span>M.O.</span>
+                                <span>Mat.</span>
+                                <span>Maq.</span>
                             </div>
                         </div>
                     )}
@@ -113,14 +197,21 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
                         <div className="col-span-1 text-right">Total</div>
                     </div>
 
-                    {item.breakdown && item.breakdown.length > 0 ? (
-                        item.breakdown.map((comp: any, idx: number) => {
+                    {isLoadingBreakdown ? (
+                        <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-xs">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Cargando descompuesto...
+                        </div>
+                    ) : breakdown && breakdown.length > 0 ? (
+                        breakdown.map((comp: any, idx: number) => {
                             const bItem = comp as BreakdownItem;
                             const total = calculateTotal(bItem);
                             const isVariable = bItem.is_variable === true;
 
                             const cQuantity = bItem.quantity ?? comp.yield ?? 1;
                             const cPrice = comp.price_unit ?? comp.unitPrice ?? comp.price ?? 0;
+                            const cQuantityNum = Number(cQuantity);
+                            const cPriceNum = Number(cPrice);
 
                             return (
                                 <div key={idx} className={`grid grid-cols-12 text-sm pt-2 pb-2 px-2 rounded-lg transition-all items-center border mb-1 ${isVariable ? 'bg-amber-500/5 hover:bg-amber-500/10 border-amber-500/30' : 'bg-transparent hover:bg-muted/50 border-transparent hover:border-border'}`}>
@@ -134,7 +225,7 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
                                     </div>
                                     <div className="col-span-6 text-foreground/80 text-xs truncate pr-4 flex items-center justify-between" title={bItem.description}>
                                         <span className={isVariable ? 'font-medium text-amber-900 dark:text-amber-100' : ''}>
-                                            {bItem.description}
+                                            {bItem.description || '—'}
                                         </span>
                                         {isVariable && (
                                             <Button
@@ -149,13 +240,13 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
                                         )}
                                     </div>
                                     <div className="col-span-2 text-right text-muted-foreground font-mono text-xs">
-                                        {cQuantity.toFixed(3)} {comp.unit}
+                                        {Number.isFinite(cQuantityNum) ? cQuantityNum.toFixed(3) : '0.000'} {comp.unit || ''}
                                     </div>
                                     <div className="col-span-1 text-right text-muted-foreground font-mono text-xs">
-                                        {cPrice.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                        {formatCurrency(cPriceNum)}
                                     </div>
                                     <div className="col-span-1 text-right text-foreground font-mono text-xs font-medium">
-                                        {total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                        {formatCurrency(total)}
                                     </div>
                                 </div>
                             );
@@ -201,7 +292,7 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
                                     <div>
                                         <div className="flex items-start justify-between gap-2 mb-1">
                                             <span className="font-mono text-xs text-primary font-medium">{alt.code}</span>
-                                            <span className="font-mono text-xs font-semibold">{new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(alt.priceTotal || 0)}</span>
+                                            <span className="font-mono text-xs font-semibold">{formatCurrency(alt.priceTotal)}</span>
                                         </div>
                                         <p className="text-xs text-muted-foreground line-clamp-2" title={alt.description}>
                                             {alt.description}

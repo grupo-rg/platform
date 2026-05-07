@@ -38,6 +38,10 @@ class BudgetBreakdownComponent(BaseModel):
     # presupuestos históricos que no lo tenían. El editor frontend (modos
     # Sólo Ejecución / Exclusivamente Mano de Obra) lo lee como `is_variable`.
     is_variable: Optional[bool] = None
+    # Phase 17 — snapshot raw PEM antes de bakear GG+BI. Permite recalcular
+    # con margen distinto sin perder fidelidad al catálogo COAATMCA.
+    rawPrice: Optional[float] = None
+    rawTotal: Optional[float] = None
 
 class BudgetConfig(BaseModel):
     marginGG: float
@@ -69,6 +73,9 @@ class AIResolution(BaseModel):
     confidence_score: int
     is_estimated: bool
     needs_human_review: bool
+    # Phase 17 — snapshot del unit_price raw PEM antes de bakear GG+BI.
+    # Permite auditoría y recálculo sin perder el valor original del LLM.
+    calculated_unit_price_raw: Optional[float] = None
 
 # --- ICL & RLHF Fragment Entities (Many-Shot Engine) ---
 class HeuristicContext(BaseModel):
@@ -141,6 +148,15 @@ class BudgetPartida(BaseModel):
     # prompt del Pro al tasar esta partida. `None` = no se buscó fragments;
     # `[]` (no lo emitimos en este sprint) sería "se buscó y no había ninguno".
     applied_fragments: Optional[List[str]] = None
+    # Phase 17 — flags de reconciliación. Marca partidas donde el LLM devolvió
+    # breakdown con divergencia >= 2% del unit_price (no auto-fixable).
+    # El editor frontend muestra chip ⚠️ y banner para revisión humana.
+    needs_reconciliation: bool = False
+    divergence_pct: Optional[float] = None  # ratio absoluto (0.05 = 5%)
+    divergence_amount: Optional[float] = None  # diff en € (sum_breakdown - unit_price)
+    last_reconciled_at: Optional[datetime] = None
+    reconciled_by: Optional[str] = None  # uid del admin
+    original_unit_price_before_reconciliation: Optional[float] = None
 
 class BudgetMaterial(BaseModel):
     type: Literal['MATERIAL'] = 'MATERIAL'
