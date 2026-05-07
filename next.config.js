@@ -41,6 +41,9 @@ const nextConfig = {
     ],
   },
   serverExternalPackages: ['pdf-parse'],
+  outputFileTracingIncludes: {
+    '/**': ['./src/backend/ai/prompts/**/*.prompt'],
+  },
 };
 
 const createNextIntlPlugin = require('next-intl/plugin');
