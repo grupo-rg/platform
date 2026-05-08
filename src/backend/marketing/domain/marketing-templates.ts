@@ -6,7 +6,7 @@ Fíjate en cómo la IA ha estructurado las partidas por sí sola. Sabemos que cr
 
 Pero generar un documento es solo teoría. El verdadero cuello de botella es cuando tienes que actualizar las tarifas de todos tus proveedores (ej. los PDFs de 300 páginas de almacenes) para evitar perder proyectos por precios desfasados. 
 
-En Basis no alquilamos una simple "calculadora en la nube". Nosotros desarrollamos la infraestructura Core de IA personalizada para tu constructora, capaz de leer y cruzar todos los documentos de tus proveedores en 15 segundos sin salir de tu entorno.
+En Grupo RG no alquilamos una simple "calculadora en la nube". Desarrollamos la infraestructura Core de IA personalizada para tu constructora, capaz de leer y cruzar todos los documentos de tus proveedores en 15 segundos sin salir de tu entorno.
 
 Agenda una **Evaluación Técnica Gratuita** y te mostramos cómo escalar tu operativa:
 👉 [ENLACE A AGENDA]`,

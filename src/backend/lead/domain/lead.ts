@@ -177,6 +177,22 @@ export class Lead {
         this.updatedAt = new Date();
     }
 
+    /**
+     * Anexa URLs al `intake.imageUrls` sin duplicar. Devuelve `true` si hubo
+     * cambios reales (al menos una URL nueva). El chat público lo usa para
+     * mantener el intake al día con las fotos que el visitante adjunta en
+     * turnos posteriores al handoff inicial.
+     */
+    appendIntakeImages(urls: string[]): boolean {
+        if (!this.intake || urls.length === 0) return false;
+        const existing = this.intake.imageUrls || [];
+        const merged = Array.from(new Set([...existing, ...urls]));
+        if (merged.length === existing.length) return false;
+        this.intake = { ...this.intake, imageUrls: merged };
+        this.updatedAt = new Date();
+        return true;
+    }
+
     setQualification(qualification: LeadQualification): void {
         this.qualification = qualification;
         this.updatedAt = new Date();

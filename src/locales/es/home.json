@@ -264,7 +264,7 @@
         "sidebarStep2Desc": "Diseño y presupuesto a tu medida.",
         "cta": "Ver más proyectos"
     },
-    "basis": {
+    "platform": {
         "hero": {
             "eyebrow": "AI-First Custom Software",
             "titlePart1": "Reduce tus horas de presupuesto a",
@@ -275,7 +275,7 @@
         },
         "wizard": {
             "title": "Tu próximo presupuesto, en piloto automático.",
-            "description": "Dile a Basis qué necesitas presupuestar. Nuestra IA estructura partidas detalladas y cruza precios de mercado en segundos.",
+            "description": "Cuéntanos qué necesitas presupuestar. Nuestra IA estructura partidas detalladas y cruza precios de mercado en segundos.",
             "examples": {
                 "kitchen": "Reforma Integral de Cocina",
                 "roof": "Impermeabilización de Cubierta"
@@ -294,7 +294,7 @@
             "sendBtn": "Enviarme PDF",
             "successTitle": "PDF enviado con éxito.",
             "successDesc": "Este generador usa medias. ¿Te imaginas hacer esto con tus tarifas y tu margen real?",
-            "upsellTitle": "Con Basis Core A Medida:",
+            "upsellTitle": "Con Grupo RG A Medida:",
             "upsellFeatures": [
                 "Integración de tus propios Excels o tarifas en PDF.",
                 "Paneles de desviación de costes en tiempo real.",
@@ -328,11 +328,11 @@
         },
         "benefits": {
             "title": "El fin del papeleo.<br />El control absoluto sobre tus obras.",
-            "description": "Basis es el motor central que unifica ventas, control económico y ejecución a medida de tu rentabilidad.",
+            "description": "Grupo RG es el motor central que unifica ventas, control económico y ejecución a medida de tu rentabilidad.",
             "items": [
                 {
                     "title": "Tu software A Medida. En 4 semanas.",
-                    "description": "Adaptamos la IA de Basis a tus procesos, integrando tus propios Excels históricos y flujos de trabajo.",
+                    "description": "Adaptamos la IA de Grupo RG a tus procesos, integrando tus propios Excels históricos y flujos de trabajo.",
                     "features": [
                         "Desarrollo Core + Capas Personalizadas",
                         "Sin curvas de aprendizaje imposibles para tu equipo",
@@ -402,7 +402,7 @@
             "badge": "Demo Personalizada",
             "titleHighlight": "Gratuita",
             "title": "Reserva Tu Consulta ",
-            "description": "30 minutos con un especialista en construcción digital. Te enseñamos cómo Basis se integra en tu flujo de trabajo real.",
+            "description": "30 minutos con un especialista en construcción digital. Te enseñamos cómo Grupo RG se integra en tu flujo de trabajo real.",
             "calendar": {
                 "months": [
                     "Enero",
@@ -459,9 +459,9 @@
             }
         },
         "floatingTrigger": {
-            "desktopTitle": "¿Hablar con Basis AI?",
+            "desktopTitle": "¿Hablar con Grupo RG IA?",
             "desktopSubtitle": "Automatiza tu presupuesto en segundos.",
-            "mobileTitle": "¿Hablar con Basis AI?",
+            "mobileTitle": "¿Hablar con Grupo RG IA?",
             "mobileSubtitle": "Cotiza tu obra en segundos."
         },
         "profiling": {

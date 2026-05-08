@@ -278,20 +278,32 @@ export function PublicCommercialChat() {
                 return;
             }
 
-            // Si el agente cualificó al lead y devolvió slots de agenda, los
-            // adjuntamos al mensaje para renderizar el InlineBookingPicker.
+            // Adjuntamos slots al mensaje para renderizar el InlineBookingPicker
+            // en dos casos:
+            //   a) Handoff cualificado con slots (camino post-cualificación inicial).
+            //   b) Llamada explícita a 'listAvailableSlots' por parte del modelo
+            //      (visitante OTP-verificado que pide ver/cambiar horarios).
+            // En (b) sólo tiene sentido si conocemos el leadId del visitante
+            // verificado, porque el botón de confirmar lo necesita.
             const handoff = (result as any).handoff;
+            const availableSlots = (result as any).availableSlots as
+                | { date: string; startTime: string; endTime: string; label: string }[]
+                | undefined;
+
+            const handoffSlots = (handoff?.decision === 'qualified' && handoff?.bookingSlots?.length > 0)
+                ? { bookingSlots: handoff.bookingSlots, bookingLeadId: handoff.leadId }
+                : null;
+
+            const listedSlots = (!handoffSlots && availableSlots && availableSlots.length > 0 && verifiedLead?.id)
+                ? { bookingSlots: availableSlots, bookingLeadId: verifiedLead.id }
+                : null;
+
             const assistantMessage: ChatMessage = {
                 id: `assistant-${Date.now()}`,
                 role: 'assistant',
                 content: result.response || '',
                 createdAt: Date.now(),
-                ...(handoff?.decision === 'qualified' && handoff?.bookingSlots?.length > 0
-                    ? {
-                          bookingSlots: handoff.bookingSlots,
-                          bookingLeadId: handoff.leadId,
-                      }
-                    : {}),
+                ...(handoffSlots || listedSlots || {}),
             };
             setMessages(prev => [...prev, assistantMessage]);
         } catch (err: any) {

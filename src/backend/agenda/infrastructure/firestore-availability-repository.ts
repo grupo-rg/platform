@@ -30,7 +30,8 @@ export class FirestoreAvailabilityRepository implements AvailabilityRepository {
             data.slotDurationMinutes || 30,
             data.bufferMinutes || 0,
             data.updatedAt?.toDate() || new Date(),
-            data.autoProposeBooking !== false  // default true
+            data.autoProposeBooking !== false,  // default true
+            typeof data.minCancellationHours === 'number' ? data.minCancellationHours : 4
         );
     }
 
@@ -41,6 +42,7 @@ export class FirestoreAvailabilityRepository implements AvailabilityRepository {
             bufferMinutes: config.bufferMinutes,
             updatedAt: config.updatedAt,
             autoProposeBooking: config.autoProposeBooking,
+            minCancellationHours: config.minCancellationHours,
         };
     }
 

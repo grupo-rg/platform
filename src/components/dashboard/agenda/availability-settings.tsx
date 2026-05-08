@@ -29,6 +29,9 @@ export function AvailabilitySettings() {
                 slotDurationMinutes: data.slotDurationMinutes,
                 bufferMinutes: data.bufferMinutes,
                 autoProposeBooking: (data as any).autoProposeBooking !== false,
+                minCancellationHours: typeof (data as any).minCancellationHours === 'number'
+                    ? (data as any).minCancellationHours
+                    : 4,
             } as any);
         } catch (err: any) {
             setError('Error al cargar la configuración: ' + err.message);
@@ -156,6 +159,29 @@ export function AvailabilitySettings() {
                         checked={(config as any).autoProposeBooking !== false}
                         onCheckedChange={(checked) => setConfig({ ...config, autoProposeBooking: checked } as any)}
                     />
+                </div>
+
+                <div className="mt-6 space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
+                    <div>
+                        <Label className="text-sm font-semibold">Antelación mínima para que el lead cancele o reagende (horas)</Label>
+                        <p className="mt-1 text-xs text-muted-foreground max-w-xl">
+                            Si la reunión está a menos de este margen, el agente del chat NO permite cancelar/reagendar al lead — debe contactar contigo. No afecta a cancelaciones desde este dashboard.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={(config as any).minCancellationHours ?? 4}
+                            onChange={(e) => setConfig({
+                                ...config,
+                                minCancellationHours: Math.max(0, parseInt(e.target.value) || 0),
+                            } as any)}
+                            className="w-32"
+                        />
+                        <span className="text-sm text-muted-foreground">horas antes del slot</span>
+                    </div>
                 </div>
             </div>
 

@@ -29,9 +29,9 @@ export class MoveDealStageUseCase implements EventHandler<BookingConfirmedEvent>
             }
 
             await this.dealRepo.save(deal);
-            console.log(`[CRM] Deal \${deal.id} movido a SALES_CALL_SCHEDULED exitosamente y url guardada.`);
+            console.log(`[CRM] Deal ${deal.id} movido a SALES_CALL_SCHEDULED exitosamente y url guardada.`);
         } else {
-            console.warn(`[CRM] No se encontró Deal activo para Lead \${event.leadId}. Ignorando Evento.`);
+            console.warn(`[CRM] No se encontró Deal activo para Lead ${event.leadId}. Ignorando Evento.`);
         }
     }
 }

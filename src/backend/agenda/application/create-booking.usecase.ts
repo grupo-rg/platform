@@ -28,10 +28,10 @@ export class CreateBookingUseCase {
         // 1. Domain Validation
         const isAvailable = await this.availabilityRepo.isSlotAvailable(targetDate, req.timeSlot);
         if (!isAvailable) {
-            throw new Error(`The slot \${req.timeSlot} is already booked or unvailable.`);
+            throw new Error(`The slot ${req.timeSlot} is already booked or unvailable.`);
         }
 
-        const id = `book_\${Date.now()}_\${Math.floor(Math.random() * 1000)}`;
+        const id = `book_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
         const newBooking = Booking.create(
             id,
@@ -51,11 +51,11 @@ export class CreateBookingUseCase {
         const startDateTime = new Date(targetDate);
         startDateTime.setHours(hours, mins, 0, 0);
 
-        const summary = `Consultoría Basis: \${req.name}`;
-        const description = `Revisión Técnica con \${req.name} (\${req.email} / \${req.phone || 'Sin telf'}). Lead ID: \${req.leadId || 'N/A'}`;
-        
-        console.log(`[Agenda] Solicitando enlace a Google Meet para: \${summary}`);
-        const meetUrl = await this.meetService.generateMeetLink(summary, description, startDateTime, 45, [req.email, 'info@consultoria.systems']);
+        const summary = `Consultoría Grupo RG: ${req.name}`;
+        const description = `Revisión Técnica con ${req.name} (${req.email} / ${req.phone || 'Sin telf'}). Lead ID: ${req.leadId || 'N/A'}`;
+
+        console.log(`[Agenda] Solicitando enlace a Google Meet para: ${summary}`);
+        const meetUrl = await this.meetService.generateMeetLink(summary, description, startDateTime, 45, [req.email, 'info@gruporg.com']);
         
         // Asociamos el link de la sala a la reserva nativa
         newBooking.meetUrl = meetUrl;

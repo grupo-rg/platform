@@ -25,7 +25,14 @@ export class AvailabilityConfig {
          * disponibles via InlineBookingPicker. Si false, el admin agenda
          * manualmente desde el dashboard.
          */
-        public autoProposeBooking: boolean = true
+        public autoProposeBooking: boolean = true,
+        /**
+         * Horas mínimas de antelación para que el lead pueda cancelar o
+         * reagendar su propia reserva desde el chat público. Si la diferencia
+         * (slot − ahora) es menor, el lead debe contactar al admin. No afecta
+         * a cancelaciones desde el dashboard, sólo a self-service del lead.
+         */
+        public minCancellationHours: number = 4
     ) { }
 
     static createDefault(id: string = 'default'): AvailabilityConfig {
@@ -49,7 +56,8 @@ export class AvailabilityConfig {
             30,
             0,
             new Date(),
-            true
+            true,
+            4
         );
     }
 }

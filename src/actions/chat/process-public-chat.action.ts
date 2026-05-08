@@ -12,7 +12,27 @@ import { SendMessageUseCase } from '@/backend/chat/application/send-message.usec
 import { LinkSessionToLeadUseCase } from '@/backend/chat/application/link-session-to-lead.usecase';
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { FirestoreMessageRepository } from '@/backend/chat/infrastructure/firestore-message-repository';
+import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
+import { getMyBookingsAction } from '@/actions/agenda/get-my-bookings.action';
 import type { Participant } from '@/backend/chat/domain/conversation';
+
+/**
+ * Mantiene `lead.intake.imageUrls` al día con todas las fotos que el visitante
+ * sube en el chat — incluidas las que llegan en turnos posteriores al handoff
+ * inicial. Sin esto, el admin sólo ve las fotos del primer registro.
+ */
+async function appendImagesToLeadIntake(leadId: string, newImageUrls: string[]): Promise<void> {
+    if (newImageUrls.length === 0) return;
+    try {
+        const leadRepo = new FirestoreLeadRepository();
+        const lead = await leadRepo.findById(leadId);
+        if (!lead) return;
+        const changed = lead.appendIntakeImages(newImageUrls);
+        if (changed) await leadRepo.save(lead);
+    } catch (err) {
+        console.error('[processPublicChatAction] Falló append de imágenes al lead intake:', err);
+    }
+}
 
 const ANON_NAME = 'Visitante anónimo';
 const ASSISTANT_PARTICIPANT: Participant = { id: 'assistant', type: 'assistant', name: 'Agente Comercial Grupo RG' };
@@ -150,6 +170,27 @@ export async function processPublicChatAction(
             ? await normalizeToPublicUrls(candidateImages, `chat-${chatSessionId || userId || 'anon'}`)
             : [];
 
+        // Precargar reservas activas si es visitante OTP-verificado, para que
+        // el agente pueda responder "¿cuándo era mi cita?" sin tool extra y
+        // tenga el bookingId a mano si pide cancelar/reagendar.
+        let activeBookings: Array<{ id: string; date: string; timeSlot: string; label: string; status: string }> | undefined;
+        if (existingLeadId) {
+            try {
+                const bookingsRes = await getMyBookingsAction(existingLeadId);
+                if (bookingsRes.success && bookingsRes.bookings && bookingsRes.bookings.length > 0) {
+                    activeBookings = bookingsRes.bookings.map(b => ({
+                        id: b.id,
+                        date: b.date,
+                        timeSlot: b.timeSlot,
+                        label: b.label,
+                        status: b.status,
+                    }));
+                }
+            } catch (err) {
+                console.warn('[processPublicChatAction] No se pudo precargar activeBookings:', err);
+            }
+        }
+
         const result = await publicCommercialAgent({
             userMessage: sanitized.text,
             history,
@@ -160,6 +201,7 @@ export async function processPublicChatAction(
             chatSessionId,
             existingLeadId,
             leadName,
+            activeBookings,
         });
 
         // Guardrail final sobre la respuesta del agente.
@@ -187,6 +229,15 @@ export async function processPublicChatAction(
             });
         }
 
+        // 5. Append idempotente de imágenes al intake del lead. Cubre el caso
+        // de fotos enviadas en turnos posteriores al handoff inicial (cuando
+        // el modelo ya no llama al tool y, por tanto, el intake nunca recibe
+        // las nuevas URLs).
+        const targetLeadId = existingLeadId || result.handoff?.leadId;
+        if (targetLeadId && imageUrls.length > 0) {
+            await appendImagesToLeadIntake(targetLeadId, imageUrls);
+        }
+
         return {
             success: true,
             response: guarded.reply,
@@ -196,6 +247,9 @@ export async function processPublicChatAction(
             // Reenvía el resultado del handoff al cliente. Si decision='qualified'
             // y hay bookingSlots, el chat renderiza el InlineBookingPicker.
             handoff: result.handoff,
+            // Slots devueltos por la tool 'listAvailableSlots' en este turno.
+            // El chat los muestra como tarjetas clicables si vienen.
+            availableSlots: (result as any).availableSlots,
         };
     } catch (error) {
         console.error("Error processing public client message:", error);

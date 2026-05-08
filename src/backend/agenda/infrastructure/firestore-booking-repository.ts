@@ -54,6 +54,16 @@ export class FirestoreBookingRepository implements BookingRepository {
         return snap.docs.map(doc => this.toBooking(doc.id, doc.data()));
     }
 
+    async findByLeadId(leadId: string): Promise<Booking[]> {
+        const snap = await db().collection(this.collection)
+            .where('leadId', '==', leadId)
+            .orderBy('date', 'desc')
+            .limit(20)
+            .get();
+
+        return snap.docs.map(doc => this.toBooking(doc.id, doc.data()));
+    }
+
     async findUpcoming(limit: number): Promise<Booking[]> {
         const now = new Date();
         const snap = await db().collection(this.collection)

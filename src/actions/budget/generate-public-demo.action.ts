@@ -54,7 +54,7 @@ export async function generatePublicDemoAction(leadId: string, requirements: Bud
             console.log(`>> Lead ${leadId} already generated a budget. Enforcing rate limit.`);
             return {
                 success: false,
-                error: "Ya has agotado tu presupuesto gratuito de demostración. Agenda una consultoría para seguir evaluando Basis."
+                error: "Ya has agotado tu presupuesto gratuito de demostración. Agenda una consultoría con Grupo RG para profundizar en tu proyecto."
             };
         }
 

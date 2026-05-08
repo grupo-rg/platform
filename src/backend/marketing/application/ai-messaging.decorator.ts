@@ -34,11 +34,11 @@ export class AIMessagingDecorator implements MessagingService {
         baseTemplate = baseTemplate.replace('{{name}}', leadVariables.name || 'Cliente');
         
         // Inyectar Rutas y Enlaces Críticos (Pre-procesamiento Determinista)
-        const urlParams = leadVariables.email ? `?email=\${encodeURIComponent(leadVariables.email)}&name=\${encodeURIComponent(leadVariables.name || '')}` : '';
-        const agendaLink = `https://basis.consultoria.systems/es\${urlParams}#agenda`;
-        const demoPath = 'https://basis.consultoria.systems/es/dashboard/asistente';
-        
-        const agendaBtnHtml = `\\n<a href="\${agendaLink}" style="display:inline-block; padding:12px 24px; background-color:#2563EB; color:#ffffff; font-weight:800; border-radius:6px; text-decoration:none; margin-top:8px;" target="_blank">Agendar Evaluación Gratis</a>\\n`;
+        const urlParams = leadVariables.email ? `?email=${encodeURIComponent(leadVariables.email)}&name=${encodeURIComponent(leadVariables.name || '')}` : '';
+        const agendaLink = `https://www.constructoresenmallorca.com/es${urlParams}#agenda`;
+        const demoPath = 'https://www.constructoresenmallorca.com/es/dashboard/assistant';
+
+        const agendaBtnHtml = `\n<a href="${agendaLink}" style="display:inline-block; padding:12px 24px; background-color:#2563EB; color:#ffffff; font-weight:800; border-radius:6px; text-decoration:none; margin-top:8px;" target="_blank">Agendar Evaluación Gratis</a>\n`;
         
         baseTemplate = baseTemplate.replaceAll('[ENLACE A TU EVALUACIÓN TÉCNICA GRATUITA]', agendaBtnHtml);
         baseTemplate = baseTemplate.replaceAll('[ENLACE A LA AUDITORÍA TÉCNICA GRATUITA]', agendaBtnHtml);
@@ -52,7 +52,7 @@ export class AIMessagingDecorator implements MessagingService {
             baseTemplate = baseTemplate.replaceAll('[ENLACE A LA REUNIÓN ZOOM/MEET]', 'https://meet.google.com/fallback-link'); // fallback
         }
 
-        const systemInstruction = `Eres un experto consultor B2B empresarial de Inteligencia Artificial (Basis). 
+        const systemInstruction = `Eres un experto consultor B2B en construcción profesional (Grupo RG).
 Tu misión es ADAPTAR LIGERAMENTE la siguiente [PLANTILLA COMPLETA] basándote en la radiografía del cliente.
 Debes reescribir y DEVOLVER TODO EL CORREO COMPLETO, de principio a fin, manteniendo la estructura pero ajustando los dolores al perfil del cliente.
 

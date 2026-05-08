@@ -42,8 +42,8 @@ export class EventDispatcher {
     async dispatch(event: DomainEvent): Promise<void> {
         const eventHandlers = this.handlers.get(event.eventName);
         if (eventHandlers && eventHandlers.length > 0) {
-            console.log(`[EventDispatcher] Ocurrió Evento \${event.eventName}. Ejecutando \${eventHandlers.length} Handlers asociados.`);
-            
+            console.log(`[EventDispatcher] Ocurrió Evento ${event.eventName}. Ejecutando ${eventHandlers.length} Handlers asociados.`);
+
             // Promise.all(Settled) para aislar fallos de un dominio respecto al flujo de otro
             const globalResults = await Promise.allSettled(
                 eventHandlers.map(handler => handler.handle(event))
@@ -51,11 +51,11 @@ export class EventDispatcher {
 
             globalResults.forEach((result, i) => {
                 if (result.status === 'rejected') {
-                    console.error(`[EventDispatcher] Handler \${i} falló silenciosamente para \${event.eventName}:`, result.reason);
+                    console.error(`[EventDispatcher] Handler ${i} falló silenciosamente para ${event.eventName}:`, result.reason);
                 }
             });
         } else {
-            console.log(`[EventDispatcher] Ocurrió Evento \${event.eventName} pero nadie lo está escuchando.`);
+            console.log(`[EventDispatcher] Ocurrió Evento ${event.eventName} pero nadie lo está escuchando.`);
         }
     }
 }

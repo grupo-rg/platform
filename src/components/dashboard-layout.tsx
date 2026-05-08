@@ -89,7 +89,7 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
                 <Menu className="h-6 w-6" />
               </Button>
             )}
-            <span className="font-semibold text-lg">Basis</span>
+            <span className="font-semibold text-lg">Grupo RG</span>
           </div>
           {/* We could add user menu or other actions here for mobile */}
         </div>

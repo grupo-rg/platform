@@ -15,6 +15,7 @@ export async function getAvailabilityConfigAction(): Promise<AvailabilityConfig>
         bufferMinutes: config.bufferMinutes,
         updatedAt: config.updatedAt,
         autoProposeBooking: config.autoProposeBooking,
+        minCancellationHours: config.minCancellationHours,
     } as AvailabilityConfig;
 }
 
@@ -24,6 +25,7 @@ export async function updateAvailabilityConfigAction(
         slotDurationMinutes: number,
         bufferMinutes: number,
         autoProposeBooking?: boolean,
+        minCancellationHours?: number,
     }
 ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -34,7 +36,8 @@ export async function updateAvailabilityConfigAction(
             data.slotDurationMinutes,
             data.bufferMinutes,
             new Date(),
-            data.autoProposeBooking !== undefined ? data.autoProposeBooking : current.autoProposeBooking
+            data.autoProposeBooking !== undefined ? data.autoProposeBooking : current.autoProposeBooking,
+            typeof data.minCancellationHours === 'number' ? data.minCancellationHours : current.minCancellationHours
         );
         await availabilityRepo.save(updated);
         return { success: true };

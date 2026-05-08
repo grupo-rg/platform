@@ -43,13 +43,40 @@ export const requestBudgetHandoffTool = ai.defineTool(
     },
     async (input, toolContext): Promise<BudgetHandoffResponse> => {
         const ctx = (toolContext?.context || {}) as PublicAgentToolContext;
-        console.log(`[Handoff Tool] Lead handoff for ${input.leadName} <${input.leadEmail}>`);
+
+        // Si el visitante ya pasó OTP, recuperamos email/nombre del Lead existente.
+        // El schema los marca opcionales para que el modelo no fabrique valores
+        // como "registrado" cuando el system prompt le pide no preguntar.
+        const leadRepository = new FirestoreLeadRepository();
+        let resolvedEmail = input.leadEmail;
+        let resolvedName = input.leadName;
+        if (ctx.existingLeadId) {
+            const existing = await leadRepository.findById(ctx.existingLeadId);
+            if (existing) {
+                resolvedEmail = existing.personalInfo.email;
+                resolvedName = existing.personalInfo.name;
+            }
+        }
+
+        if (!resolvedEmail || !resolvedName) {
+            console.error('[Handoff Tool] Faltan datos de identidad. existingLeadId=', ctx.existingLeadId, 'input=', { name: input.leadName, email: input.leadEmail });
+            return {
+                success: false,
+                leadId: '',
+                decision: 'review_required',
+                suggestedNextStep:
+                    'Pide al usuario su nombre y email para poder registrar la solicitud, ' +
+                    'y vuelve a llamar a la herramienta cuando los tengas.',
+            };
+        }
+
+        console.log(`[Handoff Tool] Lead handoff for ${resolvedName} <${resolvedEmail}>`);
 
         try {
-            const useCase = new SubmitLeadIntakeUseCase(new FirestoreLeadRepository());
+            const useCase = new SubmitLeadIntakeUseCase(leadRepository);
             const result = await useCase.execute({
-                name: input.leadName,
-                email: input.leadEmail,
+                name: resolvedName,
+                email: resolvedEmail,
                 phone: input.leadPhone || '',
                 projectType: input.projectType,
                 description: input.projectDescription,

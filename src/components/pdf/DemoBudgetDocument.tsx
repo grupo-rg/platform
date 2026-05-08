@@ -194,7 +194,7 @@ interface DemoBudgetDocumentProps {
 }
 
 const Footer = ({ pageNumber, companyName, cif, address }: { pageNumber: number, companyName?: string, cif?: string, address?: string }) => {
-    const defaultCompany = 'Basis';
+    const defaultCompany = 'Grupo RG';
     const defaultCif = '';
     const defaultAddress = '';
 
@@ -339,9 +339,9 @@ export const DemoBudgetDocument = ({
                     </View>
                 </View>
 
-                <Footer pageNumber={1} companyName={clientEmail} cif={clientEmail ? "Generado por Basis" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
-                <Footer pageNumber={2} companyName={clientEmail} cif={clientEmail ? "Generado por Basis" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
-                <Footer pageNumber={3} companyName={clientEmail} cif={clientEmail ? "Generado por Basis" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
+                <Footer pageNumber={1} companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
+                <Footer pageNumber={2} companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
+                <Footer pageNumber={3} companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
             </Page>
         </Document>
     );

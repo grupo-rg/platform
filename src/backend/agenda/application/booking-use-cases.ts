@@ -140,21 +140,86 @@ export class GetAvailabilityUseCase {
 }
 
 /**
+ * Resultado tipado de cancelación. El error semántico permite a la action
+ * y a la tool del agente diferenciar errores de UX (too_late, forbidden)
+ * de errores reales (not_found, internal).
+ */
+export type CancelBookingResult =
+    | { success: true; bookingId: string; slotDateTime: Date; leadId: string | null }
+    | { success: false; error: string; errorCode?: 'not_found' | 'forbidden' | 'too_late' | 'already_cancelled' | 'internal'; minHours?: number };
+
+export interface CancelBookingInput {
+    bookingId: string;
+    /** Si está presente, autorizamos sólo si el booking pertenece al leadId. */
+    requesterLeadId?: string;
+    /** Si true, se omite la validación de antelación mínima (uso admin). */
+    skipMinHoursCheck?: boolean;
+}
+
+/**
  * CancelBookingUseCase
+ *
+ * Por defecto valida antelación mínima leyendo `AvailabilityConfig.minCancellationHours`.
+ * Para self-service desde el chat público se pasa `requesterLeadId` para
+ * evitar que un lead cancele booking de otro. Para uso admin se pasa
+ * `skipMinHoursCheck: true`.
  */
 export class CancelBookingUseCase {
-    constructor(private bookingRepo: BookingRepository) { }
+    constructor(
+        private bookingRepo: BookingRepository,
+        private availabilityRepo?: AvailabilityRepository
+    ) { }
 
-    async execute(bookingId: string): Promise<{ success: boolean; error?: string }> {
-        const booking = await this.bookingRepo.findById(bookingId);
-        if (!booking) return { success: false, error: 'Reserva no encontrada.' };
+    async execute(input: string | CancelBookingInput): Promise<CancelBookingResult> {
+        const params: CancelBookingInput = typeof input === 'string' ? { bookingId: input } : input;
+
+        const booking = await this.bookingRepo.findById(params.bookingId);
+        if (!booking) {
+            return { success: false, error: 'Reserva no encontrada.', errorCode: 'not_found' };
+        }
+
+        if (params.requesterLeadId && booking.leadId !== params.requesterLeadId) {
+            return { success: false, error: 'No autorizado para cancelar esta reserva.', errorCode: 'forbidden' };
+        }
+
+        if (booking.status === 'CANCELLED') {
+            return { success: false, error: 'La reserva ya estaba cancelada.', errorCode: 'already_cancelled' };
+        }
+
+        // Validación de antelación mínima (sólo si tenemos availabilityRepo y no se skippea).
+        if (this.availabilityRepo && !params.skipMinHoursCheck) {
+            const config = await this.availabilityRepo.getConfig();
+            const minHours = config.minCancellationHours ?? 4;
+            const [hh, mm] = booking.timeSlot.split(':').map(Number);
+            const slotDateTime = new Date(booking.date);
+            slotDateTime.setHours(hh, mm, 0, 0);
+            const hoursUntil = (slotDateTime.getTime() - Date.now()) / (1000 * 60 * 60);
+            if (hoursUntil < minHours) {
+                return {
+                    success: false,
+                    error: `Las reservas sólo pueden cancelarse con al menos ${minHours}h de antelación.`,
+                    errorCode: 'too_late',
+                    minHours,
+                };
+            }
+        }
 
         try {
             booking.cancel();
             await this.bookingRepo.save(booking);
-            return { success: true };
+
+            const [hh, mm] = booking.timeSlot.split(':').map(Number);
+            const slotDateTime = new Date(booking.date);
+            slotDateTime.setHours(hh, mm, 0, 0);
+
+            return {
+                success: true,
+                bookingId: booking.id,
+                slotDateTime,
+                leadId: booking.leadId,
+            };
         } catch (err: any) {
-            return { success: false, error: err.message };
+            return { success: false, error: err.message, errorCode: 'internal' };
         }
     }
 }

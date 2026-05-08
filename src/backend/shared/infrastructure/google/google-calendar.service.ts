@@ -10,17 +10,17 @@ export class GoogleCalendarService {
 
         if (!clientEmail || !privateKey) {
             console.warn("[GoogleCalendarService] ⚠️ Credenciales de Service Account no encontradas en process.env. Se crearán links mockeados en desarrollo.");
-            console.log(`[GoogleCalendarService - Debug] FIREBASE_CLIENT_EMAIL: \${clientEmail ? 'Encontrado' : 'FALTA'}`);
-            console.log(`[GoogleCalendarService - Debug] FIREBASE_PRIVATE_KEY: \${privateKey ? 'Encontrado' : 'FALTA'}`);
+            console.log(`[GoogleCalendarService - Debug] FIREBASE_CLIENT_EMAIL: ${clientEmail ? 'Encontrado' : 'FALTA'}`);
+            console.log(`[GoogleCalendarService - Debug] FIREBASE_PRIVATE_KEY: ${privateKey ? 'Encontrado' : 'FALTA'}`);
         } else {
-            console.log(`[GoogleCalendarService] ✅ Credenciales detectadas para: \${clientEmail}`);
+            console.log(`[GoogleCalendarService] ✅ Credenciales detectadas para: ${clientEmail}`);
         }
 
         const clientOptions: any = {};
         if (process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL) {
             // Impersonar al administrador del Workspace (Domain-Wide Delegation)
             clientOptions.subject = process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL;
-            console.log(`[GoogleCalendarService] 🏢 Domain-Wide Delegation activada para: \${clientOptions.subject}`);
+            console.log(`[GoogleCalendarService] 🏢 Domain-Wide Delegation activada para: ${clientOptions.subject}`);
         }
 
         const auth = new google.auth.GoogleAuth({

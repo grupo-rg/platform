@@ -8,6 +8,7 @@ export interface BookingRepository {
     findById(id: string): Promise<Booking | null>;
     findByDate(date: Date): Promise<Booking[]>;
     findByEmail(email: string): Promise<Booking[]>;
+    findByLeadId(leadId: string): Promise<Booking[]>;
     findUpcoming(limit: number): Promise<Booking[]>;
     findByDateRange(start: Date, end: Date): Promise<Booking[]>;
 }

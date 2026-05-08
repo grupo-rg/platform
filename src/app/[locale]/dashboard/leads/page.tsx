@@ -32,7 +32,7 @@ export default async function LeadsPage({ searchParams }: PageProps) {
                             <Users className="w-3 h-3 mr-1 text-purple-300" /> CRM
                         </Badge>
                         <h1 className="text-4xl font-bold font-headline tracking-tight">
-                            Leads & <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-200 to-indigo-200">Pipeline</span>
+                            Solicitudes & <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-200 to-indigo-200">Pipeline</span>
                         </h1>
                         <p className="text-purple-100/80 max-w-xl text-lg">
                             Revisa solicitudes entrantes y haz avanzar las oportunidades por el pipeline comercial.

@@ -63,7 +63,7 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
         {
             label: 'Ventas',
             items: [
-                { href: '/dashboard/leads', label: 'Leads', icon: Users },
+                { href: '/dashboard/leads', label: 'Solicitudes', icon: Users },
                 { href: '/dashboard/agenda', label: 'Agenda', icon: CalendarDays },
             ]
         },

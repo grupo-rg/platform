@@ -38,7 +38,7 @@ import type { SubEvent } from '@/components/budget/budget-generation-events';
 
 export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { isAdmin?: boolean, isPublicMode?: boolean }) {
     const t = useTranslations('home');
-    const w = t.raw('basis.wizardChat');
+    const w = t.raw('platform.wizardChat');
     const {
         messages,
         input,

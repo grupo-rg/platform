@@ -1,8 +1,10 @@
 import 'server-only';
 import { EventDispatcher } from './event-dispatcher';
 import { HandleBookingConfirmedUseCase } from '@/backend/marketing/application/handle-booking-confirmed.usecase';
+import { HandleBookingCancelledUseCase } from '@/backend/marketing/application/handle-booking-cancelled.usecase';
 import { EnrollLeadInSequenceUseCase } from '@/backend/marketing/application/enroll-lead-in-sequence.usecase';
 import { MoveDealStageUseCase } from '@/backend/crm/application/move-deal-stage.usecase';
+import { RevertDealStageOnBookingCancelledUseCase } from '@/backend/crm/application/revert-deal-stage-on-booking-cancelled.usecase';
 import { FirebaseEnrollmentRepository } from '@/backend/marketing/infrastructure/persistence/firebase.enrollment.repository';
 import { FirebaseSequenceRepository } from '@/backend/marketing/infrastructure/persistence/firebase.sequence.repository';
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
@@ -12,6 +14,7 @@ import { CreateDealOnLeadCreatedUseCase } from '@/backend/crm/application/create
 import { MoveDealOnBudgetSentUseCase } from '@/backend/crm/application/move-deal-on-budget-sent.usecase';
 import { MoveDealOnBudgetAcceptedUseCase } from '@/backend/crm/application/move-deal-on-budget-accepted.usecase';
 import { AdjustScoreOnBookingConfirmed } from '@/backend/lead/application/listeners/adjust-score-on-booking.usecase';
+import { AdjustScoreOnBookingCancelled } from '@/backend/lead/application/listeners/adjust-score-on-booking-cancelled.usecase';
 import { AdjustScoreOnBudgetSent } from '@/backend/lead/application/listeners/adjust-score-on-budget-sent.usecase';
 import { AdjustScoreOnBudgetAccepted } from '@/backend/lead/application/listeners/adjust-score-on-budget-accepted.usecase';
 import { ScheduleReEngagementOnLeadCreated } from '@/backend/re-engagement/application/schedule-on-lead-created.usecase';
@@ -46,6 +49,12 @@ export function registerEventListeners(): void {
     const crmHandler = new MoveDealStageUseCase(new FirebaseDealRepository());
     dispatcher.register('BookingConfirmedEvent', crmHandler);
 
+    // CRM: cuando se cancela la reunión, mover de vuelta a NEW_LEAD si seguía en SALES_CALL_SCHEDULED.
+    dispatcher.register('BookingCancelledEvent', new RevertDealStageOnBookingCancelledUseCase(new FirebaseDealRepository()));
+
+    // Marketing: al cancelar booking, apagar la secuencia de reminders operativos.
+    dispatcher.register('BookingCancelledEvent', new HandleBookingCancelledUseCase(new FirebaseEnrollmentRepository()));
+
     // Lead: notificar al admin por email cuando entra una solicitud cualificable
     const adminNotifyHandler = new NotifyAdminOnLeadCreatedUseCase(new FirestoreLeadRepository());
     dispatcher.register('LeadCreatedEvent', adminNotifyHandler);
@@ -61,6 +70,7 @@ export function registerEventListeners(): void {
     // Lead scoring continuo: ajustar score con eventos del ciclo de venta.
     const sharedLeadRepo = new FirestoreLeadRepository();
     dispatcher.register('BookingConfirmedEvent', new AdjustScoreOnBookingConfirmed(sharedLeadRepo));
+    dispatcher.register('BookingCancelledEvent', new AdjustScoreOnBookingCancelled(sharedLeadRepo));
     dispatcher.register('BudgetSentEvent', new AdjustScoreOnBudgetSent(sharedLeadRepo));
     dispatcher.register('BudgetAcceptedEvent', new AdjustScoreOnBudgetAccepted(sharedLeadRepo));
 

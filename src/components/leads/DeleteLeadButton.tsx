@@ -21,7 +21,7 @@ export function DeleteLeadButton({ leadId }: { leadId: string }) {
         startTransition(async () => {
             const res = await deleteLeadAction(leadId);
             if (res.success) {
-                toast({ title: 'Lead eliminado', description: 'Se borraron también los deals asociados.' });
+                toast({ title: 'Solicitud eliminada', description: 'Se borraron también las oportunidades asociadas.' });
                 router.push('/dashboard/leads?tab=inbox');
             } else {
                 toast({ variant: 'destructive', title: 'No se pudo eliminar', description: res.error });
@@ -33,7 +33,7 @@ export function DeleteLeadButton({ leadId }: { leadId: string }) {
     if (confirming) {
         return (
             <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">¿Confirmas borrar este lead y sus deals?</span>
+                <span className="text-xs text-muted-foreground">¿Confirmas borrar esta solicitud y sus oportunidades?</span>
                 <Button onClick={handleClick} disabled={isPending} variant="destructive" size="sm">
                     {isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
                     Sí, borrar

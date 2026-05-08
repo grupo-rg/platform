@@ -6,8 +6,8 @@ import { z } from 'zod';
  * presupuestos: primero se cualifica el lead y se notifica al admin.
  */
 export const BudgetHandoffRequestSchema = z.object({
-    leadName: z.string().min(2).max(120).describe("Nombre del cliente potencial"),
-    leadEmail: z.string().email().describe("Email del lead (obligatorio)"),
+    leadName: z.string().min(2).max(120).optional().describe("Nombre del cliente potencial. OMITIR si el visitante ya está verificado por OTP — el sistema lo recupera del registro previo."),
+    leadEmail: z.string().email().optional().describe("Email del lead. OMITIR si el visitante ya está verificado por OTP — el sistema lo recupera del registro previo. Si se incluye, debe ser un email válido."),
     leadPhone: z.string().min(6).max(30).optional().describe("Teléfono del lead (opcional)"),
     projectDescription: z.string().min(10).max(5000).describe("Descripción detallada de la obra que el cliente quiere realizar"),
     projectType: z.enum(['bathroom', 'kitchen', 'integral', 'new_build', 'pool', 'other']).describe("Tipo de obra"),

@@ -52,11 +52,92 @@ export async function createBookingAction(params: {
 }
 
 /**
- * Cancel a booking
+ * Cancel a booking. Acepta `requesterLeadId` para autorizar self-service del
+ * chat público (sólo permite cancelar bookings propios) y `actor` para
+ * decidir si se aplica la validación de antelación mínima — los admins
+ * pueden cancelar fuera de plazo, los leads no.
+ *
+ * Side effects al cancelar OK:
+ *   - Email al lead.
+ *   - Despacho de BookingCancelledEvent (CRM revierte stage, score baja si
+ *     cancelledBy='lead', marketing apaga reminders).
  */
-export async function cancelBookingAction(bookingId: string): Promise<{ success: boolean; error?: string }> {
-    const useCase = new CancelBookingUseCase(bookingRepo);
-    return useCase.execute(bookingId);
+export async function cancelBookingAction(
+    bookingIdOrParams: string | {
+        bookingId: string;
+        requesterLeadId?: string;
+        actor?: 'lead' | 'admin' | 'system';
+    }
+): Promise<{
+    success: boolean;
+    error?: string;
+    errorCode?: 'not_found' | 'forbidden' | 'too_late' | 'already_cancelled' | 'internal';
+    minHours?: number;
+}> {
+    const params = typeof bookingIdOrParams === 'string'
+        ? { bookingId: bookingIdOrParams, actor: 'admin' as const }
+        : { ...bookingIdOrParams, actor: bookingIdOrParams.actor || 'lead' as const };
+
+    const useCase = new CancelBookingUseCase(bookingRepo, availabilityRepo);
+    const result = await useCase.execute({
+        bookingId: params.bookingId,
+        requesterLeadId: params.requesterLeadId,
+        skipMinHoursCheck: params.actor === 'admin',
+    });
+
+    if (!result.success) {
+        return {
+            success: false,
+            error: result.error,
+            errorCode: result.errorCode,
+            minHours: result.minHours,
+        };
+    }
+
+    // Email + evento (best-effort, no bloquean la respuesta de éxito).
+    try {
+        if (result.leadId) {
+            const lead = await leadRepo.findById(result.leadId);
+            if (lead?.personalInfo.email) {
+                const dateStr = result.slotDateTime.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+                const timeStr = result.slotDateTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                const html = `
+                    <div style="font-family: sans-serif; color: #333;">
+                        <h2>Hola ${lead.personalInfo.name.split(' ')[0]},</h2>
+                        <p>Confirmamos la <strong>cancelación</strong> de tu sesión prevista para el <strong>${dateStr}</strong> a las <strong>${timeStr}</strong>.</p>
+                        <p>Si quieres reagendar, vuelve al chat o contáctanos directamente.</p>
+                        <br/>
+                        <p>Un saludo,<br/><strong>Equipo Grupo RG</strong></p>
+                    </div>
+                `;
+                await ResendEmailService.send({
+                    to: lead.personalInfo.email,
+                    subject: 'Cancelación de tu sesión · Grupo RG',
+                    html,
+                    tags: [
+                        { name: 'category', value: 'booking_cancellation' },
+                        { name: 'lead_id', value: lead.id },
+                    ],
+                });
+            }
+        }
+    } catch (err) {
+        console.error('[cancelBookingAction] email cancelación falló (no crítico):', err);
+    }
+
+    try {
+        const { EventDispatcher } = await import('@/backend/shared/events/event-dispatcher');
+        const { BookingCancelledEvent } = await import('@/backend/agenda/domain/events/booking-cancelled.event');
+        const { registerEventListeners } = await import('@/backend/shared/events/register-listeners');
+        registerEventListeners();
+        await EventDispatcher.getInstance().dispatch(
+            new BookingCancelledEvent(result.bookingId, result.leadId, result.slotDateTime, params.actor)
+        );
+    } catch (err) {
+        console.error('[cancelBookingAction] dispatch BookingCancelledEvent falló:', err);
+    }
+
+    return { success: true };
 }
 
 /**
