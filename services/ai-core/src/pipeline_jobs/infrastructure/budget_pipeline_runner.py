@@ -193,6 +193,8 @@ class BudgetPipelineRunner(IPipelineRunner):
                 0.0,
             )
 
+        client_name = (payload.get("clientName") or "").strip() or None
+        budget_title = (payload.get("budgetTitle") or "").strip() or None
         return await self._restructure_uc.execute(
             raw_items=raw_items,
             lead_id=lead_id,
@@ -201,6 +203,8 @@ class BudgetPipelineRunner(IPipelineRunner):
             pdf_bytes=pdf_bytes,
             resume_from=resume_from_partidas,
             on_partida_resolved=_on_resolved,
+            client_name=client_name,
+            budget_title=budget_title,
         )
 
     # ------------------------------------------------------------------
@@ -233,8 +237,12 @@ class BudgetPipelineRunner(IPipelineRunner):
         # NL UC doesn't yet accept resume kwargs; the architect re-decomposes
         # the brief identically across retries, so practical effect is small.
         # Future P4.c can extend `GenerateBudgetFromNlUseCase` similarly.
+        client_name = (payload.get("clientName") or "").strip() or None
+        budget_title = (payload.get("budgetTitle") or "").strip() or None
         return await self._nl_uc.execute(
             narrative=narrative,
             lead_id=lead_id,
             budget_id=budget_id,
+            client_name=client_name,
+            budget_title=budget_title,
         )

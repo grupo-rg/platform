@@ -147,6 +147,29 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
 
     // Auto-resume generation after answering the Architect
     const [isAwaitingArchitect, setIsAwaitingArchitect] = React.useState(false);
+
+    // Datos de cliente / título que enriquecen el Budget resultante. Solo se
+    // piden a usuarios admin (en el flujo demo público no tiene sentido).
+    // Si están vacíos al pulsar "Generar", se abre `clientPromptOpen` para
+    // capturarlos antes de invocar la acción.
+    const [clientName, setClientName] = React.useState('');
+    const [budgetTitle, setBudgetTitle] = React.useState('');
+    const [clientPromptOpen, setClientPromptOpen] = React.useState(false);
+
+    // Pre-flight de metadata para el flujo PDF measurements. Después de subir
+    // el PDF, el extractor sync devuelve {clientName, budgetTitle, ...} y
+    // mostramos un Dialog para que el usuario confirme/edite antes del
+    // dispatch. La Promise que devuelve el callback se resuelve cuando el
+    // usuario pulsa Confirmar o Cancelar.
+    const [pdfMetadataPromptOpen, setPdfMetadataPromptOpen] = React.useState(false);
+    const [pdfMetadataPromptInitial, setPdfMetadataPromptInitial] = React.useState<{
+        clientName: string;
+        budgetTitle: string;
+        confidence: number;
+    } | null>(null);
+    const pdfMetadataResolverRef = React.useRef<
+        ((v: { clientName?: string; budgetTitle?: string } | null) => void) | null
+    >(null);
     
     // PDF Strategy Triage (legacy — se mantiene por si algún reset lo necesita,
     // pero la UX nueva captura la estrategia en un dropdown dentro del pill del
@@ -323,6 +346,18 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                     leadId: effectiveId,
                     budgetId,
                     strategy,
+                    onMetadataConfirm: isAdmin
+                        ? (extracted) =>
+                              new Promise((resolve) => {
+                                  pdfMetadataResolverRef.current = resolve;
+                                  setPdfMetadataPromptInitial({
+                                      clientName: extracted.clientName || '',
+                                      budgetTitle: extracted.budgetTitle || '',
+                                      confidence: extracted.confidence || 0,
+                                  });
+                                  setPdfMetadataPromptOpen(true);
+                              })
+                        : undefined,
                 });
                 if (newRes.success) {
                     // Stash pipelineJobId on the progress state so the
@@ -518,8 +553,38 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialPrompt, setInitialPrompt, targetLeadIdFromQuery, startNewConversation]);
 
+    /**
+     * Punto de entrada del botón "Generar". Si somos admin y aún no tenemos
+     * `clientName` + `budgetTitle`, abre un modal para capturarlos antes de
+     * dispatchear. En modo demo público o lead anónimo se salta el prompt y
+     * pasa directo a `runGeneration`.
+     */
     const handleGenerateBudget = async () => {
         if (!requirements || !requirements.specs) return;
+        if (isAdmin && (!clientName.trim() || !budgetTitle.trim())) {
+            setClientPromptOpen(true);
+            return;
+        }
+        await runGeneration();
+    };
+
+    const handleConfirmClientPrompt = async (name: string, title: string) => {
+        setClientName(name);
+        setBudgetTitle(title);
+        setClientPromptOpen(false);
+        // Esperar un microtask para que el setState se aplique antes de leerlo
+        // en runGeneration via closure (el componente re-renderiza primero).
+        await Promise.resolve();
+        await runGeneration({ overrideClientName: name, overrideBudgetTitle: title });
+    };
+
+    const runGeneration = async (overrides?: { overrideClientName?: string; overrideBudgetTitle?: string }) => {
+        if (!requirements || !requirements.specs) return;
+
+        // Si vienen overrides desde el modal, usamos esos valores (el state aún
+        // puede no haber re-renderizado a tiempo).
+        const effectiveClientName = (overrides?.overrideClientName ?? clientName).trim();
+        const effectiveBudgetTitle = (overrides?.overrideBudgetTitle ?? budgetTitle).trim();
 
         if (!isAdmin && !leadId) {
             console.error("Lead ID missing");
@@ -579,6 +644,11 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                     originalRequest: consolidatedNarrative || (requirements.specs as any).originalRequest,
                 },
                 detectedNeeds: autoDetectedNeeds,
+                // Capturados via prompt antes del dispatch (solo admin). El
+                // action de Python pone el nombre en clientSnapshot.name y el
+                // título en Budget.title.
+                clientName: effectiveClientName || undefined,
+                budgetTitle: effectiveBudgetTitle || undefined,
             };
 
             let result;
@@ -1305,6 +1375,32 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             {/* Onboarding Sidebar (Desktop) / Drawer (Mobile) */}
             <BudgetWizardTips setInput={setInput} />
 
+            <ClientPromptDialog
+                open={clientPromptOpen}
+                defaultClientName={clientName}
+                defaultBudgetTitle={budgetTitle}
+                onCancel={() => setClientPromptOpen(false)}
+                onConfirm={handleConfirmClientPrompt}
+            />
+
+            <PdfMetadataPromptDialog
+                open={pdfMetadataPromptOpen}
+                initial={pdfMetadataPromptInitial}
+                onCancel={() => {
+                    setPdfMetadataPromptOpen(false);
+                    pdfMetadataResolverRef.current?.(null);
+                    pdfMetadataResolverRef.current = null;
+                }}
+                onConfirm={(name, title) => {
+                    setPdfMetadataPromptOpen(false);
+                    pdfMetadataResolverRef.current?.({
+                        clientName: name || undefined,
+                        budgetTitle: title || undefined,
+                    });
+                    pdfMetadataResolverRef.current = null;
+                }}
+            />
+
         </div >
     );
 }
@@ -1475,4 +1571,169 @@ function formatTime(seconds: number) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Prompt previo a la generación: pide nombre del cliente + título del
+// presupuesto. Se muestra solo cuando el admin pulsa "Generar" sin
+// haberlos rellenado todavía. El callback `onConfirm` recibe los
+// valores definitivos para invocar `runGeneration`.
+// ─────────────────────────────────────────────────────────────────
+function ClientPromptDialog({
+    open, defaultClientName, defaultBudgetTitle, onCancel, onConfirm,
+}: {
+    open: boolean;
+    defaultClientName: string;
+    defaultBudgetTitle: string;
+    onCancel: () => void;
+    onConfirm: (clientName: string, budgetTitle: string) => void;
+}) {
+    const [name, setName] = React.useState(defaultClientName);
+    const [title, setTitle] = React.useState(defaultBudgetTitle);
+
+    React.useEffect(() => { if (open) setName(defaultClientName); }, [open, defaultClientName]);
+    React.useEffect(() => { if (open) setTitle(defaultBudgetTitle); }, [open, defaultBudgetTitle]);
+
+    if (!open) return null;
+
+    const canSubmit = !!name.trim() && !!title.trim();
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onCancel}>
+            <div
+                className="bg-background dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-w-md w-full mx-4 p-6"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="mb-4">
+                    <h3 className="text-lg font-semibold">Datos del presupuesto</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        Antes de generar, dinos el nombre del cliente y un título para
+                        este presupuesto. Quedarán guardados con el resultado.
+                    </p>
+                </div>
+
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium">Nombre del cliente *</label>
+                        <input
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            placeholder="Ej: Juan Pérez / Constructora XYZ SL"
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-3 py-2 text-sm"
+                            autoFocus
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium">Título del presupuesto *</label>
+                        <input
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                            placeholder="Ej: Reforma cocina Calle Mayor 23"
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-3 py-2 text-sm"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-5">
+                    <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+                    <Button
+                        onClick={() => onConfirm(name.trim(), title.trim())}
+                        disabled={!canSubmit}
+                        className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                    >
+                        Generar presupuesto
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Dialog mostrado tras subir un PDF de mediciones. Recibe los valores
+// extraídos por Gemini Flash sobre la primera página y permite editar
+// antes de disparar el dispatch del job. Si confidence es bajo (<0.5),
+// los inputs aparecen vacíos para forzar revisión del usuario.
+// ─────────────────────────────────────────────────────────────────
+function PdfMetadataPromptDialog({
+    open, initial, onCancel, onConfirm,
+}: {
+    open: boolean;
+    initial: { clientName: string; budgetTitle: string; confidence: number } | null;
+    onCancel: () => void;
+    onConfirm: (clientName: string, budgetTitle: string) => void;
+}) {
+    const [name, setName] = React.useState('');
+    const [title, setTitle] = React.useState('');
+
+    React.useEffect(() => {
+        if (!open || !initial) return;
+        // Si la confianza es alta, prerellena; si es baja, deja vacío para
+        // forzar al usuario a teclear (evita propagar alucinaciones).
+        const hi = (initial.confidence || 0) >= 0.5;
+        setName(hi ? initial.clientName : '');
+        setTitle(hi ? initial.budgetTitle : '');
+    }, [open, initial]);
+
+    if (!open || !initial) return null;
+
+    const lowConfidence = (initial.confidence || 0) < 0.5;
+    const canSubmit = !!name.trim() && !!title.trim();
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onCancel}>
+            <div
+                className="bg-background dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-w-md w-full mx-4 p-6"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="mb-4">
+                    <h3 className="text-lg font-semibold">Confirma los datos del PDF</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        Hemos analizado la primera página. Revisa cliente y título — luego
+                        arrancaremos la valoración completa de partidas.
+                    </p>
+                </div>
+
+                {lowConfidence && (
+                    <div className="mb-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        No hemos podido extraer los datos del encabezado con seguridad.
+                        Rellénalos a mano.
+                    </div>
+                )}
+
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium">Nombre del cliente *</label>
+                        <input
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            placeholder="Ej: Juan Pérez / Constructora XYZ SL"
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-3 py-2 text-sm"
+                            autoFocus
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium">Título del presupuesto *</label>
+                        <input
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                            placeholder="Ej: Reforma cocina Calle Mayor 23"
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-background px-3 py-2 text-sm"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-5">
+                    <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+                    <Button
+                        onClick={() => onConfirm(name.trim(), title.trim())}
+                        disabled={!canSubmit}
+                        className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                    >
+                        Arrancar valoración
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
 }

@@ -168,6 +168,14 @@ export interface Budget {
   // Snapshot of client data at budget creation time (Immutable record)
   clientSnapshot: PersonalInfo;
 
+  /**
+   * Título del presupuesto — opcional pero útil para identificarlo cuando un
+   * mismo cliente tiene varios. Lo rellena el usuario en el wizard NL o se
+   * extrae automáticamente del header del PDF en flujos measurements/vision.
+   * Ejemplos: "Reforma cocina Calle Mayor 23", "Obra nueva nave Almazora".
+   */
+  title?: string;
+
   // Metadata
   status: 'draft' | 'pending_review' | 'approved' | 'sent';
   createdAt: Date;

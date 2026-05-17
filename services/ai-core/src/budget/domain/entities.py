@@ -21,8 +21,18 @@ class PersonalInfo(BaseModel):
     name: str = "Cliente Generico"
     email: str = ""
     phone: str = ""
+    # `company` se mantiene por retrocompat de presupuestos históricos. Los flujos
+    # nuevos persisten en `companyName` (alineado con la interfaz TS).
     company: Optional[str] = None
+    companyName: Optional[str] = None
     nif: Optional[str] = None
+    address: Optional[str] = None
+    web: Optional[str] = None
+    billingAddress: Optional[str] = None
+    billingCity: Optional[str] = None
+    billingPostalCode: Optional[str] = None
+    billingProvince: Optional[str] = None
+    billingCountry: Optional[str] = None
 
 class BudgetBreakdownComponent(BaseModel):
     code: Optional[str] = None
@@ -207,6 +217,9 @@ class Budget(BaseModel):
     id: str
     leadId: str
     clientSnapshot: PersonalInfo
+    # Título del presupuesto — opcional. Rellenado por el wizard NL o
+    # auto-extraído del header del PDF en measurements/vision.
+    title: Optional[str] = None
     status: BudgetStatus
     createdAt: datetime
     updatedAt: datetime

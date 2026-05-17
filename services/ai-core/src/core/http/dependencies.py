@@ -24,6 +24,9 @@ from src.budget.application.services.pdf_extractor_service import (
     AnnexedPdfExtractorService,
     InlinePdfExtractorService,
 )
+from src.budget.application.services.budget_metadata_extractor import (
+    BudgetMetadataExtractor,
+)
 from src.budget.application.services.swarm_pricing_service import SwarmPricingService
 from src.budget.application.use_cases.generate_budget_from_nl_uc import (
     GenerateBudgetFromNlUseCase,
@@ -128,6 +131,7 @@ _swarm_pricing = SwarmPricingService(
     price_book_repo=_price_book_repo,
 )
 _architect = ArchitectService(llm_provider=_llm_adapter)
+_budget_metadata_extractor = BudgetMetadataExtractor(llm_provider=_llm_adapter)
 
 
 # -------- Dependency providers ---------------------------------------------
@@ -191,6 +195,11 @@ def get_pdf_storage() -> IPdfStorage:
     if _pdf_storage is None:
         _pdf_storage = GcsPdfStorage.from_env()
     return _pdf_storage
+
+
+def get_budget_metadata_extractor() -> BudgetMetadataExtractor:
+    """Singleton extractor for the sync `/extract-metadata` endpoint."""
+    return _budget_metadata_extractor
 
 
 def get_budget_pipeline_runner() -> IPipelineRunner:

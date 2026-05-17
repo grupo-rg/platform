@@ -63,6 +63,10 @@ export async function generateBudgetFromSpecsAction(
                 leadId: leadId || 'admin-user',
                 budgetId,
                 narrative,
+                // Campos opcionales — el Python UC los pone en Budget.title y
+                // Budget.clientSnapshot.name si llegan.
+                clientName: (extra.clientName || '').trim() || undefined,
+                budgetTitle: (extra.budgetTitle || '').trim() || undefined,
             }),
         });
 

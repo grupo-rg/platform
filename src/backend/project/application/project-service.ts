@@ -1,5 +1,6 @@
 // src/backend/project/application/project-service.ts
 import { Budget } from '@/backend/budget/domain/budget';
+import { PersonalInfo } from '@/backend/lead/domain/lead';
 import { Project, ProjectRepository, ProjectStatus, isValidStatusTransition } from '../domain/project';
 import { ProjectPhase } from '../domain/project-phase';
 import { v4 as uuidv4 } from 'uuid';
@@ -49,6 +50,46 @@ export class ProjectService {
             estimatedEndDate: overrides?.estimatedEndDate,
             status: 'preparacion',
             phases,
+            team: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+
+        await this.projectRepository.save(project);
+        return project;
+    }
+
+    /**
+     * Crea una obra sin presupuesto vinculado. Usado cuando el cliente contrata
+     * directamente y el contratista quiere abrir la obra ya, dejando el
+     * presupuesto formal para después (o nunca). El snapshot del cliente
+     * viene del Lead (clientSnapshot). El presupuesto puede vincularse más
+     * adelante con `linkBudget(projectId, budgetId)`.
+     */
+    async createWithoutBudget(input: {
+        leadId: string;
+        clientSnapshot: PersonalInfo;
+        name: string;
+        description?: string;
+        address?: string;
+        startDate?: Date;
+        estimatedEndDate?: Date;
+        estimatedBudget?: number;
+    }): Promise<Project> {
+        const project: Project = {
+            id: uuidv4(),
+            budgetId: null,
+            leadId: input.leadId,
+            clientSnapshot: input.clientSnapshot,
+            name: input.name,
+            description: input.description,
+            address: input.address,
+            estimatedBudget: input.estimatedBudget ?? 0,
+            realCost: 0,
+            startDate: input.startDate,
+            estimatedEndDate: input.estimatedEndDate,
+            status: 'preparacion',
+            phases: [],
             team: [],
             createdAt: new Date(),
             updatedAt: new Date(),

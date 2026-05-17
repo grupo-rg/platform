@@ -29,6 +29,10 @@ export interface DispatchInput {
     strategy?: 'INLINE' | 'ANNEXED';
     narrative?: string;
     pdf_url?: string;
+    /** Nombre del cliente — propagado al Budget.clientSnapshot.name. */
+    clientName?: string;
+    /** Título del presupuesto — propagado a Budget.title. */
+    budgetTitle?: string;
   };
 }
 

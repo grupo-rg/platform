@@ -3,6 +3,10 @@
 import { v4 as uuidv4 } from 'uuid';
 
 import { dispatchPipelineJobAction } from '@/actions/pipeline/dispatch-pipeline-job.action';
+import {
+  extractPdfMetadataAction,
+  type ExtractedBudgetMetadata,
+} from '@/actions/pipeline/extract-pdf-metadata.action';
 import { uploadPdfForPipelineJob } from '@/lib/firebase/storage-uploader';
 
 /**
@@ -31,6 +35,20 @@ export interface DispatchMeasurementsJobInput {
   budgetId?: string;
   strategy: 'INLINE' | 'ANNEXED';
   onUploadProgress?: (fraction: number) => void;
+  /**
+   * Hook the wizard uses to insert a confirmation step between the upload and
+   * the dispatch: after uploading the PDF the helper calls
+   * `extractPdfMetadataAction`, then invokes this callback so the caller can
+   * show a Dialog with the extracted fields pre-filled. The callback returns
+   * the *final* values (after user edits) that get sent in the dispatch
+   * payload. Resolve `null` to cancel the dispatch entirely.
+   *
+   * If omitted: no extraction is run and no metadata is sent (legacy
+   * behaviour preserved for tests and any non-wizard callers).
+   */
+  onMetadataConfirm?: (
+    extracted: ExtractedBudgetMetadata,
+  ) => Promise<{ clientName?: string; budgetTitle?: string } | null>;
 }
 
 export type DispatchMeasurementsJobResult =
@@ -74,12 +92,27 @@ export async function dispatchMeasurementsJob(
     };
   }
 
+  let clientName: string | undefined;
+  let budgetTitle: string | undefined;
+  if (input.onMetadataConfirm) {
+    const extractRes = await extractPdfMetadataAction({ gcsUri });
+    const extracted: ExtractedBudgetMetadata = extractRes.success
+      ? extractRes.metadata
+      : { clientName: null, budgetTitle: null, projectAddress: null, confidence: 0 };
+    const confirmed = await input.onMetadataConfirm(extracted);
+    if (confirmed === null) {
+      return { success: false, error: 'Cancelado por el usuario' };
+    }
+    clientName = confirmed.clientName?.trim() || undefined;
+    budgetTitle = confirmed.budgetTitle?.trim() || undefined;
+  }
+
   const dispatch = await dispatchPipelineJobAction({
     jobType: 'measurements',
     uid: input.uid,
     leadId: input.leadId,
     budgetId,
-    payload: { gcsUri, strategy: input.strategy },
+    payload: { gcsUri, strategy: input.strategy, clientName, budgetTitle },
   });
 
   if (!dispatch.success) {

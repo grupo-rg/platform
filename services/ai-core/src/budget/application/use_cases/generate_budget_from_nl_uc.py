@@ -98,6 +98,9 @@ class GenerateBudgetFromNlUseCase:
         narrative: str,
         lead_id: str = "anonymous",
         budget_id: Optional[str] = None,
+        *,
+        client_name: Optional[str] = None,
+        budget_title: Optional[str] = None,
     ) -> Budget:
         start_time = time.time()
         metrics = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
@@ -150,7 +153,7 @@ class GenerateBudgetFromNlUseCase:
         temp_budget = Budget(
             id=budget_id,
             leadId=lead_id,
-            clientSnapshot=PersonalInfo(),
+            clientSnapshot=PersonalInfo(name=client_name) if client_name else PersonalInfo(),
             status="draft",
             createdAt=datetime.utcnow(),
             updatedAt=datetime.utcnow(),
@@ -191,7 +194,8 @@ class GenerateBudgetFromNlUseCase:
         budget = Budget(
             id=budget_id,
             leadId=lead_id,
-            clientSnapshot=PersonalInfo(),
+            clientSnapshot=PersonalInfo(name=client_name) if client_name else PersonalInfo(),
+            title=budget_title,
             status="draft",
             createdAt=datetime.utcnow(),
             updatedAt=datetime.utcnow(),

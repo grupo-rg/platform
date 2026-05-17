@@ -34,8 +34,11 @@ export function isValidStatusTransition(from: ProjectStatus, to: ProjectStatus):
 export interface Project {
     id: string;
 
-    // Linked Budget
-    budgetId: string;
+    // Linked Budget — opcional. Una obra puede crearse sin presupuesto aprobado
+    // (caso "obra directa", típicamente cuando el cliente contrata sin presu
+    // formal). Cuando es null, `clientSnapshot` proviene del Lead seleccionado
+    // y `estimatedBudget` puede ser 0 hasta que se vincule un presupuesto.
+    budgetId: string | null;
     leadId: string;
 
     // Client snapshot (immutable at creation time)

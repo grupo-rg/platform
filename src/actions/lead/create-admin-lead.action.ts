@@ -9,6 +9,13 @@ export async function createAdminLeadAction(data: {
     email: string;
     phone: string;
     address?: string;
+    nif?: string;
+    companyName?: string;
+    billingAddress?: string;
+    billingCity?: string;
+    billingPostalCode?: string;
+    billingProvince?: string;
+    billingCountry?: string;
 }) {
     try {
         const repository = new FirestoreLeadRepository();
@@ -30,7 +37,14 @@ export async function createAdminLeadAction(data: {
                 name: data.name,
                 email: data.email,
                 phone: data.phone,
-                address: data.address
+                address: data.address,
+                nif: data.nif,
+                companyName: data.companyName,
+                billingAddress: data.billingAddress,
+                billingCity: data.billingCity,
+                billingPostalCode: data.billingPostalCode,
+                billingProvince: data.billingProvince,
+                billingCountry: data.billingCountry,
             },
             {
                 contactMethod: 'email',
@@ -55,7 +69,9 @@ export async function createAdminLeadAction(data: {
                 name: newLead.personalInfo.name,
                 email: newLead.personalInfo.email,
                 phone: newLead.personalInfo.phone,
-                address: newLead.personalInfo.address
+                address: newLead.personalInfo.address,
+                nif: newLead.personalInfo.nif,
+                companyName: newLead.personalInfo.companyName,
             }
         };
     } catch (error: any) {

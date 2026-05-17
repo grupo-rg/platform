@@ -112,10 +112,17 @@ from src.core.http.dispatch_router import (
     get_worker_job_name as _dispatch_get_worker_job_name,
 )
 from src.core.http.dependencies import (
+    get_budget_metadata_extractor as _deps_get_budget_metadata_extractor,
     get_job_executor as _deps_get_job_executor,
+    get_pdf_storage as _deps_get_pdf_storage,
     get_pipeline_job_repository as _deps_get_pipeline_job_repository,
     get_worker_job_name as _deps_get_worker_job_name,
 )
+from src.budget.application.services.budget_metadata_extractor import (
+    BudgetMetadataExtractor,
+    ExtractedBudgetMetadata,
+)
+from src.pipeline_jobs.application.ports.pdf_storage import IPdfStorage
 
 app.include_router(_build_dispatch_router())
 # The dispatch_router declares its own get_* stubs that raise NotImplementedError.
@@ -282,6 +289,8 @@ class NlBudgetRequest(BaseModel):
     leadId: str = "anonymous"
     budgetId: Optional[str] = None
     narrative: str = Field(..., description="Brief técnico consolidado (finalBrief + specs + historia de chat).")
+    clientName: Optional[str] = None
+    budgetTitle: Optional[str] = None
 
 
 @app.post("/api/v1/jobs/nl-budget")
@@ -301,7 +310,13 @@ async def process_nl_budget_job(
     async def run_nl_job():
         try:
             logger.info(f"[NL→Budget] Starting job for lead={payload.leadId} budget={payload.budgetId}")
-            await nl_uc.execute(narrative=payload.narrative, lead_id=payload.leadId, budget_id=payload.budgetId)
+            await nl_uc.execute(
+                narrative=payload.narrative,
+                lead_id=payload.leadId,
+                budget_id=payload.budgetId,
+                client_name=(payload.clientName or "").strip() or None,
+                budget_title=(payload.budgetTitle or "").strip() or None,
+            )
             logger.info(f"[NL→Budget] Completed job budget={payload.budgetId}")
         except AskingForClarificationError as asking:
             logger.info(f"[NL→Budget] Architect asks: {asking.question}")
@@ -321,3 +336,68 @@ async def process_nl_budget_job(
         "leadId": payload.leadId,
         "budgetId": payload.budgetId,
     })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/jobs/extract-metadata
+# Sync endpoint that reads the PDF from GCS, renders ONLY the first page, and
+# asks Gemini Flash for the client/budget header. Used by the wizard PDF flow
+# to pre-fill a confirmation form BEFORE dispatching the heavy job. Failure
+# returns empty fields (200) — the UI keeps the form editable.
+# ---------------------------------------------------------------------------
+
+
+class ExtractMetadataRequest(BaseModel):
+    gcsUri: str = Field(..., description="gs://bucket/path al PDF en Cloud Storage.")
+
+
+def _first_page_image_b64_from_pdf(pdf_bytes: bytes, dpi: int = 150) -> str:
+    """Render only page 0 of the PDF as a base64-encoded PNG. Keeps the cost
+    bounded — header extraction never needs more than the first page."""
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        if doc.page_count == 0:
+            return ""
+        page = doc.load_page(0)
+        zoom = dpi / 72
+        matrix = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=matrix)
+        img_bytes = pix.tobytes("png")
+        return base64.b64encode(img_bytes).decode("utf-8")
+    finally:
+        doc.close()
+
+
+@app.post("/api/v1/jobs/extract-metadata", response_model=ExtractedBudgetMetadata)
+async def extract_pdf_metadata(
+    payload: ExtractMetadataRequest,
+    extractor: BudgetMetadataExtractor = Depends(_deps_get_budget_metadata_extractor),
+    storage: IPdfStorage = Depends(_deps_get_pdf_storage),
+) -> ExtractedBudgetMetadata:
+    """Pre-flight to the heavy pipeline: returns a best-effort guess of
+    `{clientName, budgetTitle, projectAddress, confidence}` so the UI can
+    show a confirmation step. Never raises on extraction failure — returns
+    empty fields with confidence=0 so the user can fill them manually."""
+    try:
+        pdf_bytes = await storage.download_to_bytes(payload.gcsUri)
+    except Exception as e:
+        logger.exception(
+            "extract_metadata_download_failed",
+            extra={"gcsUri": payload.gcsUri, "error": str(e)},
+        )
+        # Return empty rather than 500 — UI will fall back to manual entry.
+        return ExtractedBudgetMetadata()
+
+    try:
+        image_b64 = _first_page_image_b64_from_pdf(pdf_bytes)
+    except Exception as e:
+        logger.exception(
+            "extract_metadata_render_failed",
+            extra={"gcsUri": payload.gcsUri, "error": str(e)},
+        )
+        return ExtractedBudgetMetadata()
+
+    if not image_b64:
+        return ExtractedBudgetMetadata()
+
+    return await extractor.extract(image_b64)
