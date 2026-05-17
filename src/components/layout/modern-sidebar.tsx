@@ -32,6 +32,8 @@ import Image from 'next/image';
 import { ModeToggle } from '@/components/mode-toggle';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { Logo } from '@/components/logo';
+import { useAuth } from '@/hooks/use-auth';
+import { useRouter } from '@/i18n/navigation';
 
 interface ModernSidebarProps {
     t: any;
@@ -40,7 +42,29 @@ interface ModernSidebarProps {
 
 export function ModernSidebar({ t, className }: ModernSidebarProps) {
     const pathname = usePathname();
+    const router = useRouter();
+    const { user, signOut } = useAuth();
     const [collapsed, setCollapsed] = useState(false);
+    const [signingOut, setSigningOut] = useState(false);
+
+    const handleSignOut = async () => {
+        if (signingOut) return;
+        setSigningOut(true);
+        try {
+            await signOut();
+            router.push('/login');
+        } finally {
+            // Sólo limpiamos el estado si seguimos en la página (la
+            // navegación a /login normalmente desmonta el componente).
+            setSigningOut(false);
+        }
+    };
+
+    // Display name: priorizar displayName del proveedor; si no, primera
+    // parte del email; si no, "Usuario" como antes.
+    const displayName = user?.displayName?.trim()
+        || (user?.email ? user.email.split('@')[0] : 'Usuario');
+    const avatarInitial = (displayName[0] || 'U').toUpperCase();
 
     // Asistente IA es el ítem destacado: vive fuera de cualquier grupo y se renderiza primero
     // con un acento visual (color primario + fondo suave). Resto de módulos agrupados por función.
@@ -269,25 +293,32 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                 {/* Notification Bell */}
                 <NotificationBell collapsed={collapsed} />
 
-                {/* User Card */}
-                <div className={cn(
-                    "bg-sidebar-accent/50 rounded-xl flex items-center border border-sidebar-border hover:border-sidebar-ring/50 transition-colors cursor-pointer group/user",
-                    collapsed ? "justify-center p-2" : "gap-3 p-3"
-                )}>
+                {/* User Card — click to sign out. */}
+                <button
+                    type="button"
+                    onClick={handleSignOut}
+                    disabled={signingOut}
+                    aria-label={collapsed ? 'Cerrar sesión' : `Cerrar sesión de ${displayName}`}
+                    title="Cerrar sesión"
+                    className={cn(
+                        "bg-sidebar-accent/50 rounded-xl flex items-center border border-sidebar-border hover:border-sidebar-ring/50 transition-colors cursor-pointer group/user w-full text-left disabled:opacity-60 disabled:cursor-not-allowed",
+                        collapsed ? "justify-center p-2" : "gap-3 p-3"
+                    )}
+                >
                     <div className={cn(
                         "rounded-full bg-gradient-to-tr from-amber-500 to-amber-700 border border-white/10 flex items-center justify-center font-bold text-white shadow-sm",
                         collapsed ? "h-8 w-8 text-xs" : "h-9 w-9 text-sm"
                     )}>
-                        U
+                        {avatarInitial}
                     </div>
                     {!collapsed && (
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-sidebar-foreground truncate group-hover/user:text-primary transition-colors">Usuario</p>
+                            <p className="text-sm font-semibold text-sidebar-foreground truncate group-hover/user:text-primary transition-colors">{displayName}</p>
                             <p className="text-[10px] text-muted-foreground">Administrador</p>
                         </div>
                     )}
-                    {!collapsed && <LogOut className="h-4 w-4 text-muted-foreground group-hover/user:text-foreground transition-colors" />}
-                </div>
+                    {!collapsed && <LogOut className="h-4 w-4 text-muted-foreground group-hover/user:text-foreground transition-colors shrink-0" />}
+                </button>
             </div>
         </aside>
     );

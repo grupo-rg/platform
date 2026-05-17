@@ -33,6 +33,7 @@ import { PhaseStepper } from './PhaseStepper';
 import { BudgetSummaryBar } from './BudgetSummaryBar';
 import { computeBudgetStats } from './budget-summary-stats';
 import type { SubEvent } from '@/components/budget/budget-generation-events';
+import { useAuth } from '@/hooks/use-auth';
 
 
 export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { isAdmin?: boolean, isPublicMode?: boolean }) {
@@ -73,6 +74,9 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         cancelEditConversation();
     };
     const { leadId, closeWidget, initialPrompt, setInitialPrompt } = useWidgetContext();
+    // Auth context: needed by the new pipeline-jobs flow to scope Storage
+    // uploads under `pipeline_uploads/{uid}/...` per the Storage rules.
+    const { user } = useAuth();
     // Si el admin llega con ?leadId=xxx (refinando un lead concreto desde el
     // detalle), todo lo que se genere se asociará a ese lead real, no al
     // 'admin-user' genérico.
