@@ -103,13 +103,16 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
         self.max_retries = max_retries
         self.base_delay = base_delay
 
-    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: Type[BaseModel], temperature: float = 0.2, model: str = "gemini-2.5-flash", image_base64: Optional[str] = None, max_output_tokens: int = 8192) -> tuple[BaseModel, Dict[str, int]]:
+    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: Type[BaseModel], temperature: float = 0.2, model: str = "gemini-2.5-flash", image_base64: Optional[str] = None, max_output_tokens: int = 32768) -> tuple[BaseModel, Dict[str, int]]:
         """
         Calls Vertex AI, enforcing a strict JSON return conforming to the Pydantic `response_schema`.
         Applies exponential backoff on HTTP 429 (ResourceExhausted).
 
-        `max_output_tokens` se fija por defecto a 8192 para evitar que el modelo trunque JSON
-        en páginas densas. Ajustable por el caller cuando se espere una respuesta más corta.
+        `max_output_tokens` se fija por defecto a 32768. El máximo de gemini-2.5-flash es 65535,
+        pero 32k cubre con margen briefs complejos (Architect con 50+ tareas o pages PDF densas).
+        Con el valor previo de 8192 el modelo truncaba JSON a mitad de string en reformas
+        multi-habitación → ValidationError EOF → retries de salida igual de truncada.
+        Ajustable por el caller cuando se espere una respuesta más corta.
         """
         schema_json = json.dumps(response_schema.model_json_schema(), ensure_ascii=False)
 
@@ -176,7 +179,18 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                 if raw_json.endswith("```"):
                     raw_json = raw_json[:-3]
                 raw_json = raw_json.strip()
-                
+
+                # finishReason='MAX_TOKENS' indica que Gemini se quedó sin tokens de salida
+                # y el JSON está truncado. Lo loggeamos antes de intentar parsear para
+                # diagnosticar fácilmente si el `max_output_tokens` actual sigue corto.
+                finish_reason = data["candidates"][0].get("finishReason")
+                if finish_reason and finish_reason != "STOP":
+                    logger.warning(
+                        f"[adapter] finishReason={finish_reason} (model={model}, "
+                        f"max_output_tokens={max_output_tokens}, raw_len={len(raw_json)}). "
+                        f"Si es MAX_TOKENS, subir max_output_tokens."
+                    )
+
                 usage_metadata = data.get("usageMetadata", {"promptTokenCount": 0, "candidatesTokenCount": 0, "totalTokenCount": 0})
                 
                 if raw_json.startswith("[") and raw_json.endswith("]"):
@@ -207,8 +221,13 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                         salvaged_usage = {**usage_metadata, "_salvaged": True, "_items_recovered": recovered}
                         return salvaged, salvaged_usage
                     else:
+                        # Cuando salvage falla, dumpeamos los últimos 200 chars del raw_json
+                        # para entender por qué (a veces el modelo emite un solo item
+                        # gigante o un schema con anidaciones inesperadas).
+                        tail = raw_json[-200:] if len(raw_json) > 200 else raw_json
                         logger.info(
-                            f"[adapter] Salvage sin items cerrados (raw_json len={len(raw_json)}). Retry normal."
+                            f"[adapter] Salvage sin items cerrados (raw_json len={len(raw_json)}). "
+                            f"Tail: ...{tail!r}. Retry normal."
                         )
             except Exception as e:
                 error_str = f"{type(e).__name__}: {str(e)}"

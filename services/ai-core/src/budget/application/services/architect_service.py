@@ -171,12 +171,15 @@ Cada tarea debe tener: `taskId` (int), `dependsOn` (int[]), `chapter` (string de
         prompt = self._build_prompt(user_request)
         logger.info("[Architect] Decomposing request (%d chars)", len(user_request))
 
+        # 32k tokens cubre con margen briefs complejos (reformas multi-habitación con
+        # 40-60 tareas atómicas + reasoning por tarea). El valor previo de 8192
+        # estaba causando truncamiento en producción → ValidationError EOF.
         response, usage = await self.llm.generate_structured(
             system_prompt="",
             user_prompt=prompt,
             response_schema=ArchitectResponse,
             temperature=0.1,
             model="gemini-2.5-flash",
-            max_output_tokens=8192,
+            max_output_tokens=32768,
         )
         return response, usage

@@ -21,6 +21,7 @@ import {
     type PhaseId,
     type SubEvent,
 } from './budget-generation-events';
+import { PipelineJobControls } from './PipelineJobControls';
 
 // Re-export contract functions for anything still importing from here.
 export { eventToPhase, buildSubEvent } from './budget-generation-events';
@@ -46,6 +47,13 @@ interface BudgetGenerationProgressProps {
     className?: string;
     onComplete?: (budgetId: string) => void;
     budgetId?: string;
+    /**
+     * Pipeline-jobs path ID (new architecture). When set, renders the
+     * `<PipelineJobControls>` panel above the timeline so the user can
+     * cancel / retry. Undefined → legacy behaviour (no controls, no
+     * watchdog). Wired through the feature flag at the caller.
+     */
+    pipelineJobId?: string;
     /** Fase 10.2 — bubble up al padre los subEvents agregados, para que un
      *  componente externo (p.ej. `BudgetSummaryBar`) los use. */
     onSubEventsChange?: (allSubEvents: SubEvent[]) => void;
@@ -175,7 +183,7 @@ function useElapsedSince(startedAt: number, running: boolean): string {
     return `${mm}:${ss}`;
 }
 
-export function BudgetGenerationProgress({ progress, className, onComplete, budgetId, onSubEventsChange }: BudgetGenerationProgressProps) {
+export function BudgetGenerationProgress({ progress, className, onComplete, budgetId, pipelineJobId, onSubEventsChange }: BudgetGenerationProgressProps) {
     const telemetryId = budgetId;
     const { step, extractedItems, error } = progress;
 
@@ -286,6 +294,15 @@ export function BudgetGenerationProgress({ progress, className, onComplete, budg
                 className
             )}
         >
+            {/* Pipeline Jobs control bar — only renders when the caller is on the
+                 new architecture path (pipelineJobId set). Shows status + Cancel/
+                 Retry buttons + watchdog banners (5min stale, 90min timed-out). */}
+            {pipelineJobId && (
+                <div className="px-4 pt-3">
+                    <PipelineJobControls jobId={pipelineJobId} />
+                </div>
+            )}
+
             {/* Header compacto — una sola línea con icono, título, tiempo y barra ultra fina. */}
             <div className="px-4 pt-3 pb-2.5">
                 <div className="flex items-center gap-2">

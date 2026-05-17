@@ -13,6 +13,46 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // Pipeline Jobs — coordination layer for the long-running budget
+    // pipeline (replaces the legacy BackgroundTasks). The Service / Worker
+    // (admin SDK) own the lifecycle; clients are restricted to reading
+    // their own jobs and requesting cancellation.
+    match /pipeline_jobs/{jobId} {
+      // Owner can READ the doc to drive the UI (status, attempts, error).
+      allow read: if request.auth != null
+                  && resource.data.uid == request.auth.uid;
+
+      // Owner can CREATE the initial queued doc (the dispatcher will
+      // overwrite via admin SDK immediately, but allowing client create
+      // keeps the dispatch flow resilient if the dispatcher is slow).
+      // The status MUST be 'queued' — clients can't fast-forward state.
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'queued';
+
+      // Owner can ONLY flip cancellation_requested (and bump updatedAt).
+      // Every other field stays admin-SDK-only.
+      allow update: if request.auth != null
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.diff(resource.data)
+                          .affectedKeys()
+                          .hasOnly(['cancellation_requested', 'updatedAt']);
+
+      // Subcollections: owner can read, admin SDK writes.
+      match /attempts/{attemptId} {
+        allow read: if request.auth != null
+                    && get(/databases/$(database)/documents/pipeline_jobs/$(jobId)).data.uid == request.auth.uid;
+      }
+      match /checkpoints/{partidaCode} {
+        allow read: if request.auth != null
+                    && get(/databases/$(database)/documents/pipeline_jobs/$(jobId)).data.uid == request.auth.uid;
+      }
+    }
+
+    // Pipeline telemetry stays open for the SSE stream that the Service's
+    // `/api/budget/stream` endpoint tails. Anything sensitive lives in
+    // `pipeline_jobs/*` above.
+
     match /{document=**} {
       allow read, write: if false;
     }

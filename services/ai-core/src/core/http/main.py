@@ -101,6 +101,35 @@ app.add_middleware(InternalTokenMiddleware)
 pdf_reader_adapter = PdfPlumberAdapter()
 extract_use_case = ExtractBudgetFromPdfUseCase(pdf_reader=pdf_reader_adapter)
 
+# ---------------------------------------------------------------------------
+# Pipeline Jobs dispatcher — replaces the legacy BackgroundTasks endpoints.
+# ---------------------------------------------------------------------------
+
+from src.core.http.dispatch_router import (
+    build_router as _build_dispatch_router,
+    get_job_executor as _dispatch_get_job_executor,
+    get_job_repository as _dispatch_get_job_repository,
+    get_worker_job_name as _dispatch_get_worker_job_name,
+)
+from src.core.http.dependencies import (
+    get_job_executor as _deps_get_job_executor,
+    get_pipeline_job_repository as _deps_get_pipeline_job_repository,
+    get_worker_job_name as _deps_get_worker_job_name,
+)
+
+app.include_router(_build_dispatch_router())
+# The dispatch_router declares its own get_* stubs that raise NotImplementedError.
+# We re-route them to the real production singletons via FastAPI's
+# `dependency_overrides`. Tests use the same hook with in-memory fakes.
+app.dependency_overrides[_dispatch_get_job_repository] = (
+    _deps_get_pipeline_job_repository
+)
+app.dependency_overrides[_dispatch_get_job_executor] = _deps_get_job_executor
+app.dependency_overrides[_dispatch_get_worker_job_name] = (
+    _deps_get_worker_job_name
+)
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

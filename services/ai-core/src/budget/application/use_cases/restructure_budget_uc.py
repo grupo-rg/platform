@@ -40,7 +40,17 @@ class RestructureBudgetUseCase:
         if self.emitter:
             self.emitter.emit_event(budget_id, event_type, data)
 
-    async def execute(self, raw_items: List[Dict[str, Any]], lead_id: str = "anonymous", budget_id: str = None, strategy: str = "INLINE", pdf_bytes: Optional[bytes] = None) -> Budget:
+    async def execute(
+        self,
+        raw_items: List[Dict[str, Any]],
+        lead_id: str = "anonymous",
+        budget_id: str = None,
+        strategy: str = "INLINE",
+        pdf_bytes: Optional[bytes] = None,
+        *,
+        resume_from: Optional[List[BudgetPartida]] = None,
+        on_partida_resolved=None,  # type: ignore[no-untyped-def] — keep import surface small
+    ) -> Budget:
         start_time = time.time()
         metrics = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
 
@@ -58,9 +68,17 @@ class RestructureBudgetUseCase:
             )
         except TypeError:
             restructured_items = await extractor.extract(raw_items, budget_id, metrics)
-        
-        # Phase 2: Swarm Pricing (Deconstructor + Vector Search + LLM Evaluator)
-        partidas = await self.pricing_service.evaluate_batch(restructured_items, budget_id, metrics)
+
+        # Phase 2: Swarm Pricing (Deconstructor + Vector Search + LLM Evaluator).
+        # P4.b — forward checkpoint kwargs when present; the swarm's new
+        # signature is kwarg-only and defaults preserve legacy behaviour.
+        partidas = await self.pricing_service.evaluate_batch(
+            restructured_items,
+            budget_id,
+            metrics,
+            resume_from=resume_from,
+            on_partida_resolved=on_partida_resolved,
+        )
         
         # Phase 3: Assembly & Validation
         chapters_dict = {}

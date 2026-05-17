@@ -54,6 +54,23 @@ from src.pipeline_telemetry.application.use_cases.emit_telemetry_uc import EmitT
 from src.pipeline_telemetry.infrastructure.firebase_telemetry_repository import (
     FirebaseTelemetryRepository,
 )
+from src.pipeline_jobs.application.ports.job_executor import IJobExecutor
+from src.pipeline_jobs.application.ports.job_repository import IPipelineJobRepository
+from src.pipeline_jobs.application.ports.pdf_storage import IPdfStorage
+from src.pipeline_jobs.application.ports.pipeline_runner import IPipelineRunner
+from src.pipeline_jobs.application.use_cases.run_pipeline_job_uc import (
+    RunPipelineJobUseCase,
+)
+from src.pipeline_jobs.infrastructure.budget_pipeline_runner import (
+    BudgetPipelineRunner,
+)
+from src.pipeline_jobs.infrastructure.cloud_run_jobs_executor import (
+    CloudRunJobsExecutor,
+)
+from src.pipeline_jobs.infrastructure.firestore_pipeline_job_repository import (
+    FirestorePipelineJobRepository,
+)
+from src.pipeline_jobs.infrastructure.gcs_pdf_storage import GcsPdfStorage
 
 # Cargar las normas del markdown (5.A.2). Soporta doble import path (paquete
 # `prompts.rules` vs. directorio suelto) igual que `eval_pipeline_runner.py`.
@@ -134,4 +151,84 @@ def get_generate_budget_from_nl_uc() -> GenerateBudgetFromNlUseCase:
         swarm_pricing=_swarm_pricing,
         repository=_firestore_repository,
         emitter=_progress_emitter,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pipeline Jobs DI (P1.c + dispatcher integration).
+#
+# These singletons are lazy: heavy SDK clients (Cloud Run Jobs, Cloud Storage)
+# are built on first access via factory methods, so importing this module
+# during local tests / CLI scripts doesn't require those packages to be
+# fully configured.
+# ---------------------------------------------------------------------------
+
+
+import os  # noqa: E402 — local to keep std-lib imports separated from project imports
+
+_pipeline_job_repository: Optional[IPipelineJobRepository] = None
+_job_executor: Optional[IJobExecutor] = None
+_pdf_storage: Optional[IPdfStorage] = None
+_budget_pipeline_runner: Optional[IPipelineRunner] = None
+
+
+def get_pipeline_job_repository() -> IPipelineJobRepository:
+    global _pipeline_job_repository
+    if _pipeline_job_repository is None:
+        _pipeline_job_repository = FirestorePipelineJobRepository(db=_db_client)
+    return _pipeline_job_repository
+
+
+def get_job_executor() -> IJobExecutor:
+    global _job_executor
+    if _job_executor is None:
+        _job_executor = CloudRunJobsExecutor.from_env()
+    return _job_executor
+
+
+def get_pdf_storage() -> IPdfStorage:
+    global _pdf_storage
+    if _pdf_storage is None:
+        _pdf_storage = GcsPdfStorage.from_env()
+    return _pdf_storage
+
+
+def get_budget_pipeline_runner() -> IPipelineRunner:
+    """Wires the new IPipelineRunner contract to the existing budget use
+    cases. P4.b will extend this with checkpoint hooks."""
+    global _budget_pipeline_runner
+    if _budget_pipeline_runner is None:
+        _budget_pipeline_runner = BudgetPipelineRunner(
+            restructure_uc=get_restructure_budget_uc(),
+            nl_uc=get_generate_budget_from_nl_uc(),
+        )
+    return _budget_pipeline_runner
+
+
+def get_worker_job_name() -> str:
+    """Full Cloud Run Jobs resource path. Must be set via env var in prod:
+        WORKER_JOB_NAME=projects/<id>/locations/<region>/jobs/ai-core-worker
+    """
+    name = os.environ.get("WORKER_JOB_NAME", "").strip()
+    if not name:
+        raise RuntimeError(
+            "WORKER_JOB_NAME env var is required for the dispatcher endpoint"
+        )
+    return name
+
+
+def get_run_pipeline_job_uc() -> RunPipelineJobUseCase:
+    """Builds the worker's use case. Called by `worker_main._build_use_case_from_env`.
+    Built on every call so each worker invocation has its own instance —
+    cheap (no SDK calls), and avoids stale references after a hot-reload."""
+    return RunPipelineJobUseCase(
+        repository=get_pipeline_job_repository(),
+        pdf_storage=get_pdf_storage(),
+        runner=get_budget_pipeline_runner(),
+        heartbeat_interval_seconds=float(
+            os.environ.get("PIPELINE_HEARTBEAT_SECONDS", "30")
+        ),
+        cancellation_poll_interval_seconds=float(
+            os.environ.get("PIPELINE_CANCEL_POLL_SECONDS", "5")
+        ),
     )

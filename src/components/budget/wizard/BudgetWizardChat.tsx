@@ -27,7 +27,6 @@ import {
 
 import { Trash2, MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Check, X as XIcon } from 'lucide-react';
 // removed sileo imports
-import { Logo } from '@/components/logo';
 import { Budget } from '@/backend/budget/domain/budget';
 import { BudgetWizardTips } from './BudgetWizardTips';
 import { PhaseStepper } from './PhaseStepper';
@@ -134,6 +133,10 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         currentItem?: string;
         error?: string;
         budgetId?: string;
+        /** Pipeline Jobs path id (new architecture). Set when the upload went
+         *  through `dispatchMeasurementsJob` so `<BudgetGenerationProgress>`
+         *  can render the Cancel/Retry controls. */
+        pipelineJobId?: string;
     }>({ step: 'idle' });
 
 
@@ -300,8 +303,38 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         setPdfAwaitingStrategy(null); // Clear triage UI
 
         try {
-            const { extractMeasurementPdfAction } = await import('@/actions/budget/extract-measurement-pdf.action');
+            const { isPipelineJobsEnabled } = await import('@/lib/feature-flags');
             const effectiveId = isAdmin ? 'admin-user' : (leadId || 'unknown-lead');
+
+            // New architecture path: client-side upload to Storage + dispatcher
+            // → Cloud Run Job. Falls back to legacy BackgroundTasks path when
+            // the flag is off so the canary rollout can be controlled per env.
+            if (isPipelineJobsEnabled() && user?.uid) {
+                const { dispatchMeasurementsJob } = await import(
+                    '@/lib/budget/dispatch-measurements-job'
+                );
+                const newRes = await dispatchMeasurementsJob({
+                    file: effectiveFile,
+                    uid: user.uid,
+                    leadId: effectiveId,
+                    budgetId,
+                    strategy,
+                });
+                if (newRes.success) {
+                    // Stash pipelineJobId on the progress state so the
+                    // <BudgetGenerationProgress> mount renders the controls.
+                    setGenerationProgress(prev => ({
+                        ...prev,
+                        budgetId: newRes.budgetId,
+                        pipelineJobId: newRes.jobId,
+                    } as any));
+                    return; // SSE telemetry takes over from here.
+                }
+                // Surface the failure exactly like the legacy path does.
+                throw new Error(newRes.error);
+            }
+
+            const { extractMeasurementPdfAction } = await import('@/actions/budget/extract-measurement-pdf.action');
             const result = await extractMeasurementPdfAction(formData, effectiveId, strategy, budgetId);
 
             if (result.success && result.budgetId) {
@@ -806,60 +839,12 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                 "flex w-full flex-col relative h-full min-h-0 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] will-change-transform",
                 "md:flex-1"
             )}>
-                {/* Header */}
-                <header className="absolute top-0 left-0 right-0 z-10 flex h-16 md:h-20 items-center justify-between px-4 md:px-8 bg-gradient-to-b from-background via-background/95 to-transparent backdrop-blur-sm transition-all duration-300">
-                    <div className="flex items-center gap-3 md:gap-4">
-                        {isAdmin && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                                className="mr-0 md:mr-2 text-muted-foreground hover:text-primary transition-colors hidden md:flex"
-                            >
-                                {isSidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
-                            </Button>
-                        )}
-                        <Logo className="h-6 flex items-center" width={80} height={24} />
-                    </div>
+                {/* Header retirado: se gana altura visual para el chat. El toggle
+                    del sidebar y el banner de refine viven ahora dentro de la sticky
+                    bar de fases (más abajo) para no perder accesibilidad. */}
 
-                    {/* Banner del lead que estamos refinando. Visible sólo cuando
-                        el admin entró desde el detalle del lead con ?leadId=xxx. */}
-                    {refineBanner && (
-                        <div className="hidden md:flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs">
-                            <Sparkles className="h-3.5 w-3.5 text-primary" />
-                            <span className="font-medium">{refineBanner.name}</span>
-                            <span className="text-muted-foreground">·</span>
-                            {refineBanner.projectType && (
-                                <>
-                                    <span className="text-muted-foreground capitalize">{refineBanner.projectType.replace('_', ' ')}</span>
-                                    <span className="text-muted-foreground">·</span>
-                                </>
-                            )}
-                            {(refineBanner.postalCode || refineBanner.city) && (
-                                <>
-                                    <span className="text-muted-foreground">{[refineBanner.postalCode, refineBanner.city].filter(Boolean).join(' ')}</span>
-                                    <span className="text-muted-foreground">·</span>
-                                </>
-                            )}
-                            {typeof refineBanner.score === 'number' && (
-                                <span className="font-mono text-[10px] text-muted-foreground">{refineBanner.score}/100</span>
-                            )}
-                            <Link
-                                href={`/dashboard/leads/${targetLeadIdFromQuery}`}
-                                className="ml-1 text-[10px] text-primary hover:underline"
-                            >
-                                ver lead →
-                            </Link>
-                        </div>
-                    )}
-
-                    {/* Botón "Nuevo Chat" del header eliminado — se conserva el de la
-                      * barra lateral izquierda como único punto de entrada para crear un hilo. */}
-                </header>
-
-                {/* Messages Area (el header de chat es absolute z-10; el PhaseStepper
-                    vive DENTRO del scroll area con sticky bajo el header para no solapar
-                    con el logo/botones del header). */}
+                {/* Messages Area. El PhaseStepper sigue sticky en `top-0` (sin
+                    header arriba que compensar). */}
                 <div className="flex-1 overflow-y-auto p-0 custom-scrollbar relative bg-background/50 leading-relaxed px-4 md:px-6">
                     {/* Sticky bar bajo el header. En PDF flow (con partidas resueltas)
                         mostramos `BudgetSummaryBar` con stats agregadas; en NL flow
@@ -868,11 +853,37 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         const stats = computeBudgetStats(progressSubEvents);
                         const showSummaryBar = stats.partidasCount > 0;
                         return (
-                            <div className="sticky top-16 md:top-20 z-[5] -mx-4 md:-mx-6 bg-background/85 backdrop-blur-md border-b border-black/5 dark:border-white/5 px-4 md:px-6 py-2.5">
-                                <div className="max-w-3xl mx-auto">
-                                    {showSummaryBar
-                                        ? <BudgetSummaryBar subEvents={progressSubEvents} totalTasks={generationProgress.extractedItems} />
-                                        : <PhaseStepper requirements={requirements} />}
+                            <div className="sticky top-0 z-[5] -mx-4 md:-mx-6 bg-background/85 backdrop-blur-md border-b border-black/5 dark:border-white/5 px-4 md:px-6 py-2.5">
+                                <div className="max-w-3xl mx-auto flex items-center gap-2 md:gap-3">
+                                    {/* Toggle del sidebar reubicado aquí tras quitar el header. */}
+                                    {isAdmin && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                                            className="shrink-0 text-muted-foreground hover:text-primary transition-colors hidden md:flex"
+                                            aria-label={isSidebarOpen ? "Ocultar listado de chats" : "Mostrar listado de chats"}
+                                        >
+                                            {isSidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+                                        </Button>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        {showSummaryBar
+                                            ? <BudgetSummaryBar subEvents={progressSubEvents} totalTasks={generationProgress.extractedItems} />
+                                            : <PhaseStepper requirements={requirements} />}
+                                    </div>
+                                    {refineBanner && (
+                                        <div className="hidden md:flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs shrink-0">
+                                            <Sparkles className="h-3.5 w-3.5 text-primary" />
+                                            <span className="font-medium">{refineBanner.name}</span>
+                                            <Link
+                                                href={`/dashboard/leads/${targetLeadIdFromQuery}`}
+                                                className="ml-1 text-[10px] text-primary hover:underline"
+                                            >
+                                                ver lead →
+                                            </Link>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -894,7 +905,10 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         </div>
                     )}
 
-                    <div className="max-w-3xl mx-auto pt-20 md:pt-24 pb-32 space-y-6 md:space-y-8 flex flex-col items-center">
+                    {/* pt-4: ya no hay header arriba que compensar. pb-44: aire
+                        extra sobre el input bar para que pastillas y último
+                        mensaje no queden tapados por la caja de texto. */}
+                    <div className="max-w-3xl mx-auto pt-4 md:pt-6 pb-44 md:pb-48 space-y-6 md:space-y-8 flex flex-col items-center">
                         {/* Skeleton loader mientras `switchConversation` fetchea mensajes */}
                         {isLoadingMessages && (
                             <div data-testid="chat-skeleton" className="w-full space-y-6 pt-10">
@@ -943,6 +957,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                     <BudgetGenerationProgress
                                         progress={generationProgress}
                                         budgetId={(generationProgress as any).budgetId || leadId}
+                                        pipelineJobId={generationProgress.pipelineJobId}
                                         onSubEventsChange={setProgressSubEvents}
                                         onComplete={(budgetId) => {
                                             const viewLink = isAdmin

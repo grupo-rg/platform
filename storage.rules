@@ -61,5 +61,24 @@ service firebase.storage {
                     && request.auth.token.admin == true
                     && request.resource.size < 10 * 1024 * 1024;
     }
+
+    // Pipeline Uploads — PDFs subidos directamente desde el navegador
+    // antes de que el dispatcher arranque el Cloud Run Job. Path layout:
+    //
+    //   pipeline_uploads/{uid}/{jobId}/{filename}
+    //
+    // El uid en el path debe coincidir con el del usuario autenticado.
+    // Tamaño máximo 100 MB (los PDFs de 250+ páginas pesan ~30-50 MB).
+    // El bucket aplica una lifecycle rule (7 días) sobre este prefijo —
+    // ver `services/ai-core/scripts/setup-infrastructure.sh`.
+    match /pipeline_uploads/{uid}/{jobId}/{filename} {
+      allow read: if request.auth != null
+                  && (request.auth.uid == uid
+                      || request.auth.token.admin == true);
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 100 * 1024 * 1024
+                   && request.resource.contentType == 'application/pdf';
+    }
   }
 }

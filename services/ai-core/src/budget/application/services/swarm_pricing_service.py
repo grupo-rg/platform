@@ -3,7 +3,7 @@ import asyncio
 import json
 import uuid
 import inspect
-from typing import List, Dict, Any, Optional, Literal
+from typing import Awaitable, Callable, List, Dict, Any, Optional, Literal
 from pydantic import BaseModel, Field
 
 from src.budget.application.ports.ports import ILLMProvider, IVectorSearch, IGenerationEmitter
@@ -605,10 +605,52 @@ class SwarmPricingService:
         return all_candidates[:15]
 
     # --- 3. Ejecución Orquestada de Pricing (Public Method) ---
-    async def evaluate_batch(self, items: List[RestructuredItem], budget_id: str, metrics: Dict) -> List[BudgetPartida]:
+    async def evaluate_batch(
+        self,
+        items: List[RestructuredItem],
+        budget_id: str,
+        metrics: Dict,
+        *,
+        resume_from: Optional[List[BudgetPartida]] = None,
+        on_partida_resolved: Optional[Callable[[BudgetPartida], Awaitable[None]]] = None,
+    ) -> List[BudgetPartida]:
+        """Price every item in `items` against the swarm; return the resolved
+        partidas.
+
+        New (P4.b): checkpoint-aware resume. When called by
+        `RunPipelineJobUseCase` after a retry, the caller passes:
+
+          - `resume_from`: partidas already resolved by a prior attempt.
+            Their `code`s are filtered out of `items` BEFORE any LLM call,
+            saving the full Gemini cost.
+          - `on_partida_resolved`: invoked once per newly-resolved partida
+            so the use case can persist a Firestore checkpoint atomically.
+            If it raises, the partida is still emitted; the caller is
+            responsible for handling persistence failure.
+
+        Calling without either kwarg preserves the legacy behaviour, so
+        the existing extractor / NL UC paths are untouched.
+        """
+        resume_from = resume_from or []
+        resumed_codes = {p.code for p in resume_from if p.code}
+        if resumed_codes:
+            before = len(items)
+            items = [i for i in items if (i.code or "") not in resumed_codes]
+            skipped = before - len(items)
+            if skipped > 0:
+                logger.info(
+                    f"Swarm resume: skipping {skipped}/{before} items already "
+                    f"resolved in prior attempts."
+                )
+                self._emit(
+                    budget_id,
+                    'resume_from_checkpoints',
+                    {"resumed_count": skipped, "remaining_count": len(items)},
+                )
+
         logger.info(f"Starting Swarm Pricing Phase for {len(items)} items...")
         self._emit(budget_id, 'vector_search_started', {"query": f"Invocando al cerebro Flash para romper {len(items)} partidas en queries atómicas..."})
-        
+
         # Obtenemos candidatos masivos
         async def fetch_item_candidates(item: RestructuredItem):
             queries = await self._analyze_and_deconstruct(item, metrics)
@@ -1131,6 +1173,18 @@ class SwarmPricingService:
                     priced_partidas.append(partida)
 
                     self._emit(budget_id, 'item_resolved', {"type": "PARTIDA", "item": partida.model_dump()})
+                    # P4.b — checkpoint hook. The use case persists the
+                    # partida to Firestore so a retry can resume from here.
+                    # Errors are logged but do NOT abort the swarm; the
+                    # next attempt may simply re-resolve this partida.
+                    if on_partida_resolved is not None:
+                        try:
+                            await on_partida_resolved(partida)
+                        except Exception as cb_err:
+                            logger.warning(
+                                f"[pricing] on_partida_resolved callback failed for "
+                                f"{partida.code}: {type(cb_err).__name__}: {cb_err}"
+                            )
                     global_order += 1
                 except Exception as item_err:
                     logger.error(
@@ -1144,4 +1198,7 @@ class SwarmPricingService:
                     continue
                 
         self._emit(budget_id, 'batch_pricing_completed', {"query": "Swarm finalizado. Ensamblando Presupuesto Real..."})
-        return priced_partidas
+        # Caller sees the full picture: resumed partidas (from prior attempts)
+        # concatenated with newly resolved ones. Order: resumed first, then
+        # new, matching their original creation order.
+        return resume_from + priced_partidas
