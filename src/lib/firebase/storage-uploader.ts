@@ -38,18 +38,10 @@ export interface UploadPdfResult {
 }
 
 /**
- * The bucket used by the pipeline-jobs flow. Keep in sync with the
- * `${PROJECT_ID}-pipeline-uploads` bucket created by
- * `services/ai-core/scripts/setup-infrastructure.sh`.
- *
- * We READ from a public env var so deploys can target staging vs prod
- * buckets independently of the default Firebase bucket.
+ * 100MB cap matches the Storage rule. Pre-checked here so the user gets
+ * an immediate error instead of waiting for the upload to start.
  */
-const PIPELINE_BUCKET =
-  process.env.NEXT_PUBLIC_PIPELINE_UPLOADS_BUCKET ||
-  'grupo-rg-a9929-pipeline-uploads';
-
-const MAX_BYTES = 100 * 1024 * 1024; // 100MB — matches the Storage rule
+const MAX_BYTES = 100 * 1024 * 1024;
 
 export async function uploadPdfForPipelineJob({
   file,
@@ -97,13 +89,17 @@ export async function uploadPdfForPipelineJob({
     );
   });
 
-  // `task.snapshot.ref.fullPath` should equal `objectPath`, but read it
-  // from the snapshot rather than trusting our local string in case Firebase
-  // ever normalises it (trailing slash, percent-encoding, etc.).
+  // Read bucket + fullPath from the actual upload snapshot so the gcsUri
+  // we return ALWAYS points to where the file really landed. The Firebase
+  // Storage SDK uploads to the bucket configured at `firebase.app` init
+  // (NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET), which is the project default
+  // bucket. The dispatcher hands this gcsUri to the worker; the worker
+  // needs IAM permissions on whatever bucket is named here.
+  const bucket = task.snapshot.ref.bucket;
   const fullPath = task.snapshot.ref.fullPath || objectPath;
   return {
-    gcsUri: `gs://${PIPELINE_BUCKET}/${fullPath}`,
-    bucket: PIPELINE_BUCKET,
+    gcsUri: `gs://${bucket}/${fullPath}`,
+    bucket,
     fullPath,
   };
 }
