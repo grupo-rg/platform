@@ -10,12 +10,17 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Calendar, ChevronDown, MapPin, Building2, Clock, CheckCircle2, AlertCircle, Edit2 } from 'lucide-react';
+import { Calendar, ChevronDown, MapPin, Building2, Clock, CheckCircle2, AlertCircle, Edit2, MoreVertical, Trash2, Loader2 } from 'lucide-react';
 import { updateProjectStatusAction } from '@/actions/project/update-project-status.action';
+import { deleteProjectAction } from '@/actions/project/delete-project.action';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import { Label } from '@/components/ui/label';
 import { updateProjectAction } from '@/actions/project/update-project.action';
@@ -47,6 +52,8 @@ export function ProjectHeader({ project, locale }: ProjectHeaderProps) {
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editStartDate, setEditStartDate] = useState(project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '');
     const [editEndDate, setEditEndDate] = useState(project.estimatedEndDate ? new Date(project.estimatedEndDate).toISOString().split('T')[0] : '');
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     const router = useRouter();
     const { toast } = useToast();
@@ -79,6 +86,24 @@ export function ProjectHeader({ project, locale }: ProjectHeaderProps) {
             });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        setDeleting(true);
+        try {
+            const result = await deleteProjectAction(project.id);
+            if (result.success) {
+                toast({ title: 'Obra eliminada' });
+                router.push('/dashboard/projects');
+                router.refresh();
+            } else {
+                toast({ title: 'Error al eliminar', description: result.error, variant: 'destructive' });
+                setDeleting(false);
+            }
+        } catch {
+            toast({ title: 'Error de conexión', variant: 'destructive' });
+            setDeleting(false);
         }
     };
 
@@ -128,28 +153,47 @@ export function ProjectHeader({ project, locale }: ProjectHeaderProps) {
                 </div>
 
                 <div className="flex flex-col items-end gap-3">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="gap-2 min-w-[140px] justify-between" disabled={loading}>
-                                <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[status]}`} />
-                                    {STATUS_LABELS[status]}
-                                </div>
-                                <ChevronDown className="w-4 h-4 opacity-50" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {allowedTransitions.map((s) => (
-                                <DropdownMenuItem key={s} onClick={() => handleStatusChange(s)}>
-                                    <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[s]} mr-2`} />
-                                    Mark as {STATUS_LABELS[s]}
+                    <div className="flex items-center gap-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="gap-2 min-w-[140px] justify-between" disabled={loading}>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[status]}`} />
+                                        {STATUS_LABELS[status]}
+                                    </div>
+                                    <ChevronDown className="w-4 h-4 opacity-50" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {allowedTransitions.map((s) => (
+                                    <DropdownMenuItem key={s} onClick={() => handleStatusChange(s)}>
+                                        <div className={`w-2 h-2 rounded-full ${STATUS_COLORS[s]} mr-2`} />
+                                        Mark as {STATUS_LABELS[s]}
+                                    </DropdownMenuItem>
+                                ))}
+                                {allowedTransitions.length === 0 && (
+                                    <div className="p-2 text-xs text-muted-foreground">No hay transiciones disponibles</div>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon" aria-label="Más acciones">
+                                    <MoreVertical className="w-4 h-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onClick={() => setIsDeleteOpen(true)}
+                                    className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Eliminar obra
                                 </DropdownMenuItem>
-                            ))}
-                            {allowedTransitions.length === 0 && (
-                                <div className="p-2 text-xs text-muted-foreground">No hay transiciones disponibles</div>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
 
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <div className="flex items-center gap-1.5 group cursor-pointer" onClick={() => setIsEditOpen(true)}>
@@ -170,6 +214,30 @@ export function ProjectHeader({ project, locale }: ProjectHeaderProps) {
                 </div>
                 <Progress value={phaseProgress} className="h-2.5" />
             </div>
+
+            <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Eliminar esta obra?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Se eliminará el proyecto
+                            <strong> "{project.name}" </strong>
+                            y todas sus fases. Los presupuestos asociados, leads y gastos
+                            ligados a la obra <em>no</em> se borran.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            {deleting ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" />Eliminando…</>) : 'Eliminar'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
                 <DialogContent>

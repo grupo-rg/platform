@@ -199,7 +199,7 @@ export function ProjectPhasesTab({ project }: ProjectPhasesTabProps) {
                 </Button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[calc(100vh-22rem)] overflow-y-auto pr-2 -mr-2 pb-8">
                 {project.phases.map((phase, index) => (
                     <Card key={phase.id} className="relative overflow-hidden transition-all hover:shadow-md group">
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${phase.status === 'completada' ? 'bg-emerald-500' :

@@ -92,9 +92,10 @@ export function ProjectOverviewTab({ project, locale }: ProjectOverviewTabProps)
                     <CardTitle className="text-lg">Fases del Proyecto</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {/* Use a simple list preview here, linking to Phases tab */}
-                    <div className="space-y-4">
-                        {project.phases.slice(0, 3).map((phase, i) => (
+                    {/* Lista scrollable: muestra todas las fases sin cortar; el scroll
+                        interno mantiene el resto del overview accesible. */}
+                    <div className="space-y-4 max-h-[24rem] overflow-y-auto pr-2 -mr-2 pb-6">
+                        {project.phases.map((phase, i) => (
                             <div key={phase.id} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border border-zinc-100 dark:border-zinc-800">
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 text-xs font-medium">
@@ -108,9 +109,9 @@ export function ProjectOverviewTab({ project, locale }: ProjectOverviewTabProps)
                                 </div>
                             </div>
                         ))}
-                        {project.phases.length > 3 && (
-                            <p className="text-xs text-center text-muted-foreground">
-                                + {project.phases.length - 3} fases más (ver pestaña Fases)
+                        {project.phases.length === 0 && (
+                            <p className="text-xs text-center text-muted-foreground py-4">
+                                Sin fases todavía.
                             </p>
                         )}
                     </div>
