@@ -25,8 +25,6 @@ import {
     PanelLeftOpen,
     Users,
     CalendarDays,
-    TrendingUp,
-    Bot,
 } from 'lucide-react';
 import Image from 'next/image';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -95,14 +93,12 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
             label: 'Contenido',
             items: [
                 { href: '/dashboard/seo-generator', label: t.dashboard.nav.seoGenerator, icon: Search },
-                { href: '/dashboard/marketing', label: 'Marketing', icon: TrendingUp },
             ]
         },
         {
             label: 'Analítica',
             items: [
                 { href: '/dashboard/analytics', label: 'Analíticas', icon: BarChart3 },
-                { href: '/dashboard/admin/pipelines', label: 'Pipelines IA', icon: Bot },
                 { href: '/dashboard/admin/messages', label: 'Mensajes', icon: MessageSquare },
             ]
         },

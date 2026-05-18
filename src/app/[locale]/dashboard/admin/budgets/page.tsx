@@ -18,7 +18,6 @@ import {
     Folder,
     ArrowRight,
     Search,
-    Filter,
     ShieldCheck,
     Briefcase
 } from 'lucide-react';
@@ -68,10 +67,6 @@ export default async function BudgetsListPage({ params }: { params: Promise<{ lo
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <Button variant="outline" className="border-white/10 text-white hover:bg-white/10 hover:text-white bg-transparent backdrop-blur-sm hidden md:flex">
-                            <Filter className="mr-2 h-4 w-4" />
-                            Filtrar Vista
-                        </Button>
                         <Link href="/dashboard/assistant">
                             <Button className="bg-white text-zinc-950 hover:bg-blue-50 font-semibold shadow-lg shadow-blue-900/20 transition-all duration-300 group">
                                 <Sparkles className="mr-2 h-4 w-4 text-purple-600 group-hover:scale-110 transition-transform" />

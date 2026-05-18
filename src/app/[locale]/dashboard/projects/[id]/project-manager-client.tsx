@@ -53,11 +53,11 @@ export function ProjectManagerClient({ project, expenses, locale }: ProjectManag
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-6 focus-visible:outline-none">
-                    <ProjectOverviewTab project={project} locale={locale} />
+                    <ProjectOverviewTab project={project} expenses={expenses} locale={locale} />
                 </TabsContent>
 
                 <TabsContent value="phases" className="space-y-6 focus-visible:outline-none">
-                    <ProjectPhasesTab project={project} />
+                    <ProjectPhasesTab project={project} expenses={expenses} locale={locale} />
                 </TabsContent>
 
                 <TabsContent value="financials" className="space-y-6 focus-visible:outline-none">

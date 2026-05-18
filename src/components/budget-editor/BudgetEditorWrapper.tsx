@@ -23,6 +23,7 @@ import { Menu, Sparkles, FileText, User, Home, BrainCircuit, Plus } from 'lucide
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AssignClientModal } from './AssignClientModal';
+import { EditBudgetClientDialog } from './EditBudgetClientDialog';
 import { getLeadPdfConfigAction } from '@/actions/lead/getLeadPdfConfigAction';
 import { saveLeadPdfConfigAction } from '@/actions/lead/saveLeadPdfConfigAction';
 import { getCompanyConfigAction } from '@/actions/platform/company-config.action';
@@ -379,12 +380,21 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                 <span className="text-xs font-mono text-muted-foreground">#{budget.id.substring(0, 8).toUpperCase()}</span>
                             </div>
 
-                            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight font-headline text-foreground flex items-center">
-                                {budget.clientSnapshot?.name || 'Cliente Desconocido'}
+                            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight font-headline text-foreground flex items-center gap-2 flex-wrap">
+                                <span>{budget.clientSnapshot?.name || 'Cliente Desconocido'}</span>
                                 {isAdmin && budget.leadId === 'unassigned' && (
                                     <AssignClientModal budgetId={budget.id} />
                                 )}
+                                {isAdmin && budget.leadId !== 'unassigned' && (
+                                    <EditBudgetClientDialog budget={budget} />
+                                )}
                             </h1>
+
+                            {budget.title && (
+                                <p className="text-sm md:text-base text-muted-foreground font-medium -mt-1">
+                                    {budget.title}
+                                </p>
+                            )}
 
                             <div className="flex flex-wrap items-center gap-2 md:gap-3 text-sm text-muted-foreground pt-1">
                                 <div className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800/50 px-3 py-1 rounded-full border border-zinc-200 dark:border-zinc-700/50">

@@ -1,10 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { Project } from '@/backend/project/domain/project';
 import { Expense } from '@/backend/expense/domain/expense';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ExpenseCard } from '@/components/expenses/expense-card';
-import { Receipt, AlertTriangle } from 'lucide-react';
+import { CreateExpenseModal } from '@/components/expenses/create-expense-modal';
+import { BudgetBurndownChart } from './BudgetBurndownChart';
+import { Receipt, Upload, LineChart } from 'lucide-react';
 
 interface ProjectFinancialsTabProps {
     project: Project;
@@ -13,8 +17,8 @@ interface ProjectFinancialsTabProps {
 }
 
 export function ProjectFinancialsTab({ project, expenses, locale }: ProjectFinancialsTabProps) {
+    const [createOpen, setCreateOpen] = useState(false);
     const totalExpenses = expenses.reduce((acc, e) => acc + e.total, 0);
-    const budgetUsage = project.estimatedBudget > 0 ? (totalExpenses / project.estimatedBudget) * 100 : 0;
 
     const fmt = (v: number) =>
         new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
@@ -55,9 +59,29 @@ export function ProjectFinancialsTab({ project, expenses, locale }: ProjectFinan
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
+                        <LineChart className="w-5 h-5" />
+                        Consumo de Presupuesto
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <BudgetBurndownChart project={project} expenses={expenses} locale={locale} />
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                    <CardTitle className="flex items-center gap-2">
                         <Receipt className="w-5 h-5" />
                         Historial de Gastos
                     </CardTitle>
+                    <Button
+                        size="sm"
+                        onClick={() => setCreateOpen(true)}
+                        className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
+                    >
+                        <Upload className="w-4 h-4" />
+                        Subir factura
+                    </Button>
                 </CardHeader>
                 <CardContent>
                     {expenses.length > 0 ? (
@@ -70,10 +94,27 @@ export function ProjectFinancialsTab({ project, expenses, locale }: ProjectFinan
                         <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
                             <Receipt className="w-10 h-10 mb-2 opacity-20" />
                             <p>No hay gastos registrados para esta obra.</p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCreateOpen(true)}
+                                className="mt-4 gap-2"
+                            >
+                                <Upload className="w-4 h-4" />
+                                Subir la primera factura
+                            </Button>
                         </div>
                     )}
                 </CardContent>
             </Card>
+
+            <CreateExpenseModal
+                open={createOpen}
+                onOpenChange={setCreateOpen}
+                projects={[project]}
+                locale={locale}
+                lockedProjectId={project.id}
+            />
         </div>
     );
 }

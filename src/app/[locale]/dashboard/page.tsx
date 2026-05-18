@@ -10,7 +10,6 @@ import {
   Building2,
   HardHat,
   CalendarDays,
-  Plus,
 } from 'lucide-react';
 import { getAllBudgetsAction } from '@/actions/budget/get-all-budgets.action';
 import { getLeadsAction } from '@/actions/lead/dashboard.action';
@@ -124,12 +123,6 @@ export default async function DashboardPage({ params }: { params: Promise<{ loca
             <Button className="bg-primary hover:bg-primary/90">
               <Sparkles className="w-4 h-4 mr-2" />
               Nuevo presupuesto con IA
-            </Button>
-          </Link>
-          <Link href="/dashboard/leads">
-            <Button variant="outline">
-              <Plus className="w-4 h-4 mr-2" />
-              Nuevo lead
             </Button>
           </Link>
         </div>

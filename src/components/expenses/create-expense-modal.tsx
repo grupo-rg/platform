@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Project } from '@/backend/project/domain/project';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,15 +32,22 @@ interface CreateExpenseModalProps {
     onOpenChange: (open: boolean) => void;
     projects: Project[];
     locale: string;
+    /**
+     * Si se pasa, el modal preselecciona ese proyecto, oculta el selector y no
+     * permite cambiarlo. Útil cuando el modal se abre dentro del contexto de
+     * un proyecto concreto (ej: tab Económico del detalle de obra), donde
+     * mostrar un dropdown con una sola opción solo añade fricción.
+     */
+    lockedProjectId?: string;
 }
 
-export function CreateExpenseModal({ open, onOpenChange, projects, locale }: CreateExpenseModalProps) {
+export function CreateExpenseModal({ open, onOpenChange, projects, locale, lockedProjectId }: CreateExpenseModalProps) {
     const [mode, setMode] = useState<Mode>('ai');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // Form state
-    const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const [selectedProjectId, setSelectedProjectId] = useState<string>(lockedProjectId || '');
     const [providerName, setProviderName] = useState('');
     const [providerCif, setProviderCif] = useState('');
     const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -56,8 +63,14 @@ export function CreateExpenseModal({ open, onOpenChange, projects, locale }: Cre
     const selectedProject = projects.find(p => p.id === selectedProjectId);
     const budgetChapters = selectedProject?.phases?.map(p => p.name) || [];
 
+    // Si `lockedProjectId` cambia (modal reutilizado entre obras distintas),
+    // alinea el state. Sin esto el modal mostraría la selección anterior.
+    useEffect(() => {
+        if (lockedProjectId) setSelectedProjectId(lockedProjectId);
+    }, [lockedProjectId]);
+
     const resetForm = () => {
-        setSelectedProjectId('');
+        setSelectedProjectId(lockedProjectId || '');
         setProviderName('');
         setProviderCif('');
         setInvoiceNumber('');
@@ -208,20 +221,23 @@ export function CreateExpenseModal({ open, onOpenChange, projects, locale }: Cre
                     </button>
                 </div>
 
-                {/* Project selector (shared) */}
-                <div className="space-y-2">
-                    <Label>Obra *</Label>
-                    <select
-                        className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
-                        value={selectedProjectId}
-                        onChange={e => setSelectedProjectId(e.target.value)}
-                    >
-                        <option value="">Seleccionar obra...</option>
-                        {projects.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                    </select>
-                </div>
+                {/* Project selector — oculto cuando el modal se abre dentro
+                    del contexto de una obra concreta (lockedProjectId). */}
+                {!lockedProjectId && (
+                    <div className="space-y-2">
+                        <Label>Obra *</Label>
+                        <select
+                            className="w-full rounded-md border border-zinc-200 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm"
+                            value={selectedProjectId}
+                            onChange={e => setSelectedProjectId(e.target.value)}
+                        >
+                            <option value="">Seleccionar obra...</option>
+                            {projects.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
                 {/* === AI MODE === */}
                 {mode === 'ai' && (

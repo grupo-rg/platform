@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Budget } from '@/backend/budget/domain/budget';
 import { deleteBudgetsAction } from '@/actions/budget/delete-budgets.action';
@@ -41,7 +41,11 @@ import {
     Search,
     MoreHorizontal,
     Trash2,
-    Loader2
+    Loader2,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -55,6 +59,9 @@ interface BudgetsTableProps {
     locale: string;
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
+
 export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
     const router = useRouter();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -62,13 +69,32 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+
     // Filter budgets based on search
-    const filteredBudgets = budgets.filter(budget => {
+    const filteredBudgets = useMemo(() => {
         const term = searchQuery.toLowerCase();
-        const clientName = (budget.clientSnapshot?.name || (budget as any).clientData?.name || '').toLowerCase();
-        const ref = budget.id.toLowerCase();
-        return clientName.includes(term) || ref.includes(term);
-    });
+        if (!term) return budgets;
+        return budgets.filter(budget => {
+            const clientName = (budget.clientSnapshot?.name || (budget as any).clientData?.name || '').toLowerCase();
+            const ref = budget.id.toLowerCase();
+            const title = (budget.title || '').toLowerCase();
+            return clientName.includes(term) || ref.includes(term) || title.includes(term);
+        });
+    }, [budgets, searchQuery]);
+
+    // Resetea a página 1 cuando cambia la búsqueda o el tamaño de página, para
+    // evitar quedarse en una página fuera de rango sin resultados.
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, pageSize]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredBudgets.length / pageSize));
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedBudgets = filteredBudgets.slice(startIndex, endIndex);
 
     // Toggle selection of a single budget
     const toggleSelection = (id: string) => {
@@ -81,13 +107,19 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
         setSelectedIds(newSelected);
     };
 
-    // Toggle all visible budgets
+    // Toggle all rows on the CURRENT page. Cualquier selección previa en
+    // otras páginas se preserva — el usuario puede acumular selección
+    // navegando entre páginas.
+    const allVisibleSelected = paginatedBudgets.length > 0
+        && paginatedBudgets.every(b => selectedIds.has(b.id));
     const toggleAll = () => {
-        if (selectedIds.size === filteredBudgets.length && filteredBudgets.length > 0) {
-            setSelectedIds(new Set());
+        const next = new Set(selectedIds);
+        if (allVisibleSelected) {
+            paginatedBudgets.forEach(b => next.delete(b.id));
         } else {
-            setSelectedIds(new Set(filteredBudgets.map(b => b.id)));
+            paginatedBudgets.forEach(b => next.add(b.id));
         }
+        setSelectedIds(next);
     };
 
     const handleDelete = async () => {
@@ -188,7 +220,7 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
                         <TableRow className="hover:bg-transparent border-zinc-100 dark:border-zinc-800">
                             <TableHead className="w-[40px] pl-4">
                                 <Checkbox
-                                    checked={selectedIds.size === filteredBudgets.length && filteredBudgets.length > 0}
+                                    checked={allVisibleSelected}
                                     onCheckedChange={toggleAll}
                                 />
                             </TableHead>
@@ -202,20 +234,24 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredBudgets.length === 0 ? (
+                        {paginatedBudgets.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={8} className="h-48 text-center">
                                     <div className="flex flex-col items-center justify-center text-muted-foreground">
                                         <div className="h-16 w-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4">
                                             <Folder className="h-8 w-8 opacity-50" />
                                         </div>
-                                        <p className="text-lg font-medium text-foreground">No hay presupuestos</p>
-                                        <p className="text-sm">Genere uno nuevo para comenzar.</p>
+                                        <p className="text-lg font-medium text-foreground">
+                                            {searchQuery ? 'Sin resultados para tu búsqueda' : 'No hay presupuestos'}
+                                        </p>
+                                        <p className="text-sm">
+                                            {searchQuery ? 'Prueba con otra referencia o nombre.' : 'Genere uno nuevo para comenzar.'}
+                                        </p>
                                     </div>
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredBudgets.map((budget) => {
+                            paginatedBudgets.map((budget) => {
                                 const sourceInfo = getSourceInfo(budget.source);
                                 const SourceIcon = sourceInfo.icon;
                                 const isSelected = selectedIds.has(budget.id);
@@ -354,6 +390,75 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Paginador. Solo se renderiza si hay resultados; mantiene espacio
+                fijo (h-12) para evitar saltos cuando la última página tiene
+                menos filas que pageSize. */}
+            {filteredBudgets.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1 py-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>Filas por página:</span>
+                        <select
+                            value={pageSize}
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="h-8 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-2 text-xs"
+                        >
+                            {PAGE_SIZE_OPTIONS.map(n => (
+                                <option key={n} value={n}>{n}</option>
+                            ))}
+                        </select>
+                        <span className="ml-2">
+                            {startIndex + 1}–{Math.min(endIndex, filteredBudgets.length)} de {filteredBudgets.length}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCurrentPage(1)}
+                            disabled={safePage === 1}
+                            aria-label="Primera página"
+                        >
+                            <ChevronsLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={safePage === 1}
+                            aria-label="Página anterior"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground px-3 min-w-[5rem] text-center">
+                            Página {safePage} / {totalPages}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={safePage === totalPages}
+                            aria-label="Página siguiente"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={safePage === totalPages}
+                            aria-label="Última página"
+                        >
+                            <ChevronsRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                 <AlertDialogContent>

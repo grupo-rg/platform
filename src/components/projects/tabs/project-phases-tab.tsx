@@ -1,11 +1,18 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Project } from '@/backend/project/domain/project';
 import { ProjectPhase, PhaseStatus } from '@/backend/project/domain/project-phase';
+import { Expense } from '@/backend/expense/domain/expense';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import {
+    aggregatePhaseRealCosts,
+    effectivePhaseRealCost,
+    phaseCostStatus,
+} from '@/lib/project/aggregate-phase-costs';
 import {
     Dialog,
     DialogContent,
@@ -27,9 +34,18 @@ import { useRouter } from 'next/navigation';
 
 interface ProjectPhasesTabProps {
     project: Project;
+    expenses?: Expense[];
+    locale?: string;
 }
 
-export function ProjectPhasesTab({ project }: ProjectPhasesTabProps) {
+export function ProjectPhasesTab({ project, expenses = [], locale = 'es-ES' }: ProjectPhasesTabProps) {
+    // Agrego los gastos por fase una sola vez por render.
+    const aggregation = useMemo(
+        () => aggregatePhaseRealCosts(project, expenses),
+        [project, expenses],
+    );
+    const fmt = (v: number) =>
+        new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
     const [selectedPhase, setSelectedPhase] = useState<ProjectPhase | null>(null);
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -199,7 +215,7 @@ export function ProjectPhasesTab({ project }: ProjectPhasesTabProps) {
                 </Button>
             </div>
 
-            <div className="space-y-4 max-h-[calc(100vh-22rem)] overflow-y-auto pr-2 -mr-2 pb-8">
+            <div className="space-y-4 pb-8">
                 {project.phases.map((phase, index) => (
                     <Card key={phase.id} className="relative overflow-hidden transition-all hover:shadow-md group">
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${phase.status === 'completada' ? 'bg-emerald-500' :
@@ -230,14 +246,44 @@ export function ProjectPhasesTab({ project }: ProjectPhasesTabProps) {
                                 </div>
 
                                 <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-                                    <div className="text-right hidden md:block">
-                                        <div className="text-xs text-muted-foreground">Ejecutado / Estimado</div>
-                                        <div className="font-medium">
-                                            {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(phase.realCost || 0)}
-                                            <span className="text-muted-foreground text-xs mx-1">/</span>
-                                            {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(phase.estimatedCost || 0)}
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const real = effectivePhaseRealCost(phase, aggregation);
+                                        const estimated = phase.estimatedCost || 0;
+                                        const status = phaseCostStatus(real, estimated);
+                                        const ratio = estimated > 0 ? real / estimated : 0;
+                                        return (
+                                            <div className="text-right hidden md:block">
+                                                <div className="text-xs text-muted-foreground flex items-center justify-end gap-1.5">
+                                                    Ejecutado / Estimado
+                                                    {status === 'over' && (
+                                                        <Badge className="bg-red-500 hover:bg-red-600 text-white text-[10px] h-4 px-1.5">
+                                                            +{Math.round((ratio - 1) * 100)}%
+                                                        </Badge>
+                                                    )}
+                                                    {status === 'tight' && (
+                                                        <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] h-4 px-1.5">
+                                                            +{Math.round((ratio - 1) * 100)}%
+                                                        </Badge>
+                                                    )}
+                                                    {status === 'tracking' && (
+                                                        <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] h-4 px-1.5">
+                                                            {Math.round(ratio * 100)}%
+                                                        </Badge>
+                                                    )}
+                                                    {status === 'unbudgeted' && (
+                                                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500 text-amber-600">
+                                                            Sin estimado
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <div className={`font-medium ${status === 'over' ? 'text-red-600' : status === 'tight' ? 'text-amber-600' : ''}`}>
+                                                    {fmt(real)}
+                                                    <span className="text-muted-foreground text-xs mx-1">/</span>
+                                                    {fmt(estimated)}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                     <div className="flex items-center gap-1">
                                         <div className="flex flex-col mr-2">
                                             <Button

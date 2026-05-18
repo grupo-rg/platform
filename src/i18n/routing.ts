@@ -74,7 +74,6 @@ export const routing = defineRouting({
         },
         '/dashboard/budget-request': '/dashboard/budget-request',
         '/dashboard/admin/budgets': '/dashboard/admin/budgets',
-        '/dashboard/admin/pipelines': '/dashboard/admin/pipelines',
         '/dashboard/seo-generator': '/dashboard/seo-generator',
         '/dashboard/settings/pricing': '/dashboard/settings/pricing',
         '/dashboard/settings/financial': '/dashboard/settings/financial',

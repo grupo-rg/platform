@@ -23,9 +23,13 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
 
   // Determine if the current page should be full-width/app-like (no default padding)
   const isBudgetsEditView = pathname.includes('/budgets/') && pathname.includes('/edit');
+  // `/projects` (listado) gestiona su propio scroll interno. El detalle
+  // `/projects/{id}` necesita scroll del layout — por eso el regex excluye
+  // cualquier path con segmento extra detrás de `/projects`.
+  const isProjectsList = /\/projects\/?$/.test(pathname);
   const isAppPage = pathname.includes('/admin/messages') ||
     pathname.includes('/assistant') || pathname.includes('/asistente') ||
-    pathname.includes('/projects') ||
+    isProjectsList ||
     isBudgetsEditView ||
     pathname.includes('/presupuesto');
 
