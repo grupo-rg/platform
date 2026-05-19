@@ -53,6 +53,16 @@ service cloud.firestore {
     // `/api/budget/stream` endpoint tails. Anything sensitive lives in
     // `pipeline_jobs/*` above.
 
+    // Sprint 3 — S3-07 RLHF Correction Pairs.
+    // Cada vez que un humano corrige una partida en el editor, el server
+    // action `logCorrectionPairAction` persiste el par
+    //   (query_text, ai_proposed, human_chosen)
+    // aquí. Es dataset de reentreno del bi-encoder/reranker; ningún cliente
+    // debe poder leer o escribir directo.
+    match /correction_pairs/{pairId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

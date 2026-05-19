@@ -49,6 +49,7 @@ import {
 import { detectDivergence } from '@/lib/budget/reconciliation';
 import { ReconciliationChip } from '../ReconciliationChip';
 import { useMarkupFactor } from '@/hooks/use-markup-factor';
+import { logCorrectionPairAction } from '@/actions/ai-training/log-correction-pair.action';
 
 interface TableRowItemProps {
     item: EditableBudgetLineItem;
@@ -70,9 +71,74 @@ export const TableRowItem = React.memo(({
 }: TableRowItemProps) => {
     const controls = useDragControls();
     const [isPending, startTransition] = useTransition();
-    const { state } = useBudgetEditorContext();
+    const { state, budgetId } = useBudgetEditorContext();
     // Phase 17.4 — factor de display centralizado en `useMarkupFactor`.
     const { markupFactor, isMarkupBaked } = useMarkupFactor();
+
+    // Sprint 3 — S3-07 partial.
+    //
+    // Wrapper que intercepta `onUpdate` y, si el cambio toca campos materiales
+    // (code, unitPrice, unit, quantity), dispara `logCorrectionPairAction`
+    // fire-and-forget. Comparamos la propuesta IA (capturada en
+    // `item.originalState` por `use-budget-editor.ts` en SET_ITEMS) contra los
+    // valores resultantes tras el merge.
+    //
+    // El logger es invisible al usuario: errores se loguean por consola y el
+    // editor sigue funcionando.
+    const handleUpdate = (id: string, changes: Partial<EditableBudgetLineItem>) => {
+        onUpdate(id, changes);
+
+        try {
+            // Pre-condición: necesitamos budgetId, originalState (baseline IA)
+            // y al menos un campo del payload `item` mutado.
+            if (!budgetId) return;
+            if (!item.originalState) return;
+            if (!changes.item) return;
+
+            const incoming = changes.item;
+            const baseline = item.originalState;
+            const aiCode = item.item?.code || '';
+            // Construimos el "antes" (baseline) y el "después" mezclando lo
+            // que ya tenía la partida con el delta entrante.
+            const aiProposed = {
+                code: aiCode,
+                description: baseline.description || item.item?.description || '',
+                unitPrice: Number(baseline.unitPrice ?? 0),
+                matchConfidence: Number(item.item?.matchConfidence ?? 0),
+                unit: baseline.unit || item.item?.unit || 'ud',
+                quantity: Number(baseline.quantity ?? item.item?.quantity ?? 1),
+            };
+            const humanChosen = {
+                code: (incoming as any).code ?? aiCode,
+                description: (incoming as any).description ?? item.item?.description ?? '',
+                unitPrice: Number((incoming as any).unitPrice ?? item.item?.unitPrice ?? 0),
+                unit: (incoming as any).unit ?? item.item?.unit ?? 'ud',
+                quantity: Number((incoming as any).quantity ?? item.item?.quantity ?? 1),
+            };
+
+            // Si ningún campo material cambia respecto a baseline, no hay
+            // corrección que registrar (incluye renombrados de description).
+            const codeEq = (aiProposed.code || '').trim() === (humanChosen.code || '').trim();
+            const priceEq = Math.abs(aiProposed.unitPrice - humanChosen.unitPrice) < 0.001;
+            const unitEq = (aiProposed.unit || '').trim().toLowerCase() === (humanChosen.unit || '').trim().toLowerCase();
+            const qtyEq = Math.abs(aiProposed.quantity - humanChosen.quantity) < 0.001;
+            if (codeEq && priceEq && unitEq && qtyEq) return;
+
+            // Fire-and-forget; el server-action ya filtra no-ops y errores
+            // de auth sin lanzar.
+            void logCorrectionPairAction({
+                budgetId,
+                partidaCode: item.item?.code || aiProposed.code || 'unknown',
+                queryText: item.originalTask || item.item?.description || '',
+                aiProposed,
+                humanChosen,
+            }).catch(err => {
+                console.warn('[RLHF] logCorrectionPair failed (non-fatal)', err);
+            });
+        } catch (err) {
+            console.warn('[RLHF] logCorrectionPair wrapper threw (non-fatal)', err);
+        }
+    };
 
     // Deviation Analysis
     const currentPrice = item.item?.unitPrice || 0;
@@ -117,7 +183,8 @@ export const TableRowItem = React.memo(({
         const newTotalRaw = newTotalAllIn / (markupFactor || 1);
         const quantity = item.item?.quantity || 1;
         const newUnitPrice = newTotalRaw / (quantity === 0 ? 1 : quantity);
-        onUpdate(item.id, { item: { ...item.item!, unitPrice: newUnitPrice } });
+        // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
+        handleUpdate(item.id, { item: { ...item.item!, unitPrice: newUnitPrice } });
     };
 
     const handleGenerateBreakdown = (forceShowCandidates: boolean = false) => {
@@ -343,7 +410,7 @@ export const TableRowItem = React.memo(({
             <div className="w-[80px] shrink-0 p-2 pt-3">
                 <EditableCell
                     value={item.item?.unit || 'ud'}
-                    onChange={(val) => onUpdate(item.id, { item: { ...item.item!, unit: val as string } })}
+                    onChange={(val) => handleUpdate(item.id, { item: { ...item.item!, unit: val as string } })}
                     className="text-center text-xs font-medium text-slate-500 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full"
                 />
             </div>
@@ -352,7 +419,7 @@ export const TableRowItem = React.memo(({
             <div className="w-[100px] shrink-0 p-2 text-right pt-3">
                 <EditableCell
                     value={item.item?.quantity || 0}
-                    onChange={(val) => onUpdate(item.id, { item: { ...item.item!, quantity: Number(val) } })}
+                    onChange={(val) => handleUpdate(item.id, { item: { ...item.item!, quantity: Number(val) } })}
                     type="number"
                     className="text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full pr-2"
                 />
@@ -367,7 +434,8 @@ export const TableRowItem = React.memo(({
                             // Phase 15 — el usuario edita en all-in; almacenamos raw PEM.
                             const newUnitPriceAllIn = Number(val);
                             const newUnitPriceRaw = newUnitPriceAllIn / (markupFactor || 1);
-                            onUpdate(item.id, { item: { ...item.item!, unitPrice: newUnitPriceRaw } });
+                            // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
+                            handleUpdate(item.id, { item: { ...item.item!, unitPrice: newUnitPriceRaw } });
                         }}
                         type="currency"
                         className={cn(
