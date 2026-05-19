@@ -31,6 +31,7 @@ from src.budget.application.services.swarm_pricing_service import SwarmPricingSe
 from src.budget.catalog.application.services.hybrid_catalog_search import (
     HybridCatalogSearch,
 )
+from src.budget.infrastructure.adapters.reranking.bge_reranker import BgeReranker
 from src.budget.application.use_cases.generate_budget_from_nl_uc import (
     GenerateBudgetFromNlUseCase,
 )
@@ -176,6 +177,30 @@ async def bootstrap_hybrid_catalog_search() -> Optional[HybridCatalogSearch]:
         return None
 
 
+# S1-A-03 — BgeReranker singleton. Instanciación lazy: si
+# `sentence-transformers` no está disponible (entorno sin ML deps, p.ej.
+# tests locales antes de `pip install -r requirements.txt`), capturamos el
+# ImportError y dejamos `None` — el swarm cae al rerank Flash legacy.
+_bge_reranker_singleton: Optional[BgeReranker] = None
+try:
+    _bge_reranker_singleton = BgeReranker.get()
+    import logging as _logging
+    _logging.getLogger(__name__).info(
+        "[bootstrap] BgeReranker ready (cross-encoder BAAI/bge-reranker-v2-m3)"
+    )
+except Exception as _bge_err:  # pragma: no cover (depends on host env)
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        f"[bootstrap] BgeReranker init failed ({_bge_err}); "
+        f"swarm will use Flash rerank fallback"
+    )
+    _bge_reranker_singleton = None
+
+
+def get_bge_reranker() -> Optional[BgeReranker]:
+    return _bge_reranker_singleton
+
+
 _swarm_pricing = SwarmPricingService(
     llm_provider=_llm_adapter,
     vector_search=_vector_search_adapter,
@@ -186,6 +211,7 @@ _swarm_pricing = SwarmPricingService(
     fragment_repo=_fragment_repo,
     price_book_repo=_price_book_repo,
     hybrid_search=None,  # poblado al boot por bootstrap_hybrid_catalog_search()
+    reranker=_bge_reranker_singleton,
 )
 _architect = ArchitectService(llm_provider=_llm_adapter)
 _budget_metadata_extractor = BudgetMetadataExtractor(llm_provider=_llm_adapter)

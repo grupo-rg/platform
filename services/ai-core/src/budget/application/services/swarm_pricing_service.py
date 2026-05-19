@@ -16,6 +16,7 @@ from src.budget.catalog.domain.construction_dag import ConstructionDag
 from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem, BudgetBreakdownComponent, HeuristicFragment
 from src.budget.application.services.reconciliation import reconcile_breakdown
 from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
+from src.budget.infrastructure.adapters.reranking.bge_reranker import BgeReranker
 from src.budget.learning.application.ports.heuristic_fragment_repository import IHeuristicFragmentRepository
 
 # -------------------------------------------------------------------------------------------------
@@ -531,6 +532,7 @@ class SwarmPricingService:
         fragment_repo: Optional[IHeuristicFragmentRepository] = None,
         price_book_repo: Optional[IPriceBookRepository] = None,
         hybrid_search: Optional[HybridCatalogSearch] = None,
+        reranker: Optional[BgeReranker] = None,
     ):
         self.llm = llm_provider
         self.vector_search = vector_search
@@ -553,6 +555,10 @@ class SwarmPricingService:
         # cuando se inyecta, el swarm combina BM25 in-memory con el vector y
         # mezcla por RRF antes de reranquear.
         self.hybrid_search = hybrid_search
+        # S1-A-03 — Cross-encoder reranker (BAAI/bge-reranker-v2-m3 local).
+        # Opcional para tests offline; cuando es None, el rerank sigue siendo
+        # vía Flash. En producción se inyecta vía `dependencies.py`.
+        self.reranker = reranker
 
     async def _rerank_candidates(
         self,
@@ -560,15 +566,39 @@ class SwarmPricingService:
         partida_description: str,
         partida_unit: Optional[str],
     ) -> List[Dict[str, Any]]:
-        """Fase 9.4 — re-rank intermedio con Flash. Si hay ≥ 4 candidatos,
-        invoca Flash con un prompt mínimo y devuelve los top-3 reordenados.
+        """Fase 9.4 — re-rank intermedio. Si hay ≥ 4 candidatos, llama al
+        reranker para reducir a top-3.
 
-        Si hay ≤ 3 candidatos: passthrough sin LLM (no aporta valor).
-        Si Flash falla: passthrough con los originales (no se rompe el pipeline).
+        S1-A-03: si ``self.reranker`` (BgeReranker) está inyectado, se usa
+        el cross-encoder local (~50-200ms, $0/partida). Si no, se cae al
+        path con Gemini Flash (legacy, ~500ms-1s, $0.01/partida).
+
+        Si hay ≤ 3 candidatos: passthrough sin reranker (no aporta valor).
+        Cualquier fallo: passthrough con los originales (no se rompe el pipeline).
         IDs inventados por el LLM se descartan defensivamente.
         """
         if len(candidates) <= 3:
             return candidates
+
+        # S1-A-03 — cross-encoder local path.
+        if self.reranker is not None:
+            try:
+                ranked = self.reranker.rerank(
+                    query=f"{partida_description} ({partida_unit or '?'})",
+                    candidates=candidates,
+                    top_n=3,
+                )
+                # `ranked` es lista de (cand_dict, score). Reconstruimos solo
+                # la secuencia ordenada de candidatos. Si vino vacía, fallback.
+                reranked_cands = [c for c, _ in ranked]
+                if reranked_cands:
+                    return reranked_cands
+            except Exception as e:
+                logger.warning(
+                    f"[BgeReranker] rerank crashed ({type(e).__name__}: {e}); "
+                    f"falling back to Flash rerank."
+                )
+            # Cualquier fallo → caemos al path Flash.
 
         # Prompt minimalista — solo lo necesario para rankear.
         compact = [
