@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import json
+import os
 import uuid
 import inspect
 from typing import Awaitable, Callable, List, Dict, Any, Optional, Literal
@@ -183,6 +184,76 @@ TIER_FLASH_SCORE_THRESHOLD: float = 0.85
 # Modelos LLM. Mantenidos como constantes para evitar typos en strings sueltos.
 MODEL_FLASH: str = "gemini-2.5-flash"
 MODEL_PRO: str = "gemini-2.5-pro"
+
+
+def _env_truthy(value: Optional[str]) -> bool:
+    """Helper to interpret env-var strings as boolean flags.
+
+    Accepts the common conventions: "1", "true", "yes", "on" (case-insensitive)
+    are truthy; everything else (including unset / empty) is falsy.
+    """
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_pricing_model(
+    suggested_tier: str,
+    *,
+    env: Optional[Dict[str, str]] = None,
+) -> tuple[str, str]:
+    """S1-A-01 — Sprint 1 hotfix: decide qué modelo Gemini ejecuta el pricing.
+
+    Política post-incidente 2026-05-18:
+      - **Default: Flash siempre.** Pro queda fuera del camino caliente.
+      - Pro requiere opt-in EXPLÍCITO via env var ``ENABLE_PRO_PRICING=true``.
+      - La env var legacy ``FORCE_FLASH_PRICING`` se mantiene como alias
+        deprecado: cuando está set a truthy se ignora silenciosamente porque
+        Flash ya es el default; cuando está set a falsy y ``ENABLE_PRO_PRICING``
+        no está set, sigue mandando Flash (compat con configuración previa).
+      - ``suggested_tier`` viene de ``_select_tier`` y se usa SOLO para
+        telemetría — no para elegir el modelo real.
+
+    Devuelve ``(model_id, reason)`` para que el caller pueda loggearlo.
+
+    Args:
+      suggested_tier: lo que la heurística ``_select_tier`` recomendaría.
+        Usado solo para construir la razón (telemetría).
+      env: mapping de env vars inyectable para tests. Default: ``os.environ``.
+
+    Returns:
+      Tupla ``(model_id, reason)``. ``model_id`` es uno de:
+        - ``"gemini-2.5-flash"`` (default, casi siempre)
+        - ``"gemini-2.5-pro"`` (solo con ENABLE_PRO_PRICING=true Y
+          ``suggested_tier == "pro"``)
+    """
+    resolved_env: Dict[str, str] = dict(env) if env is not None else dict(os.environ)
+    enable_pro = _env_truthy(resolved_env.get("ENABLE_PRO_PRICING"))
+    force_flash_legacy = _env_truthy(resolved_env.get("FORCE_FLASH_PRICING"))
+
+    if enable_pro:
+        # Opt-in explícito a Pro. La heurística decide tier libremente.
+        if suggested_tier == "pro":
+            return MODEL_PRO, (
+                "ENABLE_PRO_PRICING=true y suggested_tier=pro → Pro (opt-in)"
+            )
+        return MODEL_FLASH, (
+            f"ENABLE_PRO_PRICING=true pero suggested_tier={suggested_tier} → Flash"
+        )
+
+    # Default post-hotfix: SIEMPRE Flash. Documentamos en la razón si la
+    # heurística "habría querido" Pro para que la telemetría lo refleje.
+    if force_flash_legacy:
+        reason = (
+            f"Flash forzado (default); suggested_tier={suggested_tier}; "
+            f"FORCE_FLASH_PRICING=true (alias deprecado, redundante)"
+        )
+    else:
+        reason = (
+            f"Flash default post-hotfix; suggested_tier={suggested_tier}; "
+            f"ENABLE_PRO_PRICING no activado"
+        )
+    return MODEL_FLASH, reason
 
 
 def _group_tasks_adaptively(
@@ -801,6 +872,10 @@ class SwarmPricingService:
 
                 # Fase 9.3 — Two-tier dispatch. Con CHUNK_SIZE=1 cada chunk es
                 # una sola partida; usamos sus candidatos para decidir tier.
+                #
+                # S1-A-01 — `tier` ya NO selecciona el modelo: es solo
+                # telemetría. El modelo real lo decide ``_resolve_pricing_model``
+                # con default Flash y opt-in via ``ENABLE_PRO_PRICING=true``.
                 tier, tier_reason = "pro", "default"
                 first_code = task_group[0]["id"] if task_group else None
                 if first_code is not None:
@@ -814,9 +889,20 @@ class SwarmPricingService:
                         "reason": tier_reason,
                     })
 
+                # S1-A-01 — resolución real del modelo. La heurística queda
+                # como hint para análisis post-mortem ("este caso ¿habría ido
+                # a Pro si fuese opt-in?") pero el modelo concreto se decide
+                # vía env vars para que el flip humano sea sin redeploy.
+                model_to_use, model_reason = _resolve_pricing_model(tier)
+                self._emit(budget_id, 'pricing_model_resolved', {
+                    "code": first_code,
+                    "model": model_to_use,
+                    "suggested_tier": tier,
+                    "reason": model_reason,
+                })
+
                 # Respetando cuota
                 await asyncio.sleep(1.0)
-                model_to_use = MODEL_FLASH if tier == "flash" else MODEL_PRO
                 eval_res, usage = await self.llm.generate_structured(
                     system_prompt=sys_prompt,
                     user_prompt=user_prompt,
@@ -828,38 +914,58 @@ class SwarmPricingService:
                 # Fase 9.3 — escalation: si Flash devuelve from_scratch o flag
                 # needs_human_review, re-corremos con Pro. Esto preserva calidad
                 # en los casos difíciles que el tier selector no detectó.
+                #
+                # S1-A-01 — la escalation a Pro ahora SOLO se ejecuta cuando
+                # ``ENABLE_PRO_PRICING=true``. Sin opt-in mantenemos el
+                # resultado de Flash (puede traer ``needs_human_review`` para
+                # que el editor lo marque manualmente) y emitimos un evento
+                # ``tier_escalation_suppressed`` para análisis post-mortem.
                 needs_escalation = False
-                if tier == "flash" and eval_res and eval_res.results:
+                if model_to_use == MODEL_FLASH and eval_res and eval_res.results:
                     val = eval_res.results[0].valuation
                     if val.match_kind == "from_scratch" or val.needs_human_review:
                         needs_escalation = True
 
                 if needs_escalation:
-                    self._emit(budget_id, 'tier_escalated', {
-                        "code": first_code,
-                        "from_tier": "flash",
-                        "to_tier": "pro",
-                        "reason": (
-                            f"flash devolvió match_kind={eval_res.results[0].valuation.match_kind} "
-                            f"needs_review={eval_res.results[0].valuation.needs_human_review} "
-                            f"→ re-tasando con Pro"
-                        ),
-                    })
-                    eval_res_pro, usage_pro = await self.llm.generate_structured(
-                        system_prompt=sys_prompt,
-                        user_prompt=user_prompt,
-                        response_schema=BatchPricingEvaluatorResultV3,
-                        temperature=0.0,
-                        model=MODEL_PRO,
-                    )
-                    if eval_res_pro and eval_res_pro.results:
-                        eval_res = eval_res_pro
-                        # Acumulamos uso de tokens de ambas llamadas.
-                        if usage_pro and usage:
-                            for k in ("promptTokenCount", "candidatesTokenCount", "totalTokenCount"):
-                                usage[k] = usage.get(k, 0) + usage_pro.get(k, 0)
-                        elif usage_pro:
-                            usage = usage_pro
+                    if _env_truthy(os.environ.get("ENABLE_PRO_PRICING")):
+                        self._emit(budget_id, 'tier_escalated', {
+                            "code": first_code,
+                            "from_tier": "flash",
+                            "to_tier": "pro",
+                            "reason": (
+                                f"flash devolvió match_kind={eval_res.results[0].valuation.match_kind} "
+                                f"needs_review={eval_res.results[0].valuation.needs_human_review} "
+                                f"→ re-tasando con Pro (ENABLE_PRO_PRICING=true)"
+                            ),
+                        })
+                        eval_res_pro, usage_pro = await self.llm.generate_structured(
+                            system_prompt=sys_prompt,
+                            user_prompt=user_prompt,
+                            response_schema=BatchPricingEvaluatorResultV3,
+                            temperature=0.0,
+                            model=MODEL_PRO,
+                        )
+                        if eval_res_pro and eval_res_pro.results:
+                            eval_res = eval_res_pro
+                            # Acumulamos uso de tokens de ambas llamadas.
+                            if usage_pro and usage:
+                                for k in ("promptTokenCount", "candidatesTokenCount", "totalTokenCount"):
+                                    usage[k] = usage.get(k, 0) + usage_pro.get(k, 0)
+                            elif usage_pro:
+                                usage = usage_pro
+                    else:
+                        # Sin opt-in, dejamos el resultado de Flash con su
+                        # ``needs_human_review`` para que el editor lo revise.
+                        self._emit(budget_id, 'tier_escalation_suppressed', {
+                            "code": first_code,
+                            "would_be_escalated_to": "pro",
+                            "match_kind": eval_res.results[0].valuation.match_kind,
+                            "needs_review": eval_res.results[0].valuation.needs_human_review,
+                            "reason": (
+                                "ENABLE_PRO_PRICING no activado; "
+                                "Flash resultado conservado para revisión manual"
+                            ),
+                        })
 
                 self._emit(budget_id, 'vector_search', {"query": f"Evaluación Matemática Grupo {chunk_idx + 1}/{len(grouped_tasks)} terminada."})
                 return eval_res, usage
