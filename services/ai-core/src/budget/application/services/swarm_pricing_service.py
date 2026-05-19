@@ -18,7 +18,10 @@ from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem
 from src.budget.application.services.reconciliation import reconcile_breakdown
 from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
 from src.budget.application.services.pricing_cache import PricingCache
-from src.budget.infrastructure.adapters.reranking.bge_reranker import BgeReranker
+from src.budget.infrastructure.adapters.reranking.bge_reranker import (
+    BgeReranker,
+    is_enabled as _bge_is_enabled,
+)
 from src.budget.learning.application.ports.heuristic_fragment_repository import IHeuristicFragmentRepository
 
 # -------------------------------------------------------------------------------------------------
@@ -623,12 +626,25 @@ class SwarmPricingService:
         el cross-encoder local (~50-200ms, $0/partida). Si no, se cae al
         path con Gemini Flash (legacy, ~500ms-1s, $0.01/partida).
 
-        Si hay ≤ 3 candidatos: passthrough sin reranker (no aporta valor).
+        S2-A-00: kill-switch via ``ENABLE_BGE_RERANK=false`` salta el
+        rerank por completo y devuelve los top-3 del hybrid search
+        directamente (asumiendo que ya viene ordenado por score). Si hay
+        ≤ 3 candidatos: passthrough sin reranker (no aporta valor).
         Cualquier fallo: passthrough con los originales (no se rompe el pipeline).
         IDs inventados por el LLM se descartan defensivamente.
         """
         if len(candidates) <= 3:
             return candidates
+
+        # S2-A-00 — kill-switch. Si BGE rerank está desactivado por env,
+        # devolvemos los top-3 del hybrid search sin pasar por el LLM ni
+        # por el cross-encoder. Útil para A/B y emergencias.
+        if not _bge_is_enabled():
+            logger.info(
+                "[BgeReranker] disabled by ENABLE_BGE_RERANK=false; "
+                "returning top-3 from hybrid search"
+            )
+            return candidates[:3]
 
         # S1-A-03 — cross-encoder local path.
         if self.reranker is not None:
@@ -871,6 +887,7 @@ class SwarmPricingService:
         *,
         resume_from: Optional[List[BudgetPartida]] = None,
         on_partida_resolved: Optional[Callable[[BudgetPartida], Awaitable[None]]] = None,
+        cancellation_event: Optional[asyncio.Event] = None,
     ) -> List[BudgetPartida]:
         """Price every item in `items` against the swarm; return the resolved
         partidas.
@@ -915,6 +932,7 @@ class SwarmPricingService:
                 on_partida_resolved=on_partida_resolved,
                 _resolved_telemetry=_resolved_telemetry,
                 _tier_per_code=_tier_per_code,
+                cancellation_event=cancellation_event,
             )
         finally:
             duration_seconds = time.monotonic() - _start
@@ -958,6 +976,7 @@ class SwarmPricingService:
         on_partida_resolved: Optional[Callable[[BudgetPartida], Awaitable[None]]],
         _resolved_telemetry: List[Dict[str, Any]],
         _tier_per_code: Dict[str, Dict[str, str]],
+        cancellation_event: Optional[asyncio.Event] = None,
     ) -> List[BudgetPartida]:
         """Original `evaluate_batch` body extracted verbatim. Wrapped by the
         public `evaluate_batch` so we can guarantee `job_metrics_final`
@@ -965,6 +984,17 @@ class SwarmPricingService:
         keyword args (`_resolved_telemetry`, `_tier_per_code`) are populated
         as side effects for the outer aggregator.
         """
+        # S2-A-01 — early-out: si el evento ya está set antes de empezar,
+        # no quemamos ni tokens de extracción de candidates.
+        if cancellation_event is not None and cancellation_event.is_set():
+            self._emit(budget_id, 'cancellation_acknowledged', {
+                "stage": "pricing_start",
+                "items_total": len(items),
+            })
+            raise asyncio.CancelledError(
+                "swarm_pricing: cancellation_event set before start"
+            )
+
         resumed_codes = {p.code for p in resume_from if p.code}
         if resumed_codes:
             before = len(items)
@@ -1163,8 +1193,74 @@ class SwarmPricingService:
                 })
             return item, reranked
 
-        rerank_tasks = [_rerank_for_item(it, cs) for it, cs in items_with_cands]
-        reranked_pairs = await asyncio.gather(*rerank_tasks)
+        # S2-A-00 — fast path: si tenemos BGE inyectado Y el kill-switch
+        # está ON, hacemos un solo `batch_rerank` con TODOS los pairs
+        # (partidas concurrentes × max 5 candidates c/u) en un solo
+        # forward pass del cross-encoder. Speedup esperado: ~6-8x vs
+        # 1 rerank por partida.
+        use_batch_rerank = (
+            self.reranker is not None
+            and _bge_is_enabled()
+            and len(items_with_cands) > 1
+        )
+        if use_batch_rerank:
+            # Construimos la lista de (query, candidates) solo para las
+            # partidas que pasan el threshold de >3 candidates (el resto
+            # son passthrough sin rerank, igual que single-item path).
+            rerankable: List[tuple[RestructuredItem, List[Dict[str, Any]]]] = []
+            passthrough: List[tuple[RestructuredItem, List[Dict[str, Any]]]] = []
+            for it, cs in items_with_cands:
+                if len(cs) > 3:
+                    rerankable.append((it, cs))
+                else:
+                    passthrough.append((it, cs))
+
+            try:
+                if rerankable:
+                    queries_with_cands = [
+                        (
+                            f"{(it.description or '')} ({it.unit or '?'})",
+                            cs,
+                        )
+                        for it, cs in rerankable
+                    ]
+                    # Llamada única — el cross-encoder hace batching nativo.
+                    batched = await asyncio.to_thread(
+                        self.reranker.batch_rerank,
+                        queries_with_cands,
+                        top_n=3,
+                    )
+                    reranked_pairs_batched: List[tuple[Any, List[Dict[str, Any]]]] = []
+                    for (it, original_cs), ranked in zip(rerankable, batched):
+                        reranked_cands = [c for c, _ in ranked] if ranked else original_cs[:3]
+                        if not reranked_cands:
+                            reranked_cands = original_cs[:3]
+                        self._emit(budget_id, 'rerank_applied', {
+                            "code": it.code,
+                            "input_size": len(original_cs),
+                            "output_size": len(reranked_cands),
+                            "selected_ids": [c.get("id") for c in reranked_cands],
+                            "batched": True,
+                        })
+                        reranked_pairs_batched.append((it, reranked_cands))
+                    reranked_pairs = list(reranked_pairs_batched) + list(passthrough)
+                else:
+                    # Nada que rerankear: passthrough completo.
+                    reranked_pairs = list(passthrough)
+            except Exception as e:
+                # Si el batch revienta, caemos al path uno-a-uno por
+                # robustez. No queremos que un crash en batching tumbe
+                # un job de 74 partidas.
+                logger.warning(
+                    f"[BgeReranker] batch_rerank failed ({type(e).__name__}: {e}); "
+                    f"falling back to per-item rerank"
+                )
+                rerank_tasks = [_rerank_for_item(it, cs) for it, cs in items_with_cands]
+                reranked_pairs = await asyncio.gather(*rerank_tasks)
+        else:
+            # Path legacy / single-item / kill-switch off: uno por uno.
+            rerank_tasks = [_rerank_for_item(it, cs) for it, cs in items_with_cands]
+            reranked_pairs = await asyncio.gather(*rerank_tasks)
 
         for item, candidates in reranked_pairs:
             candidates_map[item.code] = {"item": item, "candidates": candidates}
@@ -1211,6 +1307,20 @@ class SwarmPricingService:
 
         async def evaluate_chunk(chunk_idx: int, task_group: List[Dict]):
             async with semaphore_pricing:
+                # S2-A-01 — cooperative cancellation check between partidas.
+                # El runner crea un `asyncio.Event` y un poller que lo flipea
+                # cuando Firestore tiene `cancellation_requested=true`. Aquí
+                # checkeamos ANTES de cada partida nueva — si el event está
+                # set, paramos limpio sin gastar más tokens.
+                if cancellation_event is not None and cancellation_event.is_set():
+                    self._emit(budget_id, 'cancellation_acknowledged', {
+                        "stage": "pricing",
+                        "code": task_group[0]["id"] if task_group else None,
+                    })
+                    raise asyncio.CancelledError(
+                        "swarm_pricing: cancellation_event set; aborting chunk"
+                    )
+
                 grouped_tasks_str = "\n\n".join(t["prompt"] for t in task_group)
 
                 # v005: contexto DAG + tools precomputadas, por cada partida del chunk.
@@ -1292,16 +1402,6 @@ class SwarmPricingService:
                         "tier": tier,
                         "reason": tier_reason,
                     })
-                # Sprint 1 (S1-B-01) — propagate the selected tier to the
-                # assembly stage so `partida_resolved_v2` can label each
-                # partida. Flash easy clusters share a tier across all items
-                # of the group, so we record it for every code in the chunk.
-                for _task in task_group:
-                    _tier_per_code[_task["id"]] = {
-                        "tier": tier,
-                        "reason": tier_reason,
-                    }
-
                 # S1-A-01 — resolución real del modelo. La heurística queda
                 # como hint para análisis post-mortem ("este caso ¿habría ido
                 # a Pro si fuese opt-in?") pero el modelo concreto se decide
@@ -1313,6 +1413,30 @@ class SwarmPricingService:
                     "suggested_tier": tier,
                     "reason": model_reason,
                 })
+
+                # S2-A-06 — fix tier display. Antes este populate inicial
+                # guardaba `tier=suggested_tier` (lo que la heurística
+                # recomendaría), no el modelo REAL ejecutado. Resultado:
+                # el panel admin reportaba "Pro: 74" cuando todos fueron
+                # Flash (coste $0.05 confirmaba el bug). Ahora guardamos:
+                #   - `tier`: modelo REAL que se va a ejecutar (flash o
+                #     pro según `_resolve_pricing_model`).
+                #   - `suggested_tier`: lo que la heurística recomendaría
+                #     (telemetry/análisis post-mortem).
+                #   - `reason`: razón conjunta (model_reason + tier_reason).
+                #
+                # Si más adelante hay escalation Flash→Pro (ENABLE_PRO_PRICING
+                # + needs_human_review), el populate de la rama de
+                # escalation sobreescribe `tier="pro"` ahí.
+                actual_tier = "pro" if model_to_use == MODEL_PRO else "flash"
+                for _task in task_group:
+                    _tier_per_code[_task["id"]] = {
+                        "tier": actual_tier,
+                        "suggested_tier": tier,
+                        "reason": (
+                            f"{model_reason}; heuristic suggested={tier}: {tier_reason}"
+                        ),
+                    }
 
                 # Respetando cuota
                 await asyncio.sleep(1.0)
@@ -1354,10 +1478,14 @@ class SwarmPricingService:
                         # Sprint 1 (S1-B-01) — reflect the escalation in the
                         # tier map so the final telemetry attributes the partida
                         # to Pro (the model that actually produced the result).
+                        # S2-A-06 — preservamos `suggested_tier="flash"` (lo que
+                        # la heurística pensaba originalmente) y marcamos
+                        # `tier="pro"` (lo que realmente se ejecutó tras escalation).
                         for _task in task_group:
                             _tier_per_code[_task["id"]] = {
                                 "tier": "pro",
-                                "reason": f"escalated from flash: {tier_reason}",
+                                "suggested_tier": "flash",
+                                "reason": f"escalated from flash to pro: {tier_reason}",
                             }
                         eval_res_pro, usage_pro = await self.llm.generate_structured(
                             system_prompt=sys_prompt,
@@ -1412,13 +1540,19 @@ class SwarmPricingService:
         # Pass 1: non-medios en paralelo (comportamiento histórico).
         non_medios_tasks = [evaluate_chunk(idx, g) for idx, g in non_medios_indexed]
         non_medios_results = await asyncio.gather(*non_medios_tasks, return_exceptions=True)
+        # S2-A-01 — si alguno raiseó CancelledError, propagamos para
+        # abortar limpio. Los gather() con return_exceptions=True devuelven
+        # CancelledError como objeto en la lista (no lo re-raisean).
+        for res in non_medios_results:
+            if isinstance(res, asyncio.CancelledError):
+                raise res
         for (idx, _), res in zip(non_medios_indexed, non_medios_results):
             results_group[idx] = res
 
         # Calcular PEM acumulado por capítulo desde resultados pass 1.
         if medios_indexed:
             for res in non_medios_results:
-                if isinstance(res, Exception):
+                if isinstance(res, (Exception, asyncio.CancelledError)):
                     continue
                 eval_res, _usage = res
                 if not eval_res or not eval_res.results:
@@ -1437,16 +1571,23 @@ class SwarmPricingService:
             # Pass 2: medios en paralelo, ya con dict poblado.
             medios_tasks = [evaluate_chunk(idx, g) for idx, g in medios_indexed]
             medios_results = await asyncio.gather(*medios_tasks, return_exceptions=True)
+            # S2-A-01 — misma protección que pass 1.
+            for res in medios_results:
+                if isinstance(res, asyncio.CancelledError):
+                    raise res
             for (idx, _), res in zip(medios_indexed, medios_results):
                 results_group[idx] = res
-        
+
         # Ensamblaje final de Pydantic Entities
         priced_partidas = []
         global_order = 1
-        
+
         for chunk_idx, res in enumerate(results_group):
-            if isinstance(res, Exception):
-                logger.error(f"Error parseo pro {chunk_idx}: {res}")
+            # S2-A-01 — CancelledError no es subclase de Exception, lo
+            # tratamos explícitamente igual que cualquier error.
+            if isinstance(res, (Exception, asyncio.CancelledError)) or res is None:
+                if isinstance(res, Exception):
+                    logger.error(f"Error parseo pro {chunk_idx}: {res}")
                 continue
                 
             eval_res, usage = res
@@ -1752,9 +1893,16 @@ class SwarmPricingService:
                     # cost_usd/latency_ms/cache_hit ahora vienen reales de S1-A-04.
                     _chunk_usage = usage or {}
                     _tier_meta = _tier_per_code.get(safe_code, {})
+                    # S2-A-06 — `tier_used` ahora refleja el modelo REAL
+                    # ejecutado (flash o pro). `suggested_tier` es lo que la
+                    # heurística recomendaba (telemetría/análisis). Ambos
+                    # llegan al panel admin para que pueda mostrar
+                    # "Flash:74 (heurística sugería Pro:30)" en lugar del
+                    # bug previo que mostraba "Pro:74" cuando todos fueron Flash.
                     _partida_telemetry = {
                         'code': partida.code,
                         'tier_used': _tier_meta.get('tier'),
+                        'suggested_tier': _tier_meta.get('suggested_tier'),
                         'tier_reason': _tier_meta.get('reason'),
                         'tokens_in': _chunk_usage.get('promptTokenCount', 0),
                         'tokens_out': _chunk_usage.get('candidatesTokenCount', 0),

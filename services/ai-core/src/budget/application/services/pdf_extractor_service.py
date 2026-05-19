@@ -3,12 +3,119 @@ import logging
 import asyncio
 import json
 import re
+import unicodedata
 from pydantic import BaseModel, Field
 
 from src.budget.application.ports.ports import ILLMProvider, IGenerationEmitter
 from src.budget.catalog.domain.unit import Unit
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# S2-A-03 — Determinismo en extracción de PDF.
+#
+# Política:
+#   1. `temperature=0.0` en ambos extractors (era 0.15 en INLINE).
+#   2. Tras extracción, ordenar `RestructuredItem[]` por (page_number,
+#      position_y, position_x) si los hay; si no, por orden de aparición.
+#   3. Generar `code` fallback determinista si el LLM devuelve uno
+#      vacío/inválido: f"AUTO-{page:03d}-{idx:03d}-{slug(description)[:20]}".
+#
+# Beneficios:
+#   - Misma entrada → mismo `code[]` array tras 3 re-corridas (smoke test).
+#   - Diff entre runs sólo refleja cambios reales del PDF, no jitter LLM.
+#   - El editor del frontend puede confiar en `code` como clave estable.
+# ---------------------------------------------------------------------------
+
+
+def _slug_for_code(description: str, max_chars: int = 20) -> str:
+    """Slug determinístico para el fallback de `code`.
+
+    Reglas:
+      - Normaliza Unicode (NFD) y quita diacríticos.
+      - Mayúsculas, espacios → '-', non-alphanumeric eliminado.
+      - Trunca a `max_chars` (default 20).
+    """
+    if not description:
+        return "ITEM"
+    # Normaliza acentos: "ñ" → "n", "á" → "a", etc.
+    nfd = unicodedata.normalize("NFD", description)
+    ascii_only = "".join(c for c in nfd if unicodedata.category(c) != "Mn")
+    ascii_only = ascii_only.upper()
+    # Mantiene letras/dígitos; el resto → '-'.
+    slug = re.sub(r"[^A-Z0-9]+", "-", ascii_only).strip("-")
+    return (slug[:max_chars] or "ITEM").strip("-") or "ITEM"
+
+
+def _build_deterministic_code(
+    *,
+    page_number: int,
+    item_index: int,
+    description: str,
+) -> str:
+    """Construye un `code` fallback determinístico.
+
+    Formato: ``AUTO-{page:03d}-{idx:03d}-{slug(description)[:20]}``.
+    Misma entrada produce siempre el mismo output.
+
+    Args:
+      page_number: número de página (1-indexed o 0-indexed, da igual mientras
+        sea consistente entre runs del mismo PDF).
+      item_index: índice del item en la página (0-indexed).
+      description: descripción de la partida (fuente del slug).
+    """
+    slug = _slug_for_code(description)
+    return f"AUTO-{page_number:03d}-{item_index:03d}-{slug}"
+
+
+def _is_valid_code(code: Optional[str]) -> bool:
+    """Heurística: True si el `code` parece válido (no vacío, no placeholder).
+
+    Códigos válidos típicos: "2.1", "C03.04", "01.02.03", "P-001". Inválidos:
+    "", "[REDACTED]", "N/A", "—", etc.
+    """
+    if not code:
+        return False
+    s = str(code).strip()
+    if not s:
+        return False
+    # Placeholders / errores del LLM.
+    INVALID_TOKENS = {
+        "N/A", "NA", "NONE", "NULL", "TBD", "TODO",
+        "—", "-", "[REDACTED]", "?", "X", "XX",
+    }
+    if s.upper() in INVALID_TOKENS:
+        return False
+    # Debe contener al menos un dígito o letra (no solo símbolos).
+    if not re.search(r"[A-Za-z0-9]", s):
+        return False
+    return True
+
+
+def _stable_sort_items(items: List["RestructuredItem"]) -> List["RestructuredItem"]:
+    """Sort determinístico de items para garantizar reproducibilidad.
+
+    Orden:
+      1. `page_number` ascendente (si la propiedad existe).
+      2. `position_y_normalized` ascendente (si existe).
+      3. `position_x_normalized` ascendente (si existe).
+      4. Orden de aparición original (estable; Python sort es estable).
+
+    Si los items no tienen page/position (típico hoy: el extractor no los
+    propaga al RestructuredItem), el sort es no-op porque todos los keys
+    son None y la estabilidad preserva el orden de entrada.
+    """
+    # Usamos getattr porque RestructuredItem hoy no tiene estos campos.
+    # Cuando los añadamos, el sort empezará a usarlos sin cambios aquí.
+    return sorted(
+        items,
+        key=lambda it: (
+            getattr(it, "page_number", None) or 0,
+            getattr(it, "position_y_normalized", None) or 0.0,
+            getattr(it, "position_x_normalized", None) or 0.0,
+        ),
+    )
 
 # --- Chapter Stabilization Logic (Anti-Hallucination) ---
 def extract_chapter_prefix(chapter_str: str) -> str:
@@ -318,7 +425,12 @@ class InlinePdfExtractorService(IPdfExtractorService):
                     self._emit(budget_id, 'restructuring', {"query": f"Extracción Multimodal Página {chunk_idx + 1}/{len(chunks)} (Iteración {iteration}/{max_iterations})..."})
 
                     # Intento principal con schema completo.
-                    # - temperature=0.15: rompe el determinismo del truncamiento en retries.
+                    # - S2-A-03: temperature=0.0 para determinismo entre runs
+                    #   del mismo PDF. Antes era 0.15 ("para romper el
+                    #   truncamiento en retries") pero el coste fue pérdida
+                    #   de reproducibilidad. Con `max_output_tokens=16384` el
+                    #   truncamiento es marginal; cuando ocurre el adapter
+                    #   hace salvage o cae al schema minimal.
                     # - max_output_tokens=16384: doble del default, reduce probabilidad de cortar.
                     # Si el adapter detecta JSON truncado, hace salvage internamente y devuelve
                     # `usage['_salvaged'] = True` + `_items_recovered`.
@@ -329,7 +441,7 @@ class InlinePdfExtractorService(IPdfExtractorService):
                             system_prompt=sys_prompt,
                             user_prompt=user_prompt,
                             response_schema=RestructureChunkResult,
-                            temperature=0.15,
+                            temperature=0.0,
                             image_base64=b64_img,
                             max_output_tokens=16384,
                         )
@@ -444,15 +556,29 @@ class InlinePdfExtractorService(IPdfExtractorService):
 
         # Los items ya vienen mutados en ordered_pages; el bucle de consolidación
         # mantenemos su lógica original (logging por fallo, métricas por página).
+        # S2-A-03: iteramos ordered_pages (no results_group) para garantizar
+        # orden estable por page_number. results_group viene del gather y su
+        # orden es no-determinístico aunque el sort de ordered_pages SÍ lo es.
         consolidated = []
+        consolidated_with_page: List[tuple[int, RestructuredItem]] = []
         for i, res in enumerate(results_group):
             if isinstance(res, Exception):
                 logger.error(f"Error procesando página visual {i}: {res}")
-            elif isinstance(res, tuple):
-                _chunk_idx, parsed, usage = res
-                consolidated.extend(parsed.items)
-                self._track_telemetry(metrics, usage)
-                
+        for chunk_idx, parsed, usage in ordered_pages:
+            self._track_telemetry(metrics, usage)
+            for item_idx, item in enumerate(parsed.items):
+                # S2-A-03: code fallback determinístico. Si el LLM emite un
+                # code vacío/placeholder, generamos AUTO-{page:03d}-{idx:03d}-{slug}.
+                # Misma entrada → mismo output entre runs.
+                if not _is_valid_code(item.code):
+                    item.code = _build_deterministic_code(
+                        page_number=chunk_idx + 1,
+                        item_index=item_idx,
+                        description=item.description or "",
+                    )
+                consolidated.append(item)
+                consolidated_with_page.append((chunk_idx, item))
+
         final_items = []
         current_chapter = "Sin Capítulo"
         for item in consolidated:
@@ -470,7 +596,14 @@ class InlinePdfExtractorService(IPdfExtractorService):
         # ("C02 ALBAÑILERIA" y "C02 TABIQUES Y PARTICIONES" coexistiendo).
         consolidate_chapters(final_items)
 
-        # Filtro Anti-Fantasmas
+        # S2-A-03: sort estable por page/position. Hoy no propagamos position
+        # del LLM, así que el sort cae al orden de aparición — pero el orden
+        # de aparición ya está garantizado por iterar ordered_pages arriba.
+        final_items = _stable_sort_items(final_items)
+
+        # Filtro Anti-Fantasmas — ya no debería eliminar nada porque el code
+        # fallback rellena los vacíos, pero mantenemos por seguridad (un
+        # `code` insanitizado por edge cases todavía podría llegar).
         valid_items = [item for item in final_items if item.code and str(item.code).strip() != ""]
         total_valid = len(valid_items)
 
@@ -484,7 +617,9 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
     # clase para que una regresión futura (alguien restaura temp=0.0 o concurrencia 15)
     # salte en el diff de la clase, no enterrada dentro del método extract().
     CONCURRENCY: int = 8
-    TEMPERATURE: float = 0.15
+    # S2-A-03: 0.0 para determinismo. Era 0.15 para romper truncamientos en
+    # retries; con max_output_tokens=16384 y salvage el truncamiento es raro.
+    TEMPERATURE: float = 0.0
     MAX_OUTPUT_TOKENS: int = 16384
     # Fase 7.C: umbral por debajo del cual una descripción se considera
     # sospechosamente corta (el LLM probablemente solo capturó el título y el
@@ -598,8 +733,8 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
         
         final_items: List[RestructuredItem] = []
         current_chapter = "Sin Capítulo"
-        
-        for d in all_descriptions:
+
+        for desc_idx, d in enumerate(all_descriptions):
             norm_code = normalize_code(d.code)
             qty = sum_dict.get(norm_code, 0.0)
 
@@ -623,8 +758,17 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
                     "preview": desc_clean[:40],
                 })
 
+            # S2-A-03: code fallback determinístico (mismo patrón que INLINE).
+            final_code = d.code if _is_valid_code(d.code) else _build_deterministic_code(
+                # Para ANNEXED no tenemos `page_number` per item; usamos el
+                # índice global de la descripción como sustituto reproducible.
+                page_number=1,
+                item_index=desc_idx,
+                description=d.description or "",
+            )
+
             final_items.append(RestructuredItem(
-                code=d.code,
+                code=final_code,
                 description=d.description,
                 unit=d.unit,
                 quantity=qty,
@@ -639,6 +783,12 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
         # Fase 8.C — lock por código canonical: elimina capítulos duplicados
         # en el flujo ANNEXED (mismo fix que INLINE).
         consolidate_chapters(final_items)
+
+        # S2-A-03: sort estable. Si el LLM no propaga position, cae al orden
+        # de aparición (ya garantizado por `ordered_pages` arriba en INLINE,
+        # y por `all_descriptions` aquí en ANNEXED que respeta la secuencia
+        # de las páginas tras el sort por chunk_idx).
+        final_items = _stable_sort_items(final_items)
 
         valid_items = [i for i in final_items if i.code and str(i.code).strip() != ""]
         self._emit(budget_id, 'subtasks_extracted', {"count": len(valid_items), "totalTasks": len(valid_items)})

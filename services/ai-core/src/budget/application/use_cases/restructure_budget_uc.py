@@ -52,6 +52,7 @@ class RestructureBudgetUseCase:
         on_partida_resolved=None,  # type: ignore[no-untyped-def] — keep import surface small
         client_name: Optional[str] = None,
         budget_title: Optional[str] = None,
+        cancellation_event=None,  # type: ignore[no-untyped-def] — asyncio.Event
     ) -> Budget:
         start_time = time.time()
         metrics = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
@@ -74,12 +75,17 @@ class RestructureBudgetUseCase:
         # Phase 2: Swarm Pricing (Deconstructor + Vector Search + LLM Evaluator).
         # P4.b — forward checkpoint kwargs when present; the swarm's new
         # signature is kwarg-only and defaults preserve legacy behaviour.
+        # S2-A-01 — forward cancellation_event for cooperative cancellation
+        # between partidas (poller of `cancellation_requested` lives in the
+        # use case; swarm checks `is_set()` between partidas to raise
+        # CancelledError without burning more LLM tokens).
         partidas = await self.pricing_service.evaluate_batch(
             restructured_items,
             budget_id,
             metrics,
             resume_from=resume_from,
             on_partida_resolved=on_partida_resolved,
+            cancellation_event=cancellation_event,
         )
         
         # Phase 3: Assembly & Validation
