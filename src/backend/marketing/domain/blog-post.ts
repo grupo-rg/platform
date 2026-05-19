@@ -26,6 +26,19 @@ export interface BlogPost {
 
     heroImageUrl?: string;
     ogImageUrl?: string;
+    /** Texto alternativo de la imagen — accesibilidad + SEO. */
+    imageAltText?: string;
+    /**
+     * Atribución de la imagen cuando viene de un stock (Unsplash, etc.).
+     * Lo guardamos junto al post para poder renderizarlo al pie y cumplir
+     * los ToS sin volver a consultar la API.
+     */
+    imageAttribution?: {
+        photographerName: string;
+        photographerUrl: string;
+        source: 'unsplash' | 'generated' | 'manual';
+        sourceId?: string;
+    };
 
     /** Contenido principal en Markdown. */
     contentMarkdown: string;
@@ -45,6 +58,13 @@ export interface BlogPost {
 
     /** Error message si el intento programado falló (status === 'failed'). */
     failureReason?: string;
+    /**
+     * Cuántas veces el cron de rescate ha tenido que reencolar este post
+     * porque la Cloud Task original venció sin publicarlo. Si supera el
+     * umbral configurado (3), el cron deja de reintentar y lo marca
+     * `failed` con `failureReason` indicando el motivo.
+     */
+    recoveryAttempts?: number;
 }
 
 export interface BlogPostRepository {
@@ -55,6 +75,20 @@ export interface BlogPostRepository {
     listPublished(locale: BlogLocale, limit?: number): Promise<BlogPost[]>;
     listScheduled(): Promise<BlogPost[]>;
     delete(id: string): Promise<void>;
+
+    /**
+     * Transición atómica `draft|scheduled|failed → published`. Si el post ya
+     * está `published`, devuelve `null` sin escribir (idempotente).
+     *
+     * Esta operación se introduce para evitar la race condition entre la
+     * Cloud Task original (endpoint `/api/marketing/blog/publish`) y el
+     * cron de rescate (`/api/cron/recover-scheduled-blog-posts`), que
+     * pueden disparar publicación del mismo post con segundos de
+     * diferencia. Sin atomicidad, ambos verían `status='scheduled'` y
+     * ambos llamarían a `save()` — el último gana pero `publishedAt`
+     * acaba siendo el segundo timestamp, lo cual confunde la auditoría.
+     */
+    publishAtomically(id: string): Promise<BlogPost | null>;
 }
 
 /** Slugify muy básico — sirve para placeholders mientras el modelo no devuelve uno. */

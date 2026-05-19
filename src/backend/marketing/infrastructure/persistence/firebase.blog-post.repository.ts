@@ -88,4 +88,30 @@ export class FirestoreBlogPostRepository implements BlogPostRepository {
     async delete(id: string): Promise<void> {
         await this.db.collection(this.collectionName).doc(id).delete();
     }
+
+    async publishAtomically(id: string): Promise<BlogPost | null> {
+        const docRef = this.db.collection(this.collectionName).doc(id);
+        const result = await this.db.runTransaction(async (tx) => {
+            const snap = await tx.get(docRef);
+            if (!snap.exists) {
+                throw new Error(`BlogPost ${id} not found`);
+            }
+            const data = snap.data()!;
+            // Si otro proceso ya lo publicó, devolvemos null para que el
+            // caller lo detecte como "idempotente, sin cambios".
+            if (data.status === 'published') return null;
+
+            const now = new Date();
+            const updates: Record<string, any> = {
+                status: 'published',
+                publishedAt: now,
+                updatedAt: now,
+                // Limpiar motivo de fallo previo si lo había
+                failureReason: null,
+            };
+            tx.set(docRef, updates, { merge: true });
+            return this.rehydrate({ id, ...data, ...updates });
+        });
+        return result;
+    }
 }

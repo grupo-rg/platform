@@ -71,7 +71,7 @@ export default async function BlogPage({ params }: { params: Promise<{ locale: s
                     <div className="relative h-56 w-full">
                       <Image
                         src={post.heroImageUrl}
-                        alt={post.title}
+                        alt={post.imageAltText || post.title}
                         fill
                         className="object-cover transition-transform duration-300 group-hover:scale-105"
                         unoptimized={post.heroImageUrl.startsWith('http')}

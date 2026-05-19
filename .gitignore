@@ -151,3 +151,6 @@ test-output/
 /backups/
 /services/ai-core/backups/
 
+# Claude Code local config y worktrees efímeros — son locales del usuario.
+.claude/
+

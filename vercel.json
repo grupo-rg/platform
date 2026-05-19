@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/re-engagement",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/recover-scheduled-blog-posts",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

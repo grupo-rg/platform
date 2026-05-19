@@ -2,7 +2,7 @@ import 'server-only';
 import { BlogPost, BlogPostRepository, BlogLocale, slugify } from '../domain/blog-post';
 import { FirestoreBlogPostRepository } from '../infrastructure/persistence/firebase.blog-post.repository';
 
-class BlogPostService {
+export class BlogPostService {
     private repo: BlogPostRepository;
     constructor(repo?: BlogPostRepository) {
         this.repo = repo ?? new FirestoreBlogPostRepository();
@@ -24,6 +24,8 @@ class BlogPostService {
             categoryId: input.categoryId,
             heroImageUrl: input.heroImageUrl,
             ogImageUrl: input.ogImageUrl,
+            imageAltText: input.imageAltText,
+            imageAttribution: input.imageAttribution,
             contentMarkdown: input.contentMarkdown,
             status: 'draft',
             authorId: input.authorId,
@@ -52,8 +54,14 @@ class BlogPostService {
     }
 
     async publishNow(id: string): Promise<BlogPost> {
-        const now = new Date();
-        return this.update(id, { status: 'published', publishedAt: now, failureReason: undefined });
+        // Transacción atómica: previene doble-publicación cuando el endpoint
+        // de Cloud Task y el cron de rescate disparan a la vez. Si el post
+        // ya estaba publicado, devolvemos el doc tal cual estaba.
+        const published = await this.repo.publishAtomically(id);
+        if (published) return published;
+        const existing = await this.repo.findById(id);
+        if (!existing) throw new Error(`BlogPost ${id} not found`);
+        return existing;
     }
 
     async markFailed(id: string, reason: string): Promise<BlogPost> {

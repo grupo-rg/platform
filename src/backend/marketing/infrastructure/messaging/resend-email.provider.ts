@@ -1,6 +1,7 @@
 import 'server-only';
 import { getFirestore } from 'firebase-admin/firestore';
 import { MessagingService } from '../../application/messaging.service';
+import { EmailProviderPort } from '../../domain/marketing.repository';
 import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/resend-email.service';
 
 /**
@@ -8,9 +9,20 @@ import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/re
  * Reemplaza al antiguo FirebaseEmailProvider (que escribía a mail/* y dependía
  * de la extensión Firebase Trigger Email, no instalada en este proyecto).
  *
- * Mantiene la misma firma para no romper el worker de marketing.
+ * También cumple `EmailProviderPort` mediante `sendDirectEmail` para los use
+ * cases (CRM/agenda/blog) que necesitan enviar a una dirección concreta
+ * sin pasar por el flujo de templates de marketing.
  */
-export class ResendEmailProvider implements MessagingService {
+export class ResendEmailProvider implements MessagingService, EmailProviderPort {
+    async sendDirectEmail(to: string, subject: string, htmlBody: string): Promise<void> {
+        await ResendEmailService.send({
+            to,
+            subject,
+            html: htmlBody,
+            tags: [{ name: 'category', value: 'transactional' }],
+        });
+    }
+
     async sendWhatsApp(phone: string, templateId: string, _variables: Record<string, string>): Promise<void> {
         // Pendiente de integrar Twilio / Meta Business API en F7
         console.log(`[ResendEmailProvider - Mock WhatsApp] phone=${phone} template=${templateId}`);

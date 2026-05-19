@@ -29,7 +29,7 @@ export class NotifyAdminOnBookingUseCase implements EventHandler<BookingConfirme
         `;
 
         try {
-            await this.emailProvider.sendEmail(this.adminEmailDest, subject, bodyContent);
+            await this.emailProvider.sendDirectEmail(this.adminEmailDest, subject, bodyContent);
             console.log(`[CRM Alert] ✅ Alerta de Email enviada exitosamente a ventas (${this.adminEmailDest}).`);
         } catch (e) {
             console.error(`[CRM Alert] Error notificando al admin de ventas:`, e);

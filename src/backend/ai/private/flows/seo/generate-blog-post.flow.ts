@@ -20,6 +20,17 @@ export const GenerateBlogPostOutputSchema = z.object({
     tags: z.array(z.string()),
     contentMarkdown: z.string(),
     seoScore: z.number().min(0).max(100).optional(),
+    /**
+     * Texto alt sugerido para la imagen cover. SEO + accesibilidad. Lo usa
+     * la UI/OG si Unsplash no devuelve un `alt_description` decente.
+     */
+    imageAltText: z.string().optional(),
+    /**
+     * Query corto EN INGLÉS para buscar la imagen cover en Unsplash (la API
+     * indexa principalmente en inglés). Ej: "modern kitchen renovation
+     * Mediterranean". Se pide al LLM porque conoce el contexto del post.
+     */
+    imageQueryEN: z.string().optional(),
 });
 
 export const generateBlogPostFlow = ai.defineFlow(
@@ -63,7 +74,9 @@ Devuelve un JSON con estos campos:
 - keywords: array de 5-8 keywords (incluyendo long-tail)
 - tags: array de 3-5 tags de categorización
 - contentMarkdown: contenido completo en Markdown, con H2/H3, listas, FAQ, y CTA final
-- seoScore: estimación 0-100 de fortaleza SEO del artículo`;
+- seoScore: estimación 0-100 de fortaleza SEO del artículo
+- imageAltText: 1 frase descriptiva (8-15 palabras) del tipo de imagen que ilustraría mejor el post. Útil para accesibilidad y SEO de imagen.
+- imageQueryEN: query corto EN INGLÉS (3-6 palabras) para buscar la imagen cover en Unsplash. Debe ser visual y específico — ej. "modern Mediterranean kitchen renovation", "bathroom marble tiles white", "outdoor pool villa Mallorca". Evita términos abstractos.`;
 
         const { output } = await ai.generate({
             model: gemini25Flash,

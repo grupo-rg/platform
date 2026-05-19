@@ -11,7 +11,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DayPicker } from 'react-day-picker';
+import { EditorialCalendar } from '@/components/marketing/editorial-calendar';
+import { EditorialPlanTab } from '@/components/marketing/editorial-plan-tab';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import {
     Loader2, Sparkles, FileText, CalendarDays, CheckCircle2, Trash2, Eye,
     Clock, ExternalLink, Send,
@@ -36,13 +39,15 @@ export default function SeoGeneratorPage() {
             </div>
 
             <Tabs defaultValue="new">
-                <TabsList className="grid w-full max-w-md grid-cols-4">
+                <TabsList className="grid w-full max-w-2xl grid-cols-5">
                     <TabsTrigger value="new"><Sparkles className="w-4 h-4 mr-1.5" />Nuevo</TabsTrigger>
+                    <TabsTrigger value="plan"><CalendarDays className="w-4 h-4 mr-1.5" />Plan</TabsTrigger>
                     <TabsTrigger value="drafts"><FileText className="w-4 h-4 mr-1.5" />Borradores</TabsTrigger>
                     <TabsTrigger value="calendar"><CalendarDays className="w-4 h-4 mr-1.5" />Calendario</TabsTrigger>
                     <TabsTrigger value="published"><CheckCircle2 className="w-4 h-4 mr-1.5" />Publicados</TabsTrigger>
                 </TabsList>
                 <TabsContent value="new" className="mt-6"><NewTab /></TabsContent>
+                <TabsContent value="plan" className="mt-6"><EditorialPlanTab /></TabsContent>
                 <TabsContent value="drafts" className="mt-6"><PostListTab status="draft" emptyLabel="No hay borradores." showActions /></TabsContent>
                 <TabsContent value="calendar" className="mt-6"><CalendarTab /></TabsContent>
                 <TabsContent value="published" className="mt-6"><PostListTab status="published" locale="es" emptyLabel="Aún no has publicado ningún artículo." /></TabsContent>
@@ -215,70 +220,10 @@ function PostListTab({
 }
 
 // -----------------------
-// Tab 3 — Calendario
+// Tab 3 — Calendario (vista mes con drag & drop)
 // -----------------------
 function CalendarTab() {
-    const [posts, setPosts] = useState<BlogPost[] | null>(null);
-    const [selectedDay, setSelectedDay] = useState<Date | undefined>(new Date());
-
-    const load = async () => {
-        const list = await listBlogPostsAction('scheduled');
-        setPosts(list);
-    };
-    useEffect(() => { load(); }, []);
-
-    if (!posts) return <div className="py-12 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
-
-    const daysWithPosts = posts
-        .map(p => p.publishAt ? new Date(p.publishAt) : null)
-        .filter(Boolean) as Date[];
-    const sameDay = (a: Date, b: Date) =>
-        a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    const postsForSelected = selectedDay
-        ? posts.filter(p => p.publishAt && sameDay(new Date(p.publishAt), selectedDay))
-        : [];
-
-    return (
-        <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Calendario editorial</CardTitle>
-                    <CardDescription>
-                        {posts.length === 0
-                            ? 'No hay posts programados.'
-                            : `${posts.length} posts programados para publicación automática.`}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <DayPicker
-                        mode="single"
-                        selected={selectedDay}
-                        onSelect={setSelectedDay}
-                        modifiers={{ scheduled: daysWithPosts }}
-                        modifiersClassNames={{
-                            scheduled: 'bg-primary/20 font-bold text-primary rounded-full',
-                        }}
-                        className="mx-auto"
-                    />
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>
-                        {selectedDay ? selectedDay.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Selecciona un día'}
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    {postsForSelected.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No hay publicaciones programadas para este día.</p>
-                    ) : (
-                        postsForSelected.map(p => <PostActions key={p.id} post={p} compact />)
-                    )}
-                </CardContent>
-            </Card>
-        </div>
-    );
+    return <EditorialCalendar />;
 }
 
 // -----------------------
@@ -423,7 +368,9 @@ function PostActions({ post, showActions = true, compact = false, onChanged }: {
                         <DialogTitle>{post.title}</DialogTitle>
                     </DialogHeader>
                     <div className="prose dark:prose-invert max-w-none text-sm">
-                        <ReactMarkdown>{post.contentMarkdown}</ReactMarkdown>
+                        <ReactMarkdown rehypePlugins={[[rehypeSanitize, defaultSchema]]}>
+                            {post.contentMarkdown}
+                        </ReactMarkdown>
                     </div>
                 </DialogContent>
             </Dialog>

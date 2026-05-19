@@ -8,6 +8,7 @@ import { Link } from '@/i18n/navigation';
 import { ArrowRight, Calendar, Tag } from 'lucide-react';
 import type { Metadata } from 'next';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { constructMetadata } from '@/i18n/seo-utils';
 import { blogPostService } from '@/backend/marketing/application/blog-post-service';
 import type { BlogLocale } from '@/backend/marketing/domain/blog-post';
@@ -58,7 +59,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           <section className="relative h-64 md:h-80 w-full">
             <Image
               src={post.heroImageUrl}
-              alt={`Imagen representativa de ${post.title}`}
+              alt={post.imageAltText || `Imagen representativa de ${post.title}`}
               fill
               className="object-cover"
               unoptimized={post.heroImageUrl.startsWith('http')}
@@ -89,7 +90,43 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
                   {post.title}
                 </h1>
               </div>
-              <ReactMarkdown>{post.contentMarkdown}</ReactMarkdown>
+              {/*
+                rehype-sanitize bloquea HTML peligroso del markdown del LLM
+                (e.g. `<script>` o atributos `onerror`). Mantenemos el schema
+                por defecto que permite formato normal de blog (headings,
+                links, listas, imágenes, énfasis). Sin este plugin un prompt
+                injection podría ejecutar JS en el detalle del post.
+              */}
+              <ReactMarkdown rehypePlugins={[[rehypeSanitize, defaultSchema]]}>
+                {post.contentMarkdown}
+              </ReactMarkdown>
+
+              {/* Atribución obligatoria por términos de uso de Unsplash.
+                  Solo se muestra cuando la imagen viene de un stock; los
+                  posts con imagen manual o sin imagen no la pintan. */}
+              {post.imageAttribution?.source === 'unsplash' && (
+                <p className="text-xs text-muted-foreground mt-8 not-prose">
+                  Foto de{' '}
+                  <a
+                    href={post.imageAttribution.photographerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="underline"
+                  >
+                    {post.imageAttribution.photographerName}
+                  </a>{' '}
+                  en{' '}
+                  <a
+                    href="https://unsplash.com"
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="underline"
+                  >
+                    Unsplash
+                  </a>
+                  .
+                </p>
+              )}
             </article>
           </div>
         </section>

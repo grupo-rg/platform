@@ -53,6 +53,32 @@ service cloud.firestore {
     // `/api/budget/stream` endpoint tails. Anything sensitive lives in
     // `pipeline_jobs/*` above.
 
+    // Blog público — los posts son legibles por cualquiera (alimentan el
+    // listado y el detalle en /blog). Las escrituras pasan SIEMPRE por el
+    // admin SDK desde server actions autenticadas (no afectadas por estas
+    // rules); por eso el write cliente se bloquea explícitamente. Sin esto,
+    // una clave Firebase del bundle filtrada podría inyectar/borrar posts.
+    match /blog_posts/{postId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Misma colección en modo test (NEXT_PUBLIC_USE_TEST_DB=true).
+    match /test_blog_posts/{postId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Briefs editoriales — internos del dashboard, NUNCA accesibles desde
+    // cliente. La generación + revisión va siempre por server actions con
+    // admin SDK. Bloqueado completamente.
+    match /content_briefs/{briefId} {
+      allow read, write: if false;
+    }
+    match /test_content_briefs/{briefId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

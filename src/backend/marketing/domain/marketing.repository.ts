@@ -22,3 +22,14 @@ export interface TaskQueuePort {
     enqueueSequenceProcessing(enrollmentId: string): Promise<void>;
 }
 
+/**
+ * Puerto mínimo para envío de email transaccional one-shot. Lo consumen
+ * use cases cross-módulo (CRM/agenda/marketing/blog) que necesitan
+ * notificar a una dirección concreta sin pasar por el flujo de templates +
+ * lead-lookup que usa `MessagingService.sendEmail(leadId, templateId, …)`.
+ * Implementación actual: `ResendEmailProvider.sendDirectEmail`.
+ */
+export interface EmailProviderPort {
+    sendDirectEmail(to: string, subject: string, htmlBody: string): Promise<void>;
+}
+

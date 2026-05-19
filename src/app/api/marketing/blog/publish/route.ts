@@ -38,6 +38,24 @@ export async function POST(req: NextRequest) {
         if (existing.status === 'published') {
             return NextResponse.json({ ok: true, skipped: 'already_published' });
         }
+
+        // Anti-reschedule-collision: si una Cloud Task vieja (de antes de
+        // reprogramar) llega a ejecutar, el `publishAt` actual del doc ya no
+        // se parece a "ahora". En ese caso skipeamos — la nueva task de la
+        // reprogramación se encargará. Margen: ±2h (cubre ejecuciones tardías
+        // de Cloud Tasks por retries internos).
+        if (existing.publishAt) {
+            const diffMs = Math.abs(existing.publishAt.getTime() - Date.now());
+            const TWO_HOURS = 2 * 60 * 60 * 1000;
+            if (diffMs > TWO_HOURS) {
+                return NextResponse.json({
+                    ok: true,
+                    skipped: 'stale_task',
+                    expected: existing.publishAt.toISOString(),
+                });
+            }
+        }
+
         const published = await blogPostService.publishNow(postId);
         return NextResponse.json({ ok: true, id: published.id, publishedAt: published.publishedAt });
     } catch (e: any) {
