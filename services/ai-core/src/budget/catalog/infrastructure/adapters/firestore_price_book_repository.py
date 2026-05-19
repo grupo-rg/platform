@@ -115,3 +115,27 @@ class FirestorePriceBookRepository(IPriceBookRepository):
                     f"PriceBookBreakdownEntry: {e}"
                 )
         return results
+
+    async def list_all_items(self) -> list[PriceBookItemEntry]:
+        """S1-A-02 — Devuelve TODOS los `kind='item'` sin embeddings.
+
+        Streamea la colección entera con un filtro `kind == 'item'`. Sobre
+        ~1,661 docs Firestore responde en <2s. Los embeddings se descartan
+        antes de construir la entity (heavy: ~3KB/doc × 1661 ≈ 5MB en
+        memoria que no necesitamos para BM25).
+        """
+        col = self.db.collection(PRICE_BOOK_COLLECTION)
+        query = col.where("kind", "==", "item")
+        items: list[PriceBookItemEntry] = []
+        for snap in query.stream():
+            data = snap.to_dict() or {}
+            data.pop("embedding", None)
+            try:
+                items.append(PriceBookItemEntry(**data))
+            except Exception as e:
+                logger.warning(
+                    f"[list_all_items] doc {snap.id} no parsea como "
+                    f"PriceBookItemEntry: {e}"
+                )
+        logger.info(f"[list_all_items] loaded {len(items)} items from {PRICE_BOOK_COLLECTION}")
+        return items

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from src.budget.application.ports.ports import ILLMProvider, IVectorSearch, IGenerationEmitter
 from src.budget.application.services.pdf_extractor_service import RestructuredItem
 from src.budget.catalog.application.services.catalog_lookup_service import CatalogLookupService
+from src.budget.catalog.application.services.hybrid_catalog_search import HybridCatalogSearch
 from src.budget.catalog.application.ports.price_book_repository import IPriceBookRepository
 from src.budget.catalog.domain.construction_dag import ConstructionDag
 from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem, BudgetBreakdownComponent, HeuristicFragment
@@ -484,6 +485,7 @@ class SwarmPricingService:
         dag: Optional[ConstructionDag] = None,
         fragment_repo: Optional[IHeuristicFragmentRepository] = None,
         price_book_repo: Optional[IPriceBookRepository] = None,
+        hybrid_search: Optional[HybridCatalogSearch] = None,
     ):
         self.llm = llm_provider
         self.vector_search = vector_search
@@ -501,6 +503,11 @@ class SwarmPricingService:
         # cuando val.breakdown está vacío. Opcional para backward-compat con
         # tests; si ausente, no se hereda.
         self.price_book_repo = price_book_repo
+        # S1-A-02 — Hybrid BM25+Vector+RRF. Opcional para backward-compat:
+        # cuando es None, el swarm usa solo el vector search puro (path legacy);
+        # cuando se inyecta, el swarm combina BM25 in-memory con el vector y
+        # mezcla por RRF antes de reranquear.
+        self.hybrid_search = hybrid_search
 
     async def _rerank_candidates(
         self,
@@ -662,7 +669,17 @@ class SwarmPricingService:
         self,
         queries: List[str],
         partida_unit_dimension: Optional[str] = None,
+        *,
+        chapter_filter: Optional[str] = None,
     ) -> List[Dict]:
+        """Resolver candidatos del catálogo por una o más subqueries.
+
+        S1-A-02: si ``self.hybrid_search`` está inyectado, cada subquery se
+        resuelve combinando BM25 in-memory + vector search + RRF
+        (``HybridCatalogSearch.search``). Si no, fallback al vector search
+        directo (path legacy, mantenido para backward-compat con tests que
+        no inyectan hybrid).
+        """
         if not queries:
             return []
 
@@ -673,14 +690,25 @@ class SwarmPricingService:
         async def _fetch_one(q: str) -> tuple[str, List[Dict]]:
             try:
                 vector = await self.llm.get_embedding(q)
-                res = self.vector_search.search_similar_items(
-                    query_vector=vector,
-                    query_text=q,
-                    limit=4,
-                    partida_unit_dimension=partida_unit_dimension,
-                )
-                candidates = await res if inspect.isawaitable(res) else res
-                return q, candidates or []
+                if self.hybrid_search is not None:
+                    # S1-A-02 — path híbrido: BM25 + vector + RRF.
+                    cands = await self.hybrid_search.search(
+                        query=q,
+                        query_vector=vector,
+                        top_k=15,
+                        chapter_filter=chapter_filter,
+                        unit_dimension_filter=partida_unit_dimension,
+                    )
+                else:
+                    # Path legacy.
+                    res = self.vector_search.search_similar_items(
+                        query_vector=vector,
+                        query_text=q,
+                        limit=4,
+                        partida_unit_dimension=partida_unit_dimension,
+                    )
+                    cands = await res if inspect.isawaitable(res) else (res or [])
+                return q, cands or []
             except Exception as e:
                 logger.error(f"Vector search failed for '{q}': {e}")
                 return q, []
@@ -693,7 +721,7 @@ class SwarmPricingService:
         seen_ids: set = set()
         for q, cands in results:
             for c in cands:
-                cid = c.get('id')
+                cid = c.get('id') or c.get('code')
                 if cid and cid not in seen_ids:
                     seen_ids.add(cid)
                     c["__query_origin"] = q

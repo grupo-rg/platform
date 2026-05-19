@@ -10,6 +10,10 @@ from src.budget.catalog.application.ports.price_book_repository import (
     EntryWithEmbedding,
     IPriceBookRepository,
 )
+from src.budget.catalog.domain.price_book_entry import (
+    PriceBookBreakdownEntry,
+    PriceBookItemEntry,
+)
 
 
 class InMemoryPriceBookRepository(IPriceBookRepository):
@@ -26,3 +30,26 @@ class InMemoryPriceBookRepository(IPriceBookRepository):
     async def wipe_price_book(self) -> None:
         self._wiped += len(self._docs)
         self._docs.clear()
+
+    async def find_breakdowns_by_parent(
+        self, parent_code: str
+    ) -> list[PriceBookBreakdownEntry]:
+        """Devuelve breakdowns cuyo parent_code coincide (entries con kind='breakdown')."""
+        if not parent_code:
+            return []
+        results: list[PriceBookBreakdownEntry] = []
+        for entry, _embedding in self._docs.values():
+            if (
+                isinstance(entry, PriceBookBreakdownEntry)
+                and entry.parent_code == parent_code
+            ):
+                results.append(entry)
+        return results
+
+    async def list_all_items(self) -> list[PriceBookItemEntry]:
+        """S1-A-02 — Devuelve todos los entries `kind='item'`."""
+        return [
+            entry
+            for entry, _embedding in self._docs.values()
+            if isinstance(entry, PriceBookItemEntry)
+        ]
