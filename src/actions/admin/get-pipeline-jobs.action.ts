@@ -42,17 +42,19 @@ function inferSource(events: any[]): 'nl' | 'pdf' | 'unknown' {
 }
 
 export async function getPipelineJobsAction(limit: number = 50): Promise<PipelineJobSummary[]> {
-    // Leemos los documentos root de pipeline_telemetry y, para cada uno, sus events.
-    // Firestore no nos da ordenación por docs raíz (están vacíos), así que leemos
-    // los events.orderBy(timestamp desc) de cada uno y consolidamos. Para la primera
-    // versión limitamos a los 50 últimos jobs más reciente; a futuro conviene tener
-    // un doc-level summary que se actualice con un trigger.
-    const rootSnap = await adminFirestore.collection('pipeline_telemetry').limit(200).get();
+    // El backend (FirebaseTelemetryRepository.save) escribe events directamente
+    // a pipeline_telemetry/{jobId}/events/* pero NO crea el parent doc. Firestore
+    // no auto-crea parents, así que .collection('pipeline_telemetry').get()
+    // devuelve [] aunque haya jobs activos. Usamos listDocuments() que sí
+    // devuelve refs a docs lógicamente existentes (con subcollections) aunque
+    // el parent doc esté vacío. Fix definitivo: el backend debería hacer
+    // parent_ref.set({}, merge=True) antes de cada event.
+    const docRefs = await adminFirestore.collection('pipeline_telemetry').listDocuments();
     const summaries: PipelineJobSummary[] = [];
 
-    for (const doc of rootSnap.docs) {
-        const jobId = doc.id;
-        const evSnap = await doc.ref.collection('events').orderBy('timestamp', 'asc').get();
+    for (const ref of docRefs.slice(0, 200)) {
+        const jobId = ref.id;
+        const evSnap = await ref.collection('events').orderBy('timestamp', 'asc').get();
         if (evSnap.empty) continue;
 
         const events = evSnap.docs.map(e => ({ id: e.id, ...e.data() } as any));
