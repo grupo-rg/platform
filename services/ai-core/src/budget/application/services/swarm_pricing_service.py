@@ -1374,16 +1374,6 @@ class SwarmPricingService:
                         "tier": tier,
                         "reason": tier_reason,
                     })
-                # Sprint 1 (S1-B-01) — propagate the selected tier to the
-                # assembly stage so `partida_resolved_v2` can label each
-                # partida. Flash easy clusters share a tier across all items
-                # of the group, so we record it for every code in the chunk.
-                for _task in task_group:
-                    _tier_per_code[_task["id"]] = {
-                        "tier": tier,
-                        "reason": tier_reason,
-                    }
-
                 # S1-A-01 — resolución real del modelo. La heurística queda
                 # como hint para análisis post-mortem ("este caso ¿habría ido
                 # a Pro si fuese opt-in?") pero el modelo concreto se decide
@@ -1395,6 +1385,30 @@ class SwarmPricingService:
                     "suggested_tier": tier,
                     "reason": model_reason,
                 })
+
+                # S2-A-06 — fix tier display. Antes este populate inicial
+                # guardaba `tier=suggested_tier` (lo que la heurística
+                # recomendaría), no el modelo REAL ejecutado. Resultado:
+                # el panel admin reportaba "Pro: 74" cuando todos fueron
+                # Flash (coste $0.05 confirmaba el bug). Ahora guardamos:
+                #   - `tier`: modelo REAL que se va a ejecutar (flash o
+                #     pro según `_resolve_pricing_model`).
+                #   - `suggested_tier`: lo que la heurística recomendaría
+                #     (telemetry/análisis post-mortem).
+                #   - `reason`: razón conjunta (model_reason + tier_reason).
+                #
+                # Si más adelante hay escalation Flash→Pro (ENABLE_PRO_PRICING
+                # + needs_human_review), el populate de la rama de
+                # escalation sobreescribe `tier="pro"` ahí.
+                actual_tier = "pro" if model_to_use == MODEL_PRO else "flash"
+                for _task in task_group:
+                    _tier_per_code[_task["id"]] = {
+                        "tier": actual_tier,
+                        "suggested_tier": tier,
+                        "reason": (
+                            f"{model_reason}; heuristic suggested={tier}: {tier_reason}"
+                        ),
+                    }
 
                 # Respetando cuota
                 await asyncio.sleep(1.0)
@@ -1436,10 +1450,14 @@ class SwarmPricingService:
                         # Sprint 1 (S1-B-01) — reflect the escalation in the
                         # tier map so the final telemetry attributes the partida
                         # to Pro (the model that actually produced the result).
+                        # S2-A-06 — preservamos `suggested_tier="flash"` (lo que
+                        # la heurística pensaba originalmente) y marcamos
+                        # `tier="pro"` (lo que realmente se ejecutó tras escalation).
                         for _task in task_group:
                             _tier_per_code[_task["id"]] = {
                                 "tier": "pro",
-                                "reason": f"escalated from flash: {tier_reason}",
+                                "suggested_tier": "flash",
+                                "reason": f"escalated from flash to pro: {tier_reason}",
                             }
                         eval_res_pro, usage_pro = await self.llm.generate_structured(
                             system_prompt=sys_prompt,
@@ -1834,9 +1852,16 @@ class SwarmPricingService:
                     # cost_usd/latency_ms/cache_hit ahora vienen reales de S1-A-04.
                     _chunk_usage = usage or {}
                     _tier_meta = _tier_per_code.get(safe_code, {})
+                    # S2-A-06 — `tier_used` ahora refleja el modelo REAL
+                    # ejecutado (flash o pro). `suggested_tier` es lo que la
+                    # heurística recomendaba (telemetría/análisis). Ambos
+                    # llegan al panel admin para que pueda mostrar
+                    # "Flash:74 (heurística sugería Pro:30)" en lugar del
+                    # bug previo que mostraba "Pro:74" cuando todos fueron Flash.
                     _partida_telemetry = {
                         'code': partida.code,
                         'tier_used': _tier_meta.get('tier'),
+                        'suggested_tier': _tier_meta.get('suggested_tier'),
                         'tier_reason': _tier_meta.get('reason'),
                         'tokens_in': _chunk_usage.get('promptTokenCount', 0),
                         'tokens_out': _chunk_usage.get('candidatesTokenCount', 0),
