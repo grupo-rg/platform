@@ -1081,6 +1081,25 @@ class SwarmPricingService:
                             "match_kind": cached_partida.match_kind,
                         },
                     })
+
+                    # Sprint 1 (S1-B-01 follow-up) — strongly-typed companion
+                    # event for the cache-hit path so admin job-detail KPIs
+                    # cuentan cache hits en su agregado (cache_hit_rate, latency).
+                    _cached_telemetry = {
+                        'code': cached_partida.code,
+                        'tier_used': 'cache',
+                        'tier_reason': 'cache_hit',
+                        'tokens_in': 0,
+                        'tokens_out': 0,
+                        'cost_usd': 0.0,
+                        'latency_ms': meta.get("latency_ms", 0),
+                        'cache_hit': True,
+                        'match_kind': cached_partida.match_kind,
+                        'confidence_score': cached_partida.matchConfidence,
+                    }
+                    self._emit(budget_id, 'partida_resolved_v2', _cached_telemetry)
+                    _resolved_telemetry.append(_cached_telemetry)
+
                     if on_partida_resolved is not None:
                         try:
                             await on_partida_resolved(cached_partida)
