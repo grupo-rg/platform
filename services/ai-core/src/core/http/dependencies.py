@@ -178,43 +178,51 @@ async def bootstrap_hybrid_catalog_search() -> Optional[HybridCatalogSearch]:
         return None
 
 
-# S1-A-03 — BgeReranker singleton. Instanciación lazy: si
-# `sentence-transformers` no está disponible (entorno sin ML deps, p.ej.
-# tests locales antes de `pip install -r requirements.txt`), capturamos el
-# ImportError y dejamos `None` — el swarm cae al rerank Flash legacy.
+# S1-A-03 + S2-A-00.1 — BgeReranker singleton.
 #
-# S2-A-00 — tras instanciar, hacemos `pre_warm()` para forzar la
-# inicialización de torch + cacheo del grafo. Sin esto, el primer rerank
-# tarda ~30s (cold-start de torch en CPU); con pre-warm, ~150-300ms
-# desde el primer call. Coste amortizado: ~3s al boot del worker.
+# Antes de S2-A-00.1 la instanciación corría a nivel módulo y el `import`
+# del Service ai-core (que es puro dispatcher HTTP) cargaba ~280MB del
+# modelo + torch + sentence-transformers en el boot del Service → OOM con
+# memory=2Gi durante el primer upload de un PDF (smoke 2026-05-19).
+#
+# Fix: lazy. La instanciación se hace al primer `get_bge_reranker()`. El
+# Service nunca llama esta función (puro dispatcher), así que jamás carga
+# el modelo. El Job worker SÍ la llama (vía bootstrap_hybrid_catalog_search
+# o vía el swarm) y paga el coste UNA SOLA VEZ al primer rerank.
+#
+# S2-A-00 pre-warm sigue ejecutándose en la misma llamada lazy.
 _bge_reranker_singleton: Optional[BgeReranker] = None
-try:
-    _bge_reranker_singleton = BgeReranker.get()
-    import logging as _logging
-    _logging.getLogger(__name__).info(
-        "[bootstrap] BgeReranker ready (cross-encoder BAAI/bge-reranker-v2-m3)"
-    )
-    # S2-A-00 — pre-warm para amortizar el cold-start de torch.
-    try:
-        _bge_reranker_singleton.pre_warm()
-        _logging.getLogger(__name__).info(
-            "[bootstrap] BgeReranker pre-warmed (torch graph cached)"
-        )
-    except Exception as _bge_warm_err:  # pragma: no cover
-        _logging.getLogger(__name__).warning(
-            f"[bootstrap] BgeReranker pre_warm failed ({_bge_warm_err}); "
-            f"first rerank will pay cold-start"
-        )
-except Exception as _bge_err:  # pragma: no cover (depends on host env)
-    import logging as _logging
-    _logging.getLogger(__name__).warning(
-        f"[bootstrap] BgeReranker init failed ({_bge_err}); "
-        f"swarm will use Flash rerank fallback"
-    )
-    _bge_reranker_singleton = None
+_bge_reranker_initialized: bool = False
 
 
 def get_bge_reranker() -> Optional[BgeReranker]:
+    global _bge_reranker_singleton, _bge_reranker_initialized
+    if _bge_reranker_initialized:
+        return _bge_reranker_singleton
+
+    _bge_reranker_initialized = True
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+    try:
+        _bge_reranker_singleton = BgeReranker.get()
+        _log.info(
+            "[bootstrap] BgeReranker ready (cross-encoder BAAI/bge-reranker-v2-m3)"
+        )
+        try:
+            _bge_reranker_singleton.pre_warm()
+            _log.info("[bootstrap] BgeReranker pre-warmed (torch graph cached)")
+        except Exception as _bge_warm_err:  # pragma: no cover
+            _log.warning(
+                f"[bootstrap] BgeReranker pre_warm failed ({_bge_warm_err}); "
+                f"first rerank will pay cold-start"
+            )
+    except Exception as _bge_err:  # pragma: no cover (depends on host env)
+        _log.warning(
+            f"[bootstrap] BgeReranker init failed ({_bge_err}); "
+            f"swarm will use Flash rerank fallback"
+        )
+        _bge_reranker_singleton = None
+
     return _bge_reranker_singleton
 
 
