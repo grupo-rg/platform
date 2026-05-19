@@ -24,9 +24,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // getSafeAuth will only run on the client, preventing build errors
     const auth = getSafeAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       setLoading(false);
+
+      // Sync the server-side session cookie with the client auth state.
+      // Without this, verifyAuth() in server actions/components always
+      // returns null because cookies().get('session') is undefined.
+      try {
+        if (user) {
+          // Force refresh so the ID Token carries the latest custom claims
+          // (e.g. role: 'super-admin' set by scripts/set-admin.js after a
+          // previous login session was minted).
+          const idToken = await user.getIdToken(true);
+          await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+          });
+        } else {
+          await fetch('/api/auth/session', { method: 'DELETE' });
+        }
+      } catch (err) {
+        console.error('[AuthContext] session cookie sync failed:', err);
+      }
     });
 
     return () => unsubscribe();
@@ -36,6 +57,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const auth = getSafeAuth();
       await firebaseSignOut(auth);
+      // Clearing here too in case onAuthStateChanged is slow — defensive.
+      await fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {});
     } catch (error) {
       console.error('Error signing out:', error);
     }
