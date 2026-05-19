@@ -217,12 +217,38 @@ def _build_use_case_from_env(env: Mapping[str, str]) -> RunPipelineJobUseCase:
     Import ORDER matters: `dependencies.py` instantiates `firestore.client()`
     at module load, which requires firebase_admin to be initialised first.
     Do NOT merge these two `from ... import ...` lines.
+
+    S1-A-02: tras bootstrap de firebase, intentamos cargar el catálogo entero
+    (~1,661 items) en memoria y construir el índice BM25 para HybridCatalogSearch.
+    Es síncronicamente costoso (~2-5s) pero solo se paga UNA VEZ por worker.
+    Si falla (Firestore caído, colección vacía), el swarm cae al path legacy.
     """
     from src.core.bootstrap import init_firebase_admin
 
     init_firebase_admin(env)
     # Import AFTER firebase is up — see docstring.
-    from src.core.http.dependencies import get_run_pipeline_job_uc
+    from src.core.http.dependencies import (
+        bootstrap_hybrid_catalog_search,
+        get_run_pipeline_job_uc,
+    )
+
+    # S1-A-02 — bootstrap del HybridCatalogSearch antes de devolver el UC.
+    # Async fire-and-await: bloqueamos UNA VEZ aquí; el swarm verá el hybrid
+    # ya inyectado en su SwarmPricingService singleton.
+    try:
+        # `asyncio.run` falla si ya hay un loop activo (raro en este factory:
+        # se llama desde `main()` que aún no ha llamado `asyncio.run`). Guard
+        # defensivo por si tests lo invocan de otra forma.
+        try:
+            asyncio.get_running_loop()
+            logger.warning(
+                "worker_main: skipping HybridCatalogSearch bootstrap "
+                "(loop already running; expected in tests, not in prod)"
+            )
+        except RuntimeError:
+            asyncio.run(bootstrap_hybrid_catalog_search())
+    except Exception:
+        logger.exception("worker_main: bootstrap_hybrid_catalog_search failed (non-fatal)")
 
     return get_run_pipeline_job_uc()
 

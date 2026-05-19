@@ -27,7 +27,12 @@ from src.budget.application.services.pdf_extractor_service import (
 from src.budget.application.services.budget_metadata_extractor import (
     BudgetMetadataExtractor,
 )
+from src.budget.application.services.pricing_cache import PricingCache
 from src.budget.application.services.swarm_pricing_service import SwarmPricingService
+from src.budget.catalog.application.services.hybrid_catalog_search import (
+    HybridCatalogSearch,
+)
+from src.budget.infrastructure.adapters.reranking.bge_reranker import BgeReranker
 from src.budget.application.use_cases.generate_budget_from_nl_uc import (
     GenerateBudgetFromNlUseCase,
 )
@@ -120,6 +125,91 @@ _inline_extractor = InlinePdfExtractorService(
 _annexed_extractor = AnnexedPdfExtractorService(
     llm_provider=_llm_adapter, emitter=_progress_emitter
 )
+# S1-A-02 — el HybridCatalogSearch se construye en boot del worker
+# (vía `bootstrap_hybrid_catalog_search`) porque `list_all_items()` es async.
+# Sin el bootstrap, `_hybrid_search_singleton` queda None y el SwarmPricingService
+# usa el path legacy (solo vector). Esto preserva backward-compat con scripts
+# offline y tests que no llaman al bootstrap.
+_hybrid_search_singleton: Optional[HybridCatalogSearch] = None
+
+
+def get_hybrid_catalog_search() -> Optional[HybridCatalogSearch]:
+    """Devuelve el singleton HybridCatalogSearch si ha sido inicializado."""
+    return _hybrid_search_singleton
+
+
+async def bootstrap_hybrid_catalog_search() -> Optional[HybridCatalogSearch]:
+    """S1-A-02 — Carga los items del price_book una vez y construye el
+    índice BM25. Llamar al boot del worker (worker_main).
+
+    Si el repo no responde (Firestore caído, colección vacía, etc.), loggea
+    un warning y devuelve None — el swarm cae al path legacy automáticamente.
+    """
+    global _hybrid_search_singleton
+    if _hybrid_search_singleton is not None:
+        return _hybrid_search_singleton
+    try:
+        import logging as _logging
+        _bootstrap_logger = _logging.getLogger(__name__)
+        _bootstrap_logger.info("[bootstrap] loading price_book items for HybridCatalogSearch...")
+        items = await _price_book_repo.list_all_items()
+        if not items:
+            _bootstrap_logger.warning(
+                "[bootstrap] price_book has 0 items; HybridCatalogSearch DISABLED"
+            )
+            return None
+        _hybrid_search_singleton = HybridCatalogSearch(
+            catalog_items=items,
+            vector_search=_vector_search_adapter,
+            rrf_k=60,
+        )
+        _bootstrap_logger.info(
+            f"[bootstrap] HybridCatalogSearch ready with {len(items)} items"
+        )
+        # Re-bind the swarm to pick up the new hybrid search.
+        # Mutamos el atributo del singleton existente — no recreamos.
+        _swarm_pricing.hybrid_search = _hybrid_search_singleton
+        return _hybrid_search_singleton
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            f"[bootstrap] HybridCatalogSearch init failed: {e}; falling back to vector-only"
+        )
+        return None
+
+
+# S1-A-03 — BgeReranker singleton. Instanciación lazy: si
+# `sentence-transformers` no está disponible (entorno sin ML deps, p.ej.
+# tests locales antes de `pip install -r requirements.txt`), capturamos el
+# ImportError y dejamos `None` — el swarm cae al rerank Flash legacy.
+_bge_reranker_singleton: Optional[BgeReranker] = None
+try:
+    _bge_reranker_singleton = BgeReranker.get()
+    import logging as _logging
+    _logging.getLogger(__name__).info(
+        "[bootstrap] BgeReranker ready (cross-encoder BAAI/bge-reranker-v2-m3)"
+    )
+except Exception as _bge_err:  # pragma: no cover (depends on host env)
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        f"[bootstrap] BgeReranker init failed ({_bge_err}); "
+        f"swarm will use Flash rerank fallback"
+    )
+    _bge_reranker_singleton = None
+
+
+def get_bge_reranker() -> Optional[BgeReranker]:
+    return _bge_reranker_singleton
+
+
+# S1-A-04 — PricingCache singleton sobre Firestore.
+_pricing_cache_singleton: PricingCache = PricingCache(db=_db_client)
+
+
+def get_pricing_cache() -> PricingCache:
+    return _pricing_cache_singleton
+
+
 _swarm_pricing = SwarmPricingService(
     llm_provider=_llm_adapter,
     vector_search=_vector_search_adapter,
@@ -129,6 +219,9 @@ _swarm_pricing = SwarmPricingService(
     dag=_construction_dag,
     fragment_repo=_fragment_repo,
     price_book_repo=_price_book_repo,
+    hybrid_search=None,  # poblado al boot por bootstrap_hybrid_catalog_search()
+    reranker=_bge_reranker_singleton,
+    pricing_cache=_pricing_cache_singleton,
 )
 _architect = ArchitectService(llm_provider=_llm_adapter)
 _budget_metadata_extractor = BudgetMetadataExtractor(llm_provider=_llm_adapter)

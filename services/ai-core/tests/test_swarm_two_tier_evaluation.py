@@ -30,8 +30,11 @@ from src.budget.application.services.pdf_extractor_service import RestructuredIt
 from src.budget.application.services.swarm_pricing_service import (
     BatchPricedItemV3,
     BatchPricingEvaluatorResultV3,
+    MODEL_FLASH,
+    MODEL_PRO,
     PricingFinalResultDB,
     SwarmPricingService,
+    _resolve_pricing_model,
     _select_tier,
 )
 
@@ -181,12 +184,18 @@ def test_easy_partida_routed_to_flash(monkeypatch):
 
 
 def test_hard_partida_routed_to_pro_directly(monkeypatch):
-    """Partida con score bajo o unit mismatch → directo a Pro."""
+    """Partida con score bajo o unit mismatch → directo a Pro (ENABLE_PRO_PRICING=true).
+
+    S1-A-01: Pro requiere opt-in explícito. Sin el flag, todas las partidas
+    van a Flash; con el flag y suggested_tier='pro', la partida va a Pro.
+    """
     monkeypatch.setattr(
         SwarmPricingService,
         "_load_prompt",
         lambda self, filename, **kwargs: ("sys", kwargs.get("batch_items", "")),
     )
+    # Opt-in a Pro (legacy behaviour). Sin este flag iría a Flash siempre.
+    monkeypatch.setenv("ENABLE_PRO_PRICING", "true")
 
     llm = _RecordingLLM({"gemini-2.5-pro": _pro_response()})
     candidates = [{"id": "C1", "description": "Hora oficial", "matchScore": 0.95,
@@ -207,12 +216,16 @@ def test_hard_partida_routed_to_pro_directly(monkeypatch):
 
 
 def test_flash_escalates_to_pro_when_match_kind_from_scratch(monkeypatch):
-    """Flash dice from_scratch → reintentamos con Pro automáticamente."""
+    """Flash dice from_scratch → reintentamos con Pro automáticamente.
+
+    S1-A-01: la escalation a Pro requiere ENABLE_PRO_PRICING=true.
+    """
     monkeypatch.setattr(
         SwarmPricingService,
         "_load_prompt",
         lambda self, filename, **kwargs: ("sys", kwargs.get("batch_items", "")),
     )
+    monkeypatch.setenv("ENABLE_PRO_PRICING", "true")
 
     llm = _RecordingLLM({
         "gemini-2.5-flash": _flash_response(match_kind="from_scratch"),
@@ -237,12 +250,16 @@ def test_flash_escalates_to_pro_when_match_kind_from_scratch(monkeypatch):
 
 
 def test_flash_escalates_when_needs_human_review_true(monkeypatch):
-    """needs_human_review=True desde Flash → escala a Pro."""
+    """needs_human_review=True desde Flash → escala a Pro.
+
+    S1-A-01: la escalation a Pro requiere ENABLE_PRO_PRICING=true.
+    """
     monkeypatch.setattr(
         SwarmPricingService,
         "_load_prompt",
         lambda self, filename, **kwargs: ("sys", kwargs.get("batch_items", "")),
     )
+    monkeypatch.setenv("ENABLE_PRO_PRICING", "true")
 
     llm = _RecordingLLM({
         "gemini-2.5-flash": _flash_response(match_kind="1:1", needs_review=True),
@@ -261,6 +278,136 @@ def test_flash_escalates_when_needs_human_review_true(monkeypatch):
 
     pro_calls = [c for c in llm.calls if "pro" in c["model"] and c["user_prompt_len"] > 50]
     assert len(pro_calls) == 1, "Debe escalar a Pro tras Flash needs_review=True"
+
+
+# ---- S1-A-01: _resolve_pricing_model -------------------------------------
+
+
+def test_resolve_pricing_model_default_returns_flash():
+    """Sin env vars, el default es Flash, independientemente del suggested_tier."""
+    model, reason = _resolve_pricing_model("pro", env={})
+    assert model == MODEL_FLASH
+    assert "flash" in reason.lower()
+
+
+def test_resolve_pricing_model_flash_suggestion_returns_flash_without_optin():
+    """Sin opt-in, suggested_tier='flash' devuelve Flash con razón clara."""
+    model, reason = _resolve_pricing_model("flash", env={})
+    assert model == MODEL_FLASH
+    assert "flash" in reason.lower()
+
+
+def test_resolve_pricing_model_enable_pro_with_pro_suggestion_returns_pro():
+    """Con opt-in ENABLE_PRO_PRICING=true y suggested_tier='pro' → Pro."""
+    model, reason = _resolve_pricing_model("pro", env={"ENABLE_PRO_PRICING": "true"})
+    assert model == MODEL_PRO
+    assert "pro" in reason.lower()
+
+
+def test_resolve_pricing_model_enable_pro_with_flash_suggestion_returns_flash():
+    """Con opt-in pero suggested_tier='flash' sigue siendo Flash (no se fuerza)."""
+    model, _ = _resolve_pricing_model("flash", env={"ENABLE_PRO_PRICING": "true"})
+    assert model == MODEL_FLASH
+
+
+def test_resolve_pricing_model_force_flash_legacy_is_compatible():
+    """FORCE_FLASH_PRICING=true (alias deprecado) sigue forzando Flash."""
+    model, reason = _resolve_pricing_model("pro", env={"FORCE_FLASH_PRICING": "true"})
+    assert model == MODEL_FLASH
+    assert "deprecado" in reason.lower() or "forzado" in reason.lower()
+
+
+def test_resolve_pricing_model_truthy_env_var_values():
+    """Reconoce '1', 'true', 'yes', 'on' como truthy (case-insensitive)."""
+    for v in ["1", "true", "True", "TRUE", "yes", "on", "YES"]:
+        model, _ = _resolve_pricing_model("pro", env={"ENABLE_PRO_PRICING": v})
+        assert model == MODEL_PRO, f"value {v!r} not recognized as truthy"
+
+
+def test_resolve_pricing_model_falsy_env_var_values():
+    """Reconoce '0', 'false', '', valores arbitrarios como falsy."""
+    for v in ["0", "false", "False", "no", "off", "", "anything", "  "]:
+        model, _ = _resolve_pricing_model("pro", env={"ENABLE_PRO_PRICING": v})
+        assert model == MODEL_FLASH, f"value {v!r} should not be truthy"
+
+
+# ---- S1-A-01: end-to-end swarm uses Flash by default ---------------------
+
+
+def test_swarm_uses_flash_by_default_even_when_tier_says_pro(monkeypatch):
+    """Sin ENABLE_PRO_PRICING, una partida 'hard' (que la heurística etiqueta
+    como pro) se tasa con Flash. La telemetría guarda tier='pro' para análisis.
+    """
+    monkeypatch.setattr(
+        SwarmPricingService,
+        "_load_prompt",
+        lambda self, filename, **kwargs: ("sys", kwargs.get("batch_items", "")),
+    )
+    # Asegura que ningún var del entorno fuerza Pro.
+    monkeypatch.delenv("ENABLE_PRO_PRICING", raising=False)
+    monkeypatch.delenv("FORCE_FLASH_PRICING", raising=False)
+
+    llm = _RecordingLLM({"gemini-2.5-flash": _flash_response(match_kind="1:1")})
+    candidates = [{"id": "C1", "description": "Hora oficial", "matchScore": 0.95,
+                   "unit": "h", "priceTotal": 25.0}]  # unit mismatch → suggested_tier='pro'
+    emitter = _SpyEmitter()
+    svc = SwarmPricingService(
+        llm_provider=llm,
+        vector_search=_StubVectorSearch(candidates),
+        emitter=emitter,
+    )
+    items = [RestructuredItem(code="TEST.1", description="Tabique m2",
+                              quantity=10.0, unit="m2", chapter="C02")]
+    metrics = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
+    asyncio.run(svc.evaluate_batch(items, budget_id="b-default-flash", metrics=metrics))
+
+    pricing_calls = [c for c in llm.calls if c["user_prompt_len"] > 50]
+    assert all("flash" in c["model"] for c in pricing_calls), (
+        "Sin opt-in, todas las llamadas de pricing deben usar Flash"
+    )
+
+    # Telemetría preserva el tier sugerido.
+    tier_events = [e for e in emitter.events if e["type"] == "tier_assigned"]
+    assert tier_events and tier_events[0]["data"]["tier"] == "pro"
+
+    # Nuevo evento de resolución del modelo expone qué se ejecutó.
+    model_events = [e for e in emitter.events if e["type"] == "pricing_model_resolved"]
+    assert model_events
+    assert model_events[0]["data"]["model"] == "gemini-2.5-flash"
+    assert model_events[0]["data"]["suggested_tier"] == "pro"
+
+
+def test_swarm_suppresses_escalation_without_optin(monkeypatch):
+    """Sin ENABLE_PRO_PRICING, una Flash que dice 'from_scratch' NO se escala a Pro.
+    El evento 'tier_escalation_suppressed' se emite para análisis.
+    """
+    monkeypatch.setattr(
+        SwarmPricingService,
+        "_load_prompt",
+        lambda self, filename, **kwargs: ("sys", kwargs.get("batch_items", "")),
+    )
+    monkeypatch.delenv("ENABLE_PRO_PRICING", raising=False)
+
+    llm = _RecordingLLM({"gemini-2.5-flash": _flash_response(match_kind="from_scratch")})
+    candidates = [{"id": "C1", "description": "X", "matchScore": 0.92,
+                   "unit": "m2", "priceTotal": 60.0}]
+    emitter = _SpyEmitter()
+    svc = SwarmPricingService(
+        llm_provider=llm,
+        vector_search=_StubVectorSearch(candidates),
+        emitter=emitter,
+    )
+    items = [RestructuredItem(code="TEST.1", description="X",
+                              quantity=10.0, unit="m2", chapter="C")]
+    metrics = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
+    asyncio.run(svc.evaluate_batch(items, budget_id="b-suppress", metrics=metrics))
+
+    pro_calls = [c for c in llm.calls if "pro" in c["model"]]
+    assert len(pro_calls) == 0, "Pro NO debe llamarse sin ENABLE_PRO_PRICING"
+
+    suppressed = [e for e in emitter.events if e["type"] == "tier_escalation_suppressed"]
+    assert suppressed, "Debe emitirse tier_escalation_suppressed"
+    assert suppressed[0]["data"]["match_kind"] == "from_scratch"
 
 
 def test_telemetry_emits_tier_assigned_event(monkeypatch):

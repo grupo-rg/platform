@@ -45,3 +45,17 @@ class IPriceBookRepository(ABC):
         catálogo cuando el agente devuelve un match 1:1 sin breakdown propio.
         Retorna lista vacía si el padre no tiene breakdowns asociados.
         """
+
+    @abstractmethod
+    async def list_all_items(self) -> list[PriceBookItemEntry]:
+        """S1-A-02 — Lista TODOS los documentos `kind='item'` (no breakdowns)
+        de la colección. Usado para cargar el catálogo entero (~1,661 items
+        del COAATMCA 2025) en memoria al boot del worker, para alimentar el
+        índice BM25 del ``HybridCatalogSearch``.
+
+        Retorna lista vacía si la colección no tiene items.
+
+        Devuelve los ``PriceBookItemEntry`` SIN sus embeddings (heavy) para
+        minimizar payload — el embedding sigue residiendo en Firestore y
+        se usa por el vector search adapter, no por BM25.
+        """

@@ -79,6 +79,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // S1-A-04 — Pricing cache by hash. Written by ai-core (admin SDK) when
+    // a partida is resolved with high confidence, read at the start of every
+    // pricing batch to short-circuit repeated partidas. No client access:
+    // the data is keyed by sha256(description+unit) and would leak nothing
+    // sensitive, but there is also no reason to expose it to clients.
+    match /partida_pricing_cache/{hash} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

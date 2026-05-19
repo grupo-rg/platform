@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import json
+import os
 import time
 import uuid
 import inspect
@@ -10,11 +11,14 @@ from pydantic import BaseModel, Field
 from src.budget.application.ports.ports import ILLMProvider, IVectorSearch, IGenerationEmitter
 from src.budget.application.services.pdf_extractor_service import RestructuredItem
 from src.budget.catalog.application.services.catalog_lookup_service import CatalogLookupService
+from src.budget.catalog.application.services.hybrid_catalog_search import HybridCatalogSearch
 from src.budget.catalog.application.ports.price_book_repository import IPriceBookRepository
 from src.budget.catalog.domain.construction_dag import ConstructionDag
 from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem, BudgetBreakdownComponent, HeuristicFragment
 from src.budget.application.services.reconciliation import reconcile_breakdown
 from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
+from src.budget.application.services.pricing_cache import PricingCache
+from src.budget.infrastructure.adapters.reranking.bge_reranker import BgeReranker
 from src.budget.learning.application.ports.heuristic_fragment_repository import IHeuristicFragmentRepository
 
 # -------------------------------------------------------------------------------------------------
@@ -185,6 +189,104 @@ TIER_FLASH_SCORE_THRESHOLD: float = 0.85
 MODEL_FLASH: str = "gemini-2.5-flash"
 MODEL_PRO: str = "gemini-2.5-pro"
 
+# S1-A-07 — concurrencia del swarm de pricing. Configurable vía
+# ``SWARM_CONCURRENCY`` (default 8). El valor previo era 4, que el incidente
+# 2026-05-18 demostró insuficiente (los 4 slots se atascaron en Pro/503).
+# Con Flash como default (S1-A-01) + timeout (S1-A-06), 8 es seguro.
+_DEFAULT_SWARM_CONCURRENCY: int = 8
+
+
+def _read_swarm_concurrency() -> int:
+    """Lee ``SWARM_CONCURRENCY`` del entorno; sanity [1, 64]; default 8."""
+    raw = (os.environ.get("SWARM_CONCURRENCY") or "").strip()
+    if not raw:
+        return _DEFAULT_SWARM_CONCURRENCY
+    try:
+        v = int(raw)
+        if v < 1 or v > 64:
+            logger.warning(
+                "SWARM_CONCURRENCY=%s fuera de rango [1,64]; usando default %d",
+                raw, _DEFAULT_SWARM_CONCURRENCY,
+            )
+            return _DEFAULT_SWARM_CONCURRENCY
+        return v
+    except ValueError:
+        logger.warning(
+            "SWARM_CONCURRENCY=%s no es int válido; usando default %d",
+            raw, _DEFAULT_SWARM_CONCURRENCY,
+        )
+        return _DEFAULT_SWARM_CONCURRENCY
+
+
+def _env_truthy(value: Optional[str]) -> bool:
+    """Helper to interpret env-var strings as boolean flags.
+
+    Accepts the common conventions: "1", "true", "yes", "on" (case-insensitive)
+    are truthy; everything else (including unset / empty) is falsy.
+    """
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_pricing_model(
+    suggested_tier: str,
+    *,
+    env: Optional[Dict[str, str]] = None,
+) -> tuple[str, str]:
+    """S1-A-01 — Sprint 1 hotfix: decide qué modelo Gemini ejecuta el pricing.
+
+    Política post-incidente 2026-05-18:
+      - **Default: Flash siempre.** Pro queda fuera del camino caliente.
+      - Pro requiere opt-in EXPLÍCITO via env var ``ENABLE_PRO_PRICING=true``.
+      - La env var legacy ``FORCE_FLASH_PRICING`` se mantiene como alias
+        deprecado: cuando está set a truthy se ignora silenciosamente porque
+        Flash ya es el default; cuando está set a falsy y ``ENABLE_PRO_PRICING``
+        no está set, sigue mandando Flash (compat con configuración previa).
+      - ``suggested_tier`` viene de ``_select_tier`` y se usa SOLO para
+        telemetría — no para elegir el modelo real.
+
+    Devuelve ``(model_id, reason)`` para que el caller pueda loggearlo.
+
+    Args:
+      suggested_tier: lo que la heurística ``_select_tier`` recomendaría.
+        Usado solo para construir la razón (telemetría).
+      env: mapping de env vars inyectable para tests. Default: ``os.environ``.
+
+    Returns:
+      Tupla ``(model_id, reason)``. ``model_id`` es uno de:
+        - ``"gemini-2.5-flash"`` (default, casi siempre)
+        - ``"gemini-2.5-pro"`` (solo con ENABLE_PRO_PRICING=true Y
+          ``suggested_tier == "pro"``)
+    """
+    resolved_env: Dict[str, str] = dict(env) if env is not None else dict(os.environ)
+    enable_pro = _env_truthy(resolved_env.get("ENABLE_PRO_PRICING"))
+    force_flash_legacy = _env_truthy(resolved_env.get("FORCE_FLASH_PRICING"))
+
+    if enable_pro:
+        # Opt-in explícito a Pro. La heurística decide tier libremente.
+        if suggested_tier == "pro":
+            return MODEL_PRO, (
+                "ENABLE_PRO_PRICING=true y suggested_tier=pro → Pro (opt-in)"
+            )
+        return MODEL_FLASH, (
+            f"ENABLE_PRO_PRICING=true pero suggested_tier={suggested_tier} → Flash"
+        )
+
+    # Default post-hotfix: SIEMPRE Flash. Documentamos en la razón si la
+    # heurística "habría querido" Pro para que la telemetría lo refleje.
+    if force_flash_legacy:
+        reason = (
+            f"Flash forzado (default); suggested_tier={suggested_tier}; "
+            f"FORCE_FLASH_PRICING=true (alias deprecado, redundante)"
+        )
+    else:
+        reason = (
+            f"Flash default post-hotfix; suggested_tier={suggested_tier}; "
+            f"ENABLE_PRO_PRICING no activado"
+        )
+    return MODEL_FLASH, reason
+
 
 def _resolve_pricing_model(intended: str) -> str:
     """Aplica el override `FORCE_FLASH_PRICING` si está activo en el entorno.
@@ -308,6 +410,51 @@ def _select_tier(
         "flash",
         f"score {score:.2f} ≥ {TIER_FLASH_SCORE_THRESHOLD} y unit {partida_unit_n} coincide → Flash",
     )
+
+
+# S1-A-05 — capítulos que NO aportan señal estructural y por tanto no se
+# usan como filtro pre-vector (el filtro degradaría la cobertura del
+# retrieval sin reducir ruido). Coincide con la lista que ``stabilize_chapter_name``
+# considera alucinación o sin valor.
+_LOW_CONFIDENCE_CHAPTERS: set = {
+    "VARIOS",
+    "VARIOS Y OTROS",
+    "[UNKNOWN]",
+    "SIN CAPÍTULO",
+    "SIN CAPITULO",
+    "OTROS",
+    "GENERAL",
+}
+
+
+def _derive_structural_filters(item: RestructuredItem) -> Dict[str, Optional[str]]:
+    """S1-A-05 — Construye filtros estructurales pre-vector para una partida.
+
+    Reduce el espacio de búsqueda al BM25/vector limitándolos a:
+      - el ``chapter`` cuando es confiable (no está en ``_LOW_CONFIDENCE_CHAPTERS``
+        y no contiene marcadores de alucinación);
+      - la ``unit_dimension`` cuando la partida la tiene clara.
+
+    Ambos filtros son opcionales: cuando faltan, el retrieval cae al
+    comportamiento original (sin filtro).
+    """
+    chapter_filter: Optional[str] = None
+    raw_chapter = (item.chapter or "").strip()
+    if raw_chapter:
+        upper = raw_chapter.upper()
+        is_hallucination = any(
+            marker in upper
+            for marker in ("[", "NOT FOUND", "NO ESPECIFICADO", "NO IDENTIFICADO",
+                          "NO ENCONTRADO", "UNKNOWN", "UNDEFINED")
+        )
+        if not is_hallucination and upper not in _LOW_CONFIDENCE_CHAPTERS:
+            chapter_filter = raw_chapter
+
+    unit_dimension_filter: Optional[str] = item.unit_dimension or None
+    return {
+        "chapter_filter": chapter_filter,
+        "unit_dimension_filter": unit_dimension_filter,
+    }
 
 
 def _is_medios_partida(item: Optional[RestructuredItem]) -> bool:
@@ -448,6 +595,9 @@ class SwarmPricingService:
         dag: Optional[ConstructionDag] = None,
         fragment_repo: Optional[IHeuristicFragmentRepository] = None,
         price_book_repo: Optional[IPriceBookRepository] = None,
+        hybrid_search: Optional[HybridCatalogSearch] = None,
+        reranker: Optional[BgeReranker] = None,
+        pricing_cache: Optional[PricingCache] = None,
     ):
         self.llm = llm_provider
         self.vector_search = vector_search
@@ -465,6 +615,18 @@ class SwarmPricingService:
         # cuando val.breakdown está vacío. Opcional para backward-compat con
         # tests; si ausente, no se hereda.
         self.price_book_repo = price_book_repo
+        # S1-A-02 — Hybrid BM25+Vector+RRF. Opcional para backward-compat:
+        # cuando es None, el swarm usa solo el vector search puro (path legacy);
+        # cuando se inyecta, el swarm combina BM25 in-memory con el vector y
+        # mezcla por RRF antes de reranquear.
+        self.hybrid_search = hybrid_search
+        # S1-A-03 — Cross-encoder reranker (BAAI/bge-reranker-v2-m3 local).
+        # Opcional para tests offline; cuando es None, el rerank sigue siendo
+        # vía Flash. En producción se inyecta vía `dependencies.py`.
+        self.reranker = reranker
+        # S1-A-04 — Caché de pricing por hash (descripción + unidad). Opcional;
+        # cuando es None, el swarm no consulta ni persiste cache (camino legacy).
+        self.pricing_cache = pricing_cache
 
     async def _rerank_candidates(
         self,
@@ -472,15 +634,39 @@ class SwarmPricingService:
         partida_description: str,
         partida_unit: Optional[str],
     ) -> List[Dict[str, Any]]:
-        """Fase 9.4 — re-rank intermedio con Flash. Si hay ≥ 4 candidatos,
-        invoca Flash con un prompt mínimo y devuelve los top-3 reordenados.
+        """Fase 9.4 — re-rank intermedio. Si hay ≥ 4 candidatos, llama al
+        reranker para reducir a top-3.
 
-        Si hay ≤ 3 candidatos: passthrough sin LLM (no aporta valor).
-        Si Flash falla: passthrough con los originales (no se rompe el pipeline).
+        S1-A-03: si ``self.reranker`` (BgeReranker) está inyectado, se usa
+        el cross-encoder local (~50-200ms, $0/partida). Si no, se cae al
+        path con Gemini Flash (legacy, ~500ms-1s, $0.01/partida).
+
+        Si hay ≤ 3 candidatos: passthrough sin reranker (no aporta valor).
+        Cualquier fallo: passthrough con los originales (no se rompe el pipeline).
         IDs inventados por el LLM se descartan defensivamente.
         """
         if len(candidates) <= 3:
             return candidates
+
+        # S1-A-03 — cross-encoder local path.
+        if self.reranker is not None:
+            try:
+                ranked = self.reranker.rerank(
+                    query=f"{partida_description} ({partida_unit or '?'})",
+                    candidates=candidates,
+                    top_n=3,
+                )
+                # `ranked` es lista de (cand_dict, score). Reconstruimos solo
+                # la secuencia ordenada de candidatos. Si vino vacía, fallback.
+                reranked_cands = [c for c, _ in ranked]
+                if reranked_cands:
+                    return reranked_cands
+            except Exception as e:
+                logger.warning(
+                    f"[BgeReranker] rerank crashed ({type(e).__name__}: {e}); "
+                    f"falling back to Flash rerank."
+                )
+            # Cualquier fallo → caemos al path Flash.
 
         # Prompt minimalista — solo lo necesario para rankear.
         compact = [
@@ -626,7 +812,17 @@ class SwarmPricingService:
         self,
         queries: List[str],
         partida_unit_dimension: Optional[str] = None,
+        *,
+        chapter_filter: Optional[str] = None,
     ) -> List[Dict]:
+        """Resolver candidatos del catálogo por una o más subqueries.
+
+        S1-A-02: si ``self.hybrid_search`` está inyectado, cada subquery se
+        resuelve combinando BM25 in-memory + vector search + RRF
+        (``HybridCatalogSearch.search``). Si no, fallback al vector search
+        directo (path legacy, mantenido para backward-compat con tests que
+        no inyectan hybrid).
+        """
         if not queries:
             return []
 
@@ -637,14 +833,31 @@ class SwarmPricingService:
         async def _fetch_one(q: str) -> tuple[str, List[Dict]]:
             try:
                 vector = await self.llm.get_embedding(q)
-                res = self.vector_search.search_similar_items(
-                    query_vector=vector,
-                    query_text=q,
-                    limit=4,
-                    partida_unit_dimension=partida_unit_dimension,
-                )
-                candidates = await res if inspect.isawaitable(res) else res
-                return q, candidates or []
+                if self.hybrid_search is not None:
+                    # S1-A-02 — path híbrido: BM25 + vector + RRF.
+                    cands = await self.hybrid_search.search(
+                        query=q,
+                        query_vector=vector,
+                        top_k=15,
+                        chapter_filter=chapter_filter,
+                        unit_dimension_filter=partida_unit_dimension,
+                    )
+                else:
+                    # Path legacy.
+                    # S1-A-05 — propagamos chapter_filter al adapter legacy
+                    # también; el adapter Firestore acepta `chapter_filters` (lista).
+                    legacy_chapter_filters = (
+                        [chapter_filter] if chapter_filter else None
+                    )
+                    res = self.vector_search.search_similar_items(
+                        query_vector=vector,
+                        query_text=q,
+                        limit=4,
+                        chapter_filters=legacy_chapter_filters,
+                        partida_unit_dimension=partida_unit_dimension,
+                    )
+                    cands = await res if inspect.isawaitable(res) else (res or [])
+                return q, cands or []
             except Exception as e:
                 logger.error(f"Vector search failed for '{q}': {e}")
                 return q, []
@@ -657,7 +870,7 @@ class SwarmPricingService:
         seen_ids: set = set()
         for q, cands in results:
             for c in cands:
-                cid = c.get('id')
+                cid = c.get('id') or c.get('code')
                 if cid and cid not in seen_ids:
                     seen_ids.add(cid)
                     c["__query_origin"] = q
@@ -786,15 +999,132 @@ class SwarmPricingService:
                     {"resumed_count": skipped, "remaining_count": len(items)},
                 )
 
+        # S1-A-04 — Cache lookup en lote ANTES del swarm.
+        # Para cada item, intentamos un hit de cache; los que aciertan no
+        # entran al swarm. Estado para enriquecer `item_resolved` después:
+        cache_metadata_by_code: Dict[str, Dict[str, Any]] = {}
+        cached_partidas: List[BudgetPartida] = []
+        if self.pricing_cache is not None and items:
+            remaining: List[RestructuredItem] = []
+            for it in items:
+                lookup_start = time.monotonic()
+                try:
+                    hit = await self.pricing_cache.lookup(
+                        description=it.description, unit=it.unit,
+                    )
+                except Exception as e:
+                    logger.warning(f"[cache] lookup crashed for {it.code}: {e}")
+                    hit = None
+                lookup_ms = int((time.monotonic() - lookup_start) * 1000)
+                if hit is not None:
+                    # Cache hit: short-circuit, no LLM call.
+                    cache_metadata_by_code[it.code or ""] = {
+                        "cache_hit": True,
+                        "cost_usd": 0.0,
+                        "latency_ms": lookup_ms,
+                    }
+                    # Reconstruimos un BudgetPartida desde el payload cacheado.
+                    # `partida` viene como dict de `model_dump()` previo.
+                    try:
+                        partida = BudgetPartida.model_validate(hit.partida)
+                        cached_partidas.append(partida)
+                        self._emit(budget_id, 'pricing_cache_hit', {
+                            "code": it.code,
+                            "hash": hit.hash[:16],
+                            "hits_count": hit.hits_count,
+                            "confidence_score": hit.confidence_score,
+                            "latency_ms": lookup_ms,
+                        })
+                    except Exception as build_err:
+                        # Si el doc cacheado está corrupto, lo ignoramos y
+                        # reprocesamos vía swarm (no rompemos el batch).
+                        logger.warning(
+                            f"[cache] hit for {it.code} no parsea como "
+                            f"BudgetPartida: {build_err}; reprocesando."
+                        )
+                        remaining.append(it)
+                else:
+                    cache_metadata_by_code[it.code or ""] = {
+                        "cache_hit": False,
+                        "cost_usd": None,  # poblado tras el LLM swarm
+                        "latency_ms": None,
+                        "lookup_ms": lookup_ms,
+                    }
+                    remaining.append(it)
+            items = remaining
+            if cached_partidas:
+                self._emit(budget_id, 'pricing_cache_batch_summary', {
+                    "cache_hits": len(cached_partidas),
+                    "cache_misses": len(items),
+                    "hit_rate": (
+                        len(cached_partidas)
+                        / (len(cached_partidas) + len(items))
+                        if (len(cached_partidas) + len(items)) > 0
+                        else 0.0
+                    ),
+                })
+                # Emitimos `item_resolved` para cada partida cacheada con
+                # `cache_hit=True` para que Agent B pueda enriquecer
+                # `partida_resolved_v2` con métricas reales. También invocamos
+                # el callback `on_partida_resolved` para que el use case
+                # persista checkpoint (mismo flujo que las resueltas vía LLM).
+                for cached_partida in cached_partidas:
+                    code = cached_partida.code or ""
+                    meta = cache_metadata_by_code.get(code, {})
+                    self._emit(budget_id, 'item_resolved', {
+                        "type": "PARTIDA",
+                        "item": cached_partida.model_dump(),
+                        "pricing_metadata": {
+                            "cache_hit": True,
+                            "cost_usd": 0.0,
+                            "latency_ms": meta.get("latency_ms", 0),
+                            "match_kind": cached_partida.match_kind,
+                        },
+                    })
+                    if on_partida_resolved is not None:
+                        try:
+                            await on_partida_resolved(cached_partida)
+                        except Exception as cb_err:
+                            logger.warning(
+                                f"[pricing] on_partida_resolved callback failed "
+                                f"for cached {cached_partida.code}: "
+                                f"{type(cb_err).__name__}: {cb_err}"
+                            )
+
         logger.info(f"Starting Swarm Pricing Phase for {len(items)} items...")
         self._emit(budget_id, 'vector_search_started', {"query": f"Invocando al cerebro Flash para romper {len(items)} partidas en queries atómicas..."})
+
+        # S1-A-04 — snapshot per-item start time + pre-call cost para poder
+        # calcular `cost_usd` y `latency_ms` por partida cuando el LLM la
+        # resuelva. Para cache misses únicamente.
+        item_start_times: Dict[str, float] = {}
+        item_pre_call_cost: Dict[str, float] = {}
+        for it in items:
+            code = it.code or ""
+            item_start_times[code] = time.monotonic()
+            item_pre_call_cost[code] = float(metrics.get("cost") or 0.0)
 
         # Obtenemos candidatos masivos
         async def fetch_item_candidates(item: RestructuredItem):
             queries = await self._analyze_and_deconstruct(item, metrics)
+            # S1-A-05 — Filtros estructurales pre-vector. Reducen el pool de
+            # candidatos antes del retrieval, lo que ahorra coste en partidas
+            # con `chapter` confiable (la mayoría tras `stabilize_chapter_name`).
+            filters = _derive_structural_filters(item)
+            chapter_filter = filters["chapter_filter"]
+            unit_dim_filter = filters["unit_dimension_filter"]
+            # Trazabilidad post-filter para validar la reducción de ≥30% que
+            # menciona el plan. ``candidates`` ya viene filtrado por la propia
+            # query; aquí solo emitimos los filtros aplicados.
+            self._emit(budget_id, 'structural_filters_applied', {
+                "code": item.code,
+                "chapter_filter": chapter_filter,
+                "unit_dimension_filter": unit_dim_filter,
+            })
             candidates = await self._firestore_vector_swarm(
                 queries,
-                partida_unit_dimension=item.unit_dimension,
+                partida_unit_dimension=unit_dim_filter,
+                chapter_filter=chapter_filter,
             )
             return item, candidates
             
@@ -864,7 +1194,13 @@ class SwarmPricingService:
         # Fase 6.C → 6.D: qué fragments se inyectaron al prompt de qué partida.
         # Poblado en evaluate_chunk, leído en el assembly de BudgetPartida (6.D).
         fragments_used_per_code: Dict[str, List[str]] = {}
-        semaphore_pricing = asyncio.Semaphore(4)
+        # S1-A-07 — concurrencia del swarm configurable. Default 8 (era 4
+        # hardcodeado). Con Flash como default + timeout por llamada, 8 slots
+        # son seguros y duplican el throughput sin saturar la API.
+        swarm_concurrency = _read_swarm_concurrency()
+        logger.info(f"[swarm] concurrency={swarm_concurrency}")
+        self._emit(budget_id, 'swarm_concurrency_set', {"value": swarm_concurrency})
+        semaphore_pricing = asyncio.Semaphore(swarm_concurrency)
 
         # Fase 14.B — PEM acumulado por capítulo, poblado tras la 1ª pasada
         # (no-medios) y leído por evaluate_chunk en la 2ª pasada (medios).
@@ -939,6 +1275,10 @@ class SwarmPricingService:
 
                 # Fase 9.3 — Two-tier dispatch. Con CHUNK_SIZE=1 cada chunk es
                 # una sola partida; usamos sus candidatos para decidir tier.
+                #
+                # S1-A-01 — `tier` ya NO selecciona el modelo: es solo
+                # telemetría. El modelo real lo decide ``_resolve_pricing_model``
+                # con default Flash y opt-in via ``ENABLE_PRO_PRICING=true``.
                 tier, tier_reason = "pro", "default"
                 first_code = task_group[0]["id"] if task_group else None
                 if first_code is not None:
@@ -961,10 +1301,20 @@ class SwarmPricingService:
                         "reason": tier_reason,
                     }
 
+                # S1-A-01 — resolución real del modelo. La heurística queda
+                # como hint para análisis post-mortem ("este caso ¿habría ido
+                # a Pro si fuese opt-in?") pero el modelo concreto se decide
+                # vía env vars para que el flip humano sea sin redeploy.
+                model_to_use, model_reason = _resolve_pricing_model(tier)
+                self._emit(budget_id, 'pricing_model_resolved', {
+                    "code": first_code,
+                    "model": model_to_use,
+                    "suggested_tier": tier,
+                    "reason": model_reason,
+                })
+
                 # Respetando cuota
                 await asyncio.sleep(1.0)
-                intended_model = MODEL_FLASH if tier == "flash" else MODEL_PRO
-                model_to_use = _resolve_pricing_model(intended_model)
                 eval_res, usage = await self.llm.generate_structured(
                     system_prompt=sys_prompt,
                     user_prompt=user_prompt,
@@ -976,46 +1326,66 @@ class SwarmPricingService:
                 # Fase 9.3 — escalation: si Flash devuelve from_scratch o flag
                 # needs_human_review, re-corremos con Pro. Esto preserva calidad
                 # en los casos difíciles que el tier selector no detectó.
+                #
+                # S1-A-01 — la escalation a Pro ahora SOLO se ejecuta cuando
+                # ``ENABLE_PRO_PRICING=true``. Sin opt-in mantenemos el
+                # resultado de Flash (puede traer ``needs_human_review`` para
+                # que el editor lo marque manualmente) y emitimos un evento
+                # ``tier_escalation_suppressed`` para análisis post-mortem.
                 needs_escalation = False
-                if tier == "flash" and eval_res and eval_res.results:
+                if model_to_use == MODEL_FLASH and eval_res and eval_res.results:
                     val = eval_res.results[0].valuation
                     if val.match_kind == "from_scratch" or val.needs_human_review:
                         needs_escalation = True
 
                 if needs_escalation:
-                    self._emit(budget_id, 'tier_escalated', {
-                        "code": first_code,
-                        "from_tier": "flash",
-                        "to_tier": "pro",
-                        "reason": (
-                            f"flash devolvió match_kind={eval_res.results[0].valuation.match_kind} "
-                            f"needs_review={eval_res.results[0].valuation.needs_human_review} "
-                            f"→ re-tasando con Pro"
-                        ),
-                    })
-                    # Sprint 1 (S1-B-01) — reflect the escalation in the
-                    # tier map so the final telemetry attributes the partida
-                    # to Pro (the model that actually produced the result).
-                    for _task in task_group:
-                        _tier_per_code[_task["id"]] = {
-                            "tier": "pro",
-                            "reason": f"escalated from flash: {tier_reason}",
-                        }
-                    eval_res_pro, usage_pro = await self.llm.generate_structured(
-                        system_prompt=sys_prompt,
-                        user_prompt=user_prompt,
-                        response_schema=BatchPricingEvaluatorResultV3,
-                        temperature=0.0,
-                        model=_resolve_pricing_model(MODEL_PRO),
-                    )
-                    if eval_res_pro and eval_res_pro.results:
-                        eval_res = eval_res_pro
-                        # Acumulamos uso de tokens de ambas llamadas.
-                        if usage_pro and usage:
-                            for k in ("promptTokenCount", "candidatesTokenCount", "totalTokenCount"):
-                                usage[k] = usage.get(k, 0) + usage_pro.get(k, 0)
-                        elif usage_pro:
-                            usage = usage_pro
+                    if _env_truthy(os.environ.get("ENABLE_PRO_PRICING")):
+                        self._emit(budget_id, 'tier_escalated', {
+                            "code": first_code,
+                            "from_tier": "flash",
+                            "to_tier": "pro",
+                            "reason": (
+                                f"flash devolvió match_kind={eval_res.results[0].valuation.match_kind} "
+                                f"needs_review={eval_res.results[0].valuation.needs_human_review} "
+                                f"→ re-tasando con Pro (ENABLE_PRO_PRICING=true)"
+                            ),
+                        })
+                        # Sprint 1 (S1-B-01) — reflect the escalation in the
+                        # tier map so the final telemetry attributes the partida
+                        # to Pro (the model that actually produced the result).
+                        for _task in task_group:
+                            _tier_per_code[_task["id"]] = {
+                                "tier": "pro",
+                                "reason": f"escalated from flash: {tier_reason}",
+                            }
+                        eval_res_pro, usage_pro = await self.llm.generate_structured(
+                            system_prompt=sys_prompt,
+                            user_prompt=user_prompt,
+                            response_schema=BatchPricingEvaluatorResultV3,
+                            temperature=0.0,
+                            model=MODEL_PRO,
+                        )
+                        if eval_res_pro and eval_res_pro.results:
+                            eval_res = eval_res_pro
+                            # Acumulamos uso de tokens de ambas llamadas.
+                            if usage_pro and usage:
+                                for k in ("promptTokenCount", "candidatesTokenCount", "totalTokenCount"):
+                                    usage[k] = usage.get(k, 0) + usage_pro.get(k, 0)
+                            elif usage_pro:
+                                usage = usage_pro
+                    else:
+                        # Sin opt-in, dejamos el resultado de Flash con su
+                        # ``needs_human_review`` para que el editor lo revise.
+                        self._emit(budget_id, 'tier_escalation_suppressed', {
+                            "code": first_code,
+                            "would_be_escalated_to": "pro",
+                            "match_kind": eval_res.results[0].valuation.match_kind,
+                            "needs_review": eval_res.results[0].valuation.needs_human_review,
+                            "reason": (
+                                "ENABLE_PRO_PRICING no activado; "
+                                "Flash resultado conservado para revisión manual"
+                            ),
+                        })
 
                 self._emit(budget_id, 'vector_search', {"query": f"Evaluación Matemática Grupo {chunk_idx + 1}/{len(grouped_tasks)} terminada."})
                 return eval_res, usage
@@ -1328,11 +1698,57 @@ class SwarmPricingService:
                     )
                     priced_partidas.append(partida)
 
-                    self._emit(budget_id, 'item_resolved', {"type": "PARTIDA", "item": partida.model_dump()})
+                    # S1-A-04 — calcular y exponer pricing_metadata por partida.
+                    # ``cost_usd`` se aproxima por diferencia del coste total
+                    # acumulado entre antes y después de procesar este item.
+                    # ``latency_ms`` desde que se inició la fase de pricing
+                    # para esta partida. Ambos best-effort: el coste real
+                    # depende de paralelismo de Gemini y puede ser ruidoso.
+                    pricing_metadata: Dict[str, Any] = {
+                        "cache_hit": False,
+                        "cost_usd": max(
+                            0.0,
+                            float(metrics.get("cost") or 0.0)
+                            - item_pre_call_cost.get(safe_code, 0.0),
+                        ),
+                        "latency_ms": int(
+                            (time.monotonic() - item_start_times.get(safe_code, time.monotonic()))
+                            * 1000
+                        ),
+                        "match_kind": val.match_kind,
+                        "confidence_score": confidence,
+                    }
+
+                    # Persistir en caché si confidence >= threshold.
+                    if self.pricing_cache is not None and not needs_human_review:
+                        try:
+                            persisted = await self.pricing_cache.persist(
+                                description=item.description,
+                                unit=item.unit,
+                                partida=partida.model_dump(),
+                                confidence_score=float(confidence) / 100.0 if confidence > 1 else float(confidence),
+                                match_kind=val.match_kind or "1:1",
+                            )
+                            if persisted:
+                                self._emit(budget_id, 'pricing_cache_persisted', {
+                                    "code": safe_code,
+                                    "confidence_score": float(confidence),
+                                })
+                        except Exception as cache_err:
+                            logger.warning(
+                                f"[cache] persist failed for {safe_code}: {cache_err}"
+                            )
+
+                    self._emit(budget_id, 'item_resolved', {
+                        "type": "PARTIDA",
+                        "item": partida.model_dump(),
+                        "pricing_metadata": pricing_metadata,
+                    })
 
                     # Sprint 1 (S1-B-01) — strongly-typed companion event the
                     # admin job-detail page consumes for cost/latency/quality
                     # KPIs. Kept additive next to the legacy `item_resolved`.
+                    # cost_usd/latency_ms/cache_hit ahora vienen reales de S1-A-04.
                     _chunk_usage = usage or {}
                     _tier_meta = _tier_per_code.get(safe_code, {})
                     _partida_telemetry = {
@@ -1341,15 +1757,14 @@ class SwarmPricingService:
                         'tier_reason': _tier_meta.get('reason'),
                         'tokens_in': _chunk_usage.get('promptTokenCount', 0),
                         'tokens_out': _chunk_usage.get('candidatesTokenCount', 0),
-                        'cost_usd': 0,         # TODO: connect to S1-A-04
-                        'latency_ms': 0,        # TODO: connect to S1-A-04
-                        'cache_hit': None,       # TODO: connect to S1-A-04
+                        'cost_usd': pricing_metadata['cost_usd'],
+                        'latency_ms': pricing_metadata['latency_ms'],
+                        'cache_hit': pricing_metadata['cache_hit'],
                         'match_kind': val.match_kind if val else None,
                         'confidence_score': confidence,
                     }
                     self._emit(budget_id, 'partida_resolved_v2', _partida_telemetry)
                     _resolved_telemetry.append(_partida_telemetry)
-
                     # P4.b — checkpoint hook. The use case persists the
                     # partida to Firestore so a retry can resume from here.
                     # Errors are logged but do NOT abort the swarm; the
@@ -1377,5 +1792,5 @@ class SwarmPricingService:
         self._emit(budget_id, 'batch_pricing_completed', {"query": "Swarm finalizado. Ensamblando Presupuesto Real..."})
         # Caller sees the full picture: resumed partidas (from prior attempts)
         # concatenated with newly resolved ones. Order: resumed first, then
-        # new, matching their original creation order.
-        return resume_from + priced_partidas
+        # cached (S1-A-04, no LLM cost), then newly resolved via LLM.
+        return resume_from + cached_partidas + priced_partidas

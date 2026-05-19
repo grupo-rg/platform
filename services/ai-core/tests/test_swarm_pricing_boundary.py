@@ -208,3 +208,84 @@ def test_evaluate_batch_skips_corrupt_item_and_emits_event(monkeypatch):
     assert len(skipped_events) == 1
     assert skipped_events[0]["data"]["code"] == "CORRUPT.1"
     assert "Simulated" in skipped_events[0]["data"]["reason"]
+
+
+# -------- Test 3: item_resolved carries pricing_metadata (S1-A-04) -----------
+
+
+def test_item_resolved_event_includes_pricing_metadata(monkeypatch):
+    """S1-A-04 — el evento `item_resolved` ahora siempre incluye un campo
+    `pricing_metadata` con cache_hit/cost_usd/latency_ms para que Agent B
+    pueda enriquecer `partida_resolved_v2`.
+    """
+    import asyncio
+
+    from src.budget.application.services.swarm_pricing_service import (
+        BatchPricedItemV3,
+        BatchPricingEvaluatorResultV3,
+        PricingFinalResultDB,
+        SwarmPricingService,
+    )
+    from src.budget.application.ports.ports import ILLMProvider, IVectorSearch
+
+    class _LLM(ILLMProvider):
+        async def generate_structured(self, system_prompt, user_prompt, response_schema, **kwargs):
+            name = response_schema.__name__
+            if name == "DeconstructResult":
+                return response_schema(is_complex=False, queries=["q"]), {}
+            if name == "BatchPricingEvaluatorResultV3":
+                return (
+                    BatchPricingEvaluatorResultV3(results=[
+                        BatchPricedItemV3(
+                            item_code="OK.1",
+                            valuation=PricingFinalResultDB(
+                                pensamiento_calculista="r",
+                                calculated_unit_price=20.0,
+                                needs_human_review=False,
+                                match_kind="1:1",
+                            ),
+                        ),
+                    ]),
+                    {"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15},
+                )
+            raise AssertionError(name)
+
+        async def get_embedding(self, text: str):
+            return [0.0] * 768
+
+    class _VS(IVectorSearch):
+        def search_similar_items(self, query_vector, query_text, limit=4, **kwargs):
+            return [{
+                "id": "C1", "code": "C1", "description": "x",
+                "matchScore": 0.95, "unit": "m2", "priceTotal": 20.0,
+            }]
+
+    monkeypatch.setattr(
+        SwarmPricingService,
+        "_load_prompt",
+        lambda self, filename, **kwargs: ("sys", "u"),
+    )
+
+    emitter = _SpyEmitter()
+    svc = SwarmPricingService(
+        llm_provider=_LLM(),
+        vector_search=_VS(),
+        emitter=emitter,
+    )
+    items = [RestructuredItem(
+        code="OK.1", description="d", quantity=1.0, unit="m2",
+        chapter="03 HORMIGONES",
+    )]
+    metrics: Dict[str, float] = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
+    asyncio.run(svc.evaluate_batch(items, budget_id="b-meta", metrics=metrics))
+
+    resolved = [e for e in emitter.events if e["type"] == "item_resolved"]
+    assert resolved, "Debe emitirse item_resolved"
+    meta = resolved[0]["data"].get("pricing_metadata")
+    assert isinstance(meta, dict)
+    assert "cache_hit" in meta
+    assert "cost_usd" in meta
+    assert "latency_ms" in meta
+    assert meta["cache_hit"] is False
+    assert isinstance(meta["latency_ms"], int)
+    assert meta["latency_ms"] >= 0

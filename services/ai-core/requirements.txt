@@ -11,3 +11,13 @@ python-multipart>=0.0.9
 PyMuPDF>=1.24.0
 google-cloud-run>=0.10.0
 google-cloud-storage>=2.18.0
+# S1-A-02 — BM25 in-memory para HybridCatalogSearch.
+rank-bm25==0.2.2
+# S1-A-03 — Cross-encoder reranker (BAAI/bge-reranker-v2-m3) local.
+# Importante: `torch` se instala como wheel CPU-only desde
+# https://download.pytorch.org/whl/cpu para que la imagen Docker no incluya
+# el runtime CUDA (~1.5GB). Ver instrucciones en services/ai-core/Dockerfile.
+sentence-transformers==3.0.1
+# Pin a la versión CPU-only de torch para `sentence-transformers`. En entornos
+# de desarrollo locales puede aceptarse el wheel default (con CUDA opcional).
+torch==2.3.0
