@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 import json
@@ -13,6 +14,62 @@ from src.budget.application.ports.ports import ILLMProvider
 from src.budget.domain.exceptions import AIProviderError
 
 logger = logging.getLogger(__name__)
+
+
+# S1-A-06 — defaults para el timeout y los retries por llamada LLM.
+# Antes del Sprint 1 el adapter sólo tenía `httpx timeout=300s` total (incluyendo
+# todos los retries), y `max_retries=5` por defecto. El incidente 2026-05-18
+# reveló que un retry colgado bloquea un slot del semaphore indefinidamente.
+# Solución: timeout duro por intento + max_retries explícito y bajo.
+_DEFAULT_LLM_CALL_TIMEOUT_SECONDS: float = 60.0
+_DEFAULT_LLM_CALL_MAX_RETRIES: int = 2
+
+
+def _read_llm_call_timeout_seconds() -> float:
+    """Lee `LLM_CALL_TIMEOUT_SECONDS` del entorno; usa default si no está set
+    o si el valor es inválido. Acepta floats (3.5) o ints (60).
+    """
+    raw = (os.environ.get("LLM_CALL_TIMEOUT_SECONDS") or "").strip()
+    if not raw:
+        return _DEFAULT_LLM_CALL_TIMEOUT_SECONDS
+    try:
+        v = float(raw)
+        # Sanity: rechaza valores absurdos (≤0 o >600). Cae a default.
+        if v <= 0 or v > 600:
+            logger.warning(
+                "LLM_CALL_TIMEOUT_SECONDS=%s fuera de rango (0,600]; usando default %.1f",
+                raw, _DEFAULT_LLM_CALL_TIMEOUT_SECONDS,
+            )
+            return _DEFAULT_LLM_CALL_TIMEOUT_SECONDS
+        return v
+    except ValueError:
+        logger.warning(
+            "LLM_CALL_TIMEOUT_SECONDS=%s no es float válido; usando default %.1f",
+            raw, _DEFAULT_LLM_CALL_TIMEOUT_SECONDS,
+        )
+        return _DEFAULT_LLM_CALL_TIMEOUT_SECONDS
+
+
+def _read_llm_call_max_retries() -> int:
+    """Lee `LLM_CALL_MAX_RETRIES` del entorno; default = 2."""
+    raw = (os.environ.get("LLM_CALL_MAX_RETRIES") or "").strip()
+    if not raw:
+        return _DEFAULT_LLM_CALL_MAX_RETRIES
+    try:
+        v = int(raw)
+        if v < 1 or v > 10:
+            logger.warning(
+                "LLM_CALL_MAX_RETRIES=%s fuera de rango [1,10]; usando default %d",
+                raw, _DEFAULT_LLM_CALL_MAX_RETRIES,
+            )
+            return _DEFAULT_LLM_CALL_MAX_RETRIES
+        return v
+    except ValueError:
+        logger.warning(
+            "LLM_CALL_MAX_RETRIES=%s no es int válido; usando default %d",
+            raw, _DEFAULT_LLM_CALL_MAX_RETRIES,
+        )
+        return _DEFAULT_LLM_CALL_MAX_RETRIES
 
 
 def _salvage_truncated_json(raw: str, schema: Type[BaseModel]) -> tuple[Optional[BaseModel], int]:
@@ -91,17 +148,32 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
     Uses native GCP Service Account OAuth2 Authentication for 99.9% SLA guarantees.
     """
     
-    def __init__(self, model_name: str = 'gemini-2.5-flash', max_retries: int = 5, base_delay: float = 2.0):
+    def __init__(
+        self,
+        model_name: str = 'gemini-2.5-flash',
+        max_retries: Optional[int] = None,
+        base_delay: float = 2.0,
+        per_call_timeout_seconds: Optional[float] = None,
+    ):
         self.api_key = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("GOOGLE_GENAI_API_KEY environment variable missing.")
-            
+
         from google import genai
         self.genai_client = genai.Client(api_key=self.api_key)
-        
+
         self.model_name = model_name
-        self.max_retries = max_retries
+        # S1-A-06 — defaults configurables vía env vars. Las llamadas pueden
+        # seguir pasando un override explícito (tests).
+        self.max_retries = (
+            max_retries if max_retries is not None else _read_llm_call_max_retries()
+        )
         self.base_delay = base_delay
+        self.per_call_timeout_seconds = (
+            per_call_timeout_seconds
+            if per_call_timeout_seconds is not None
+            else _read_llm_call_timeout_seconds()
+        )
 
     async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: Type[BaseModel], temperature: float = 0.2, model: str = "gemini-2.5-flash", image_base64: Optional[str] = None, max_output_tokens: int = 32768) -> tuple[BaseModel, Dict[str, int]]:
         """
@@ -157,13 +229,23 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
             usage_metadata: Dict[str, Any] = {}
             try:
                 headers = {'Content-Type': 'application/json'}
-                
+
                 logger.debug(f"Calling GenAI API {model} (Attempt {attempt + 1}/{self.max_retries})...")
-                
+
                 limits = httpx.Limits(max_keepalive_connections=0, keepalive_expiry=0)
+                # S1-A-06 — per-call timeout via `asyncio.wait_for`. Sin esto,
+                # un retry interno de httpx/genai puede bloquear el slot del
+                # semaphore del swarm indefinidamente (incidente 2026-05-18).
+                # Cuando el timeout expira lanzamos `asyncio.TimeoutError` que
+                # captura el `except` específico de abajo y degrada el retry
+                # según política (loggear + intentar de nuevo o salir).
+                call_started_at = time.monotonic()
                 async with httpx.AsyncClient(timeout=300.0, limits=limits, http2=False) as client:
-                    response = await client.post(url, json=payload, headers=headers)
-                
+                    response = await asyncio.wait_for(
+                        client.post(url, json=payload, headers=headers),
+                        timeout=self.per_call_timeout_seconds,
+                    )
+
                 if response.status_code in [400, 401, 403, 404]:
                     raise AIProviderError(f"Terminal API Error {response.status_code} on GenAI API: {response.text}")
                     
@@ -202,6 +284,17 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                 parsed = response_schema.model_validate_json(raw_json)
                 return parsed, usage_metadata
                 
+            except asyncio.TimeoutError:
+                # S1-A-06 — per-call timeout. Loggeamos elapsed real para que el
+                # operador pueda calibrar `LLM_CALL_TIMEOUT_SECONDS`. Marcamos
+                # con un prefijo claro para grep en Cloud Logging.
+                elapsed = time.monotonic() - call_started_at
+                error_str = (
+                    f"llm_call_timeout: model={model} elapsed={elapsed:.1f}s "
+                    f"> timeout={self.per_call_timeout_seconds:.1f}s "
+                    f"(attempt {attempt + 1}/{self.max_retries})"
+                )
+                logger.warning(error_str)
             except httpx.HTTPError as e:
                 error_str = f"HTTP Error: {str(e)}"
                 logger.error(f"GenAI API REST Error: {error_str}")
