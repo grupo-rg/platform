@@ -143,8 +143,13 @@ def test_partial_failure_across_multiple_pages_is_resilient():
 
 
 def test_extractor_uses_temperature_0_15_and_16k_tokens_on_primary_call():
-    """La llamada principal del extractor debe usar los valores nuevos del plan
-    (anti-determinismo + más colchón de tokens)."""
+    """S2-A-03: la llamada principal del extractor debe usar temperature=0.0
+    (determinismo entre runs) y max_output_tokens=16384 (anti-truncamiento).
+
+    Antes (Sprint 1) era 0.15 ("anti-determinismo en retries"); S2-A-03 lo
+    baja a 0.0 porque la entropía costaba reproducibilidad sin beneficio
+    medible (el salvage del adapter cubre el truncamiento).
+    """
 
     captured_calls: List[Dict[str, Any]] = []
 
@@ -167,10 +172,10 @@ def test_extractor_uses_temperature_0_15_and_16k_tokens_on_primary_call():
         metrics={"prompt": 0, "completion": 0, "total": 0, "cost": 0.0},
     ))
 
-    # La primera llamada (schema completo) debe traer temperature=0.15 y max_output_tokens=16384
+    # La primera llamada (schema completo) debe traer temperature=0.0 y max_output_tokens=16384
     primary = captured_calls[0]
     assert primary["schema"] is RestructureChunkResult
-    assert primary["temperature"] == 0.15
+    assert primary["temperature"] == 0.0
     assert primary["max_output_tokens"] == 16384
 
 

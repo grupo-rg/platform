@@ -81,9 +81,11 @@ def test_annexed_declares_concurrency_equal_to_inline() -> None:
 
 
 def test_annexed_declares_temperature_equal_to_inline() -> None:
-    """La misma temperatura 0.15 que INLINE rompe el determinismo del
-    truncamiento en retries sin comprometer la precisión."""
-    assert AnnexedPdfExtractorService.TEMPERATURE == 0.15
+    """S2-A-03 — temperature=0.0 para determinismo entre runs del mismo PDF.
+    Antes era 0.15 ("para romper el truncamiento en retries"); con
+    `max_output_tokens=16384` + salvage del adapter, el truncamiento es raro,
+    y el coste de la entropía (cambiar `code[]` entre runs) lo superaba."""
+    assert AnnexedPdfExtractorService.TEMPERATURE == 0.0
 
 
 def test_annexed_declares_max_output_tokens_equal_to_inline() -> None:
