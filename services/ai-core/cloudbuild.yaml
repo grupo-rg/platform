@@ -31,7 +31,15 @@ substitutions:
   _REGION: europe-southwest1
   _SERVICE_NAME: ai-core
   _JOB_NAME: ai-core-worker
-  _SERVICE_MEMORY: "1Gi"
+  # 2Gi is the persistent floor after P5.a removed INLINE BackgroundTasks.
+  # The Service is now a pure HTTP dispatcher (upload PDF to GCS → create
+  # Firestore PipelineJob → spawn Cloud Run Job), so 2Gi covers the FastAPI
+  # process + Firebase Admin SDK headroom + brief PDF buffer (≤100MB) during
+  # the upload. The heavy swarm/catalog/reranker resides ONLY in the Job
+  # worker (`_JOB_MEMORY`). Without this flag the deploy step inherits
+  # whatever the Service had previously — set explicitly so re-deploys never
+  # silently drop below the floor.
+  _SERVICE_MEMORY: "2Gi"
   _SERVICE_CPU: "1"
   _SERVICE_TIMEOUT: "60s"
   _JOB_MEMORY: "2Gi"

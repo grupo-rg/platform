@@ -45,6 +45,30 @@ class IPdfStorage(ABC):
     async def get_metadata(self, gcs_uri: str) -> PdfMetadata:
         """Cheap HEAD-like call. Used for sanity checks and logging."""
 
+    @abstractmethod
+    async def upload_pdf(
+        self,
+        *,
+        uid: str,
+        job_id: str,
+        filename: str,
+        pdf_bytes: bytes,
+        content_type: str = "application/pdf",
+    ) -> str:
+        """Upload PDF bytes to the pipeline_uploads bucket and return its
+        `gs://bucket/path` URI.
+
+        The object path is `pipeline_uploads/{uid}/{job_id}/{filename}` to
+        mirror the client-side uploader (`storage-uploader.ts`). Keeping the
+        layout identical means the Storage rules apply uniformly whether the
+        PDF was uploaded by the browser or by the dispatcher.
+
+        Used by the HTTP dispatcher when the legacy endpoints
+        (`/api/v1/jobs/measurements`, `/api/v1/budget/vision-extract`)
+        receive a PDF synchronously and need to hand it off to the Cloud
+        Run Job worker without keeping it in the Service's memory.
+        """
+
 
 class PdfStorageError(Exception):
     """Wraps any cloud-side failure (size cap exceeded, permission denied,

@@ -122,7 +122,16 @@ from src.budget.application.services.budget_metadata_extractor import (
     BudgetMetadataExtractor,
     ExtractedBudgetMetadata,
 )
+from src.pipeline_jobs.application.ports.job_executor import (
+    IJobExecutor,
+    JobExecutorError,
+)
+from src.pipeline_jobs.application.ports.job_repository import (
+    IPipelineJobRepository,
+)
 from src.pipeline_jobs.application.ports.pdf_storage import IPdfStorage
+from src.pipeline_jobs.domain.entities import JobType, PipelineJob
+import uuid
 
 app.include_router(_build_dispatch_router())
 # The dispatch_router declares its own get_* stubs that raise NotImplementedError.
@@ -150,132 +159,308 @@ class VisionExtractRequest(BaseModel):
     budget_id: Optional[str] = None
     strategy: str = "ANNEXED"
 
-def download_and_convert_pdf(url: str):
-    """Devuelve `(raw_items, pdf_bytes)` — los bytes se conservan para que el
-    pipeline INLINE pueda intentar el fast path heurístico (Fase 9.2)."""
+def _download_pdf_bytes_from_url(url: str) -> bytes:
+    """Fetch a PDF over HTTP and return its raw bytes.
+
+    Used by the vision-extract endpoint to hand the file off to GCS. We
+    deliberately do NOT render images here — that work is the Job worker's
+    job. Keeping this path in pure-bytes mode means the Cloud Run Service
+    never holds more than the raw PDF in memory (≤100MB by policy)."""
     response = requests.get(url)
     response.raise_for_status()
-    pdf_bytes = response.content
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    total_pages = doc.page_count
-
-    raw_items = []
-    logger.info(f"Descargado PDF de {total_pages} páginas. Iniciando renderizado Fitz a base64...")
-    for p in range(total_pages):
-        page = doc.load_page(p)
-        matrix = fitz.Matrix(150 / 72, 150 / 72)
-        pix = page.get_pixmap(matrix=matrix)
-        img_data = pix.tobytes("png")
-        b64 = base64.b64encode(img_data).decode('utf-8')
-
-        # Heurística simple: Última mitad de páginas suele ser sumatorios en formato BC3/Presto
-        is_summatory = True if p >= (total_pages / 2) else False
-        raw_items.append({"image_base64": b64, "page_number": p, "is_summatory": is_summatory})
-
-    doc.close()
-    return raw_items, pdf_bytes
+    return response.content
 
 @app.post("/api/v1/budget/vision-extract")
 async def process_vision_budget(
-    background_tasks: BackgroundTasks,
     payload: VisionExtractRequest,
-    restructure_uc: RestructureBudgetUseCase = Depends(get_restructure_budget_uc)
+    storage: IPdfStorage = Depends(_deps_get_pdf_storage),
+    repo: IPipelineJobRepository = Depends(_deps_get_pipeline_job_repository),
+    executor: IJobExecutor = Depends(_deps_get_job_executor),
+    worker_job_name: str = Depends(_deps_get_worker_job_name),
 ):
+    """Legacy JSON endpoint: receives a `pdf_url`, dispatches to the Job worker.
+
+    Refactored (P5.a) for the same OOM reason as `/api/v1/jobs/measurements`.
+    Steps:
+
+      1. Download the PDF bytes from `pdf_url` (no Fitz rendering — the Job
+         worker re-renders inside its own 2GiB process).
+      2. Upload those bytes to GCS via `IPdfStorage.upload_pdf`.
+      3. Create a `pipeline_jobs/{jobId}` doc with jobType=`vision-extract`.
+      4. Dispatch the Cloud Run Job.
+      5. Return 202 with `{status, jobId, leadId, budgetId}`.
+    """
+    job_id = str(uuid.uuid4())
+    budget_id_value = (payload.budget_id or "").strip() or job_id
+    uid = (payload.lead_id or "").strip() or "anonymous"
+
+    # 1. Download bytes from the source URL.
     try:
-        # Descarga y conversión sníncrona inicial
-        raw_items, pdf_bytes_for_pipeline = download_and_convert_pdf(payload.pdf_url)
-        logger.info(f"Generados {len(raw_items)} chunks de página visuales.")
-
-        async def run_ai_vision_job():
-            try:
-                logger.info("Background AI Vision Job Started.")
-                await restructure_uc.execute(
-                    raw_items, lead_id=payload.lead_id, budget_id=payload.budget_id,
-                    strategy=payload.strategy, pdf_bytes=pdf_bytes_for_pipeline,
-                )
-                logger.info("Background AI Vision Job Completed Successfully.")
-            except Exception as e:
-                logger.error(f"Background AI Vision Job Failed: {e}")
-                import traceback
-                traceback.print_exc()
-
-        background_tasks.add_task(run_ai_vision_job)
-        return JSONResponse(status_code=202, content={
-            "status": "processing", 
-            "message": "AI Vision Pipeline Started in background.",
-            "leadId": payload.lead_id
-        })
+        pdf_bytes = _download_pdf_bytes_from_url(payload.pdf_url)
     except Exception as e:
-        logger.error(f"Failed to start vision pipeline: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(
+            "vision_extract_url_fetch_failed",
+            extra={"pdfUrl": payload.pdf_url, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=400, detail=f"Failed to fetch PDF from URL: {e}"
+        )
+
+    if not pdf_bytes:
+        raise HTTPException(
+            status_code=400, detail="Empty PDF body fetched from URL"
+        )
+
+    # Derive a stable filename from the URL — fall back to "{jobId}.pdf".
+    try:
+        from urllib.parse import urlparse
+
+        url_path = urlparse(payload.pdf_url).path or ""
+        filename = url_path.rsplit("/", 1)[-1].strip()
+    except Exception:
+        filename = ""
+    if not filename.lower().endswith(".pdf"):
+        filename = f"{job_id}.pdf"
+
+    # 2. Upload to GCS.
+    try:
+        gcs_uri = await storage.upload_pdf(
+            uid=uid,
+            job_id=job_id,
+            filename=filename,
+            pdf_bytes=pdf_bytes,
+        )
+    except Exception as e:
+        logger.error(
+            "vision_extract_upload_failed",
+            extra={"jobId": job_id, "uid": uid, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to upload PDF to GCS: {e}"
+        )
+
+    # 3. Persist PipelineJob entity.
+    job = PipelineJob.new(
+        jobId=job_id,
+        jobType=JobType.VISION_EXTRACT,
+        leadId=payload.lead_id,
+        budgetId=budget_id_value,
+        uid=uid,
+        payload={
+            "gcsUri": gcs_uri,
+            "strategy": (payload.strategy or "ANNEXED").upper(),
+            "filename": filename,
+            "sourceUrl": payload.pdf_url,
+        },
+    )
+    try:
+        await repo.create(job)
+    except Exception as e:
+        logger.error(
+            "vision_extract_create_job_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to persist pipeline job: {e}"
+        )
+    logger.info(
+        "vision_extract_dispatch_queued",
+        extra={
+            "jobId": job_id,
+            "budgetId": budget_id_value,
+            "leadId": payload.lead_id,
+            "strategy": payload.strategy,
+            "gcsUri": gcs_uri,
+        },
+    )
+
+    # 4. Spawn Cloud Run Job execution. Same failure handling as the
+    #    measurements endpoint and the dispatch_router happy path.
+    try:
+        execution_name = await executor.run_execution(
+            job_name=worker_job_name,
+            env_overrides={"JOB_ID": job_id},
+        )
+    except JobExecutorError as e:
+        try:
+            await repo.mark_dispatch_failed(
+                job_id,
+                error_message=str(e),
+                error_type=type(e).__name__,
+            )
+        except Exception:
+            logger.exception(
+                "vision_extract_mark_failed_error",
+                extra={"jobId": job_id},
+            )
+        logger.error(
+            "vision_extract_executor_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start Cloud Run Job: {e}",
+        )
+
+    await repo.attach_execution_name(job_id, execution_name)
+    logger.info(
+        "vision_extract_dispatch_started",
+        extra={"jobId": job_id, "executionName": execution_name},
+    )
+
+    return JSONResponse(status_code=202, content={
+        "status": "processing",
+        "message": (
+            "Vision-extract pipeline dispatched to Cloud Run Job worker."
+        ),
+        "jobId": job_id,
+        "leadId": payload.lead_id,
+        "budgetId": budget_id_value,
+    })
 
 @app.post("/api/v1/jobs/measurements")
 async def process_measurement_job(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     leadId: str = Form("anonymous"),
     budgetId: str = Form(None),
     strategy: str = Form("ANNEXED"),
-    restructure_uc: RestructureBudgetUseCase = Depends(get_restructure_budget_uc)
+    storage: IPdfStorage = Depends(_deps_get_pdf_storage),
+    repo: IPipelineJobRepository = Depends(_deps_get_pipeline_job_repository),
+    executor: IJobExecutor = Depends(_deps_get_job_executor),
+    worker_job_name: str = Depends(_deps_get_worker_job_name),
 ):
+    """Legacy `multipart/form-data` PDF endpoint.
+
+    Refactored (P5.a) to stop running the budget pipeline inside the Service
+    via BackgroundTasks — that approach OOM-killed the Cloud Run Service even
+    with 8GiB because the Sprint 1 swarm now keeps the BGE reranker + the
+    1,661-item catalog resident. We instead:
+
+      1. Materialise the PDF bytes in memory just long enough to upload them
+         to the `pipeline_uploads` bucket.
+      2. Create a `pipeline_jobs/{jobId}` Firestore doc with jobType=
+         `measurements` and payload `{gcsUri, strategy, ...}`.
+      3. Dispatch a fresh execution of the `ai-core-worker` Cloud Run Job
+         with `JOB_ID={jobId}` so the worker picks it up.
+      4. Return 202 with `{status, jobId, message, leadId, budgetId}` so the
+         UI keeps the existing wire shape (`budgetId`, `leadId` preserved).
+
+    Heavy work (Fitz page rendering, Gemini swarm) now lives in the Job
+    worker, which has its own 2GiB memory budget isolated from the Service.
     """
-    1. Spatial PDF Extraction (Synchronous Conversion to Mapped Images via Fitz)
-    2. Spawns Background AI Job (Asynchronous) into Map-Reduce 'ANNEXED' workflow.
-    Returns 202 Accepted instantly.
-    """
-    if not file.filename.endswith(".pdf"):
+    if not file.filename or not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     try:
         pdf_bytes = await file.read()
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        total_pages = doc.page_count
-        
-        raw_items = []
-        logger.info(f"Recibido archivo {file.filename} ({total_pages} páginas). Convirtiendo PDF a imágenes B64...")
-        for p in range(total_pages):
-            page = doc.load_page(p)
-            matrix = fitz.Matrix(150 / 72, 150 / 72)
-            pix = page.get_pixmap(matrix=matrix)
-            img_data = pix.tobytes("png")
-            b64 = base64.b64encode(img_data).decode('utf-8')
-            
-            # Heurística temporal general para separar cuadros de texto de sumatorios BC3
-            is_summatory = True if p >= (total_pages / 2) else False
-            raw_items.append({"image_base64": b64, "page_number": p, "is_summatory": is_summatory})
-            
-        doc.close()
-        logger.info(f"Generados {len(raw_items)} visual chunks en memoria. Traspasando trabajo pesado a worker Asíncrono.")
-
-        # Fase 9.2 — pasamos los bytes del PDF al pipeline para habilitar el
-        # fast path heurístico del INLINE extractor. ANNEXED ignora el kwarg.
-        pdf_bytes_for_pipeline = pdf_bytes
-
-        async def run_ai_vision_job():
-            try:
-                logger.info(f"Swarm Pricing Strategy: {strategy} ({len(raw_items)} chunks) INICIANDO...")
-                await restructure_uc.execute(
-                    raw_items, lead_id=leadId, budget_id=budgetId, strategy=strategy,
-                    pdf_bytes=pdf_bytes_for_pipeline,
-                )
-                logger.info("🎉 Background AI Budget Processing Exitóso!")
-            except Exception as e:
-                logger.error(f"Background AI Job Failed: {e}")
-                import traceback
-                traceback.print_exc()
-            
-        background_tasks.add_task(run_ai_vision_job)
-
-        return JSONResponse(status_code=202, content={
-            "status": "processing",
-            "message": "NexoAI Vision Swarm is now deconstructing the PDF budget.",
-            "leadId": leadId,
-            "budgetId": budgetId
-        })
-
     except Exception as e:
-         logger.error(f"Error procesando PDF: {e}")
-         raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to read uploaded PDF: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
+
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Empty PDF body")
+
+    job_id = str(uuid.uuid4())
+    budget_id_value = (budgetId or "").strip() or job_id
+    # Use `leadId` as `uid` until the frontend passes a real auth uid — this
+    # mirrors the placeholder that Next.js currently sends (`leadId="admin-user"`).
+    uid = (leadId or "").strip() or "anonymous"
+
+    # 1. Upload the PDF to GCS so the worker can fetch it.
+    try:
+        gcs_uri = await storage.upload_pdf(
+            uid=uid,
+            job_id=job_id,
+            filename=file.filename,
+            pdf_bytes=pdf_bytes,
+        )
+    except Exception as e:
+        logger.error(
+            "measurements_dispatch_upload_failed",
+            extra={"jobId": job_id, "uid": uid, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to upload PDF to GCS: {e}"
+        )
+
+    # 2. Persist the PipelineJob entity. Worker reads this when JOB_ID arrives.
+    job = PipelineJob.new(
+        jobId=job_id,
+        jobType=JobType.MEASUREMENTS,
+        leadId=leadId,
+        budgetId=budget_id_value,
+        uid=uid,
+        payload={
+            "gcsUri": gcs_uri,
+            "strategy": (strategy or "ANNEXED").upper(),
+            "filename": file.filename,
+        },
+    )
+    try:
+        await repo.create(job)
+    except Exception as e:
+        logger.error(
+            "measurements_dispatch_create_job_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to persist pipeline job: {e}"
+        )
+    logger.info(
+        "measurements_dispatch_queued",
+        extra={
+            "jobId": job_id,
+            "budgetId": budget_id_value,
+            "leadId": leadId,
+            "strategy": strategy,
+            "gcsUri": gcs_uri,
+        },
+    )
+
+    # 3. Spawn a Cloud Run Jobs execution. If the executor refuses, mark the
+    #    job as `failed` so the UI surfaces a real error instead of a phantom
+    #    `queued` job. Pattern lifted from `dispatch_router.dispatch`.
+    try:
+        execution_name = await executor.run_execution(
+            job_name=worker_job_name,
+            env_overrides={"JOB_ID": job_id},
+        )
+    except JobExecutorError as e:
+        try:
+            await repo.mark_dispatch_failed(
+                job_id,
+                error_message=str(e),
+                error_type=type(e).__name__,
+            )
+        except Exception:
+            logger.exception(
+                "measurements_dispatch_mark_failed_error",
+                extra={"jobId": job_id},
+            )
+        logger.error(
+            "measurements_dispatch_executor_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start Cloud Run Job: {e}",
+        )
+
+    await repo.attach_execution_name(job_id, execution_name)
+    logger.info(
+        "measurements_dispatch_started",
+        extra={"jobId": job_id, "executionName": execution_name},
+    )
+
+    return JSONResponse(status_code=202, content={
+        "status": "processing",
+        "message": (
+            "Measurements pipeline dispatched to Cloud Run Job worker."
+        ),
+        "jobId": job_id,
+        "leadId": leadId,
+        "budgetId": budget_id_value,
+    })
 
 
 # -----------------------------------------------------------------------------
@@ -295,46 +480,106 @@ class NlBudgetRequest(BaseModel):
 
 @app.post("/api/v1/jobs/nl-budget")
 async def process_nl_budget_job(
-    background_tasks: BackgroundTasks,
     payload: NlBudgetRequest,
-    nl_uc: GenerateBudgetFromNlUseCase = Depends(get_generate_budget_from_nl_uc),
+    repo: IPipelineJobRepository = Depends(_deps_get_pipeline_job_repository),
+    executor: IJobExecutor = Depends(_deps_get_job_executor),
+    worker_job_name: str = Depends(_deps_get_worker_job_name),
 ):
-    """
-    Dispara el pipeline NL → Budget (Architect → SwarmPricing → Assembly).
-    Responde 202 inmediatamente; la telemetría llega al UI vía Firestore
-    pipeline_telemetry/{budgetId}/events.
+    """Legacy NL → Budget endpoint.
+
+    Refactored (P5.a) to stop running `GenerateBudgetFromNlUseCase` inline
+    via BackgroundTasks. Same OOM rationale as the PDF endpoints: the
+    SwarmPricing service keeps BGE reranker + catalog resident, so even
+    no-PDF NL jobs spike memory above the Service quota.
+
+    Steps:
+      1. Create `pipeline_jobs/{jobId}` with jobType=`nl-budget` and payload
+         `{narrative, clientName, budgetTitle}`.
+      2. Dispatch a Cloud Run Jobs execution of `ai-core-worker`.
+      3. Return 202.
+
+    Telemetry continues to land on `pipeline_telemetry/{jobId}/events` —
+    the Worker emits the same events as the old BackgroundTasks path.
     """
     if not payload.narrative or len(payload.narrative.strip()) < 10:
         raise HTTPException(status_code=400, detail="narrative demasiado corta")
 
-    async def run_nl_job():
-        try:
-            logger.info(f"[NL→Budget] Starting job for lead={payload.leadId} budget={payload.budgetId}")
-            await nl_uc.execute(
-                narrative=payload.narrative,
-                lead_id=payload.leadId,
-                budget_id=payload.budgetId,
-                client_name=(payload.clientName or "").strip() or None,
-                budget_title=(payload.budgetTitle or "").strip() or None,
-            )
-            logger.info(f"[NL→Budget] Completed job budget={payload.budgetId}")
-        except AskingForClarificationError as asking:
-            logger.info(f"[NL→Budget] Architect asks: {asking.question}")
-            # No hay forma limpia de devolver la pregunta al cliente una vez el
-            # request ya respondió 202. Dejamos el evento extraction_failed_chunk
-            # que el use case emitió; la UI lo pintará como error con el texto.
-        except Exception as e:
-            logger.error(f"[NL→Budget] Job failed: {e}")
-            import traceback
-            traceback.print_exc()
+    job_id = str(uuid.uuid4())
+    budget_id_value = (payload.budgetId or "").strip() or job_id
+    uid = (payload.leadId or "").strip() or "anonymous"
 
-    background_tasks.add_task(run_nl_job)
+    # 1. Persist PipelineJob entity.
+    job = PipelineJob.new(
+        jobId=job_id,
+        jobType=JobType.NL_BUDGET,
+        leadId=payload.leadId,
+        budgetId=budget_id_value,
+        uid=uid,
+        payload={
+            "narrative": payload.narrative,
+            "clientName": (payload.clientName or "").strip() or None,
+            "budgetTitle": (payload.budgetTitle or "").strip() or None,
+        },
+    )
+    try:
+        await repo.create(job)
+    except Exception as e:
+        logger.error(
+            "nl_budget_create_job_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to persist pipeline job: {e}"
+        )
+    logger.info(
+        "nl_budget_dispatch_queued",
+        extra={
+            "jobId": job_id,
+            "budgetId": budget_id_value,
+            "leadId": payload.leadId,
+            "narrativeLen": len(payload.narrative),
+        },
+    )
+
+    # 2. Dispatch worker.
+    try:
+        execution_name = await executor.run_execution(
+            job_name=worker_job_name,
+            env_overrides={"JOB_ID": job_id},
+        )
+    except JobExecutorError as e:
+        try:
+            await repo.mark_dispatch_failed(
+                job_id,
+                error_message=str(e),
+                error_type=type(e).__name__,
+            )
+        except Exception:
+            logger.exception(
+                "nl_budget_mark_failed_error",
+                extra={"jobId": job_id},
+            )
+        logger.error(
+            "nl_budget_executor_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start Cloud Run Job: {e}",
+        )
+
+    await repo.attach_execution_name(job_id, execution_name)
+    logger.info(
+        "nl_budget_dispatch_started",
+        extra={"jobId": job_id, "executionName": execution_name},
+    )
 
     return JSONResponse(status_code=202, content={
         "status": "processing",
-        "message": "NL → Budget pipeline started.",
+        "message": "NL → Budget pipeline dispatched to Cloud Run Job worker.",
+        "jobId": job_id,
         "leadId": payload.leadId,
-        "budgetId": payload.budgetId,
+        "budgetId": budget_id_value,
     })
 
 
