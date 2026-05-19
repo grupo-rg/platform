@@ -1,11 +1,12 @@
 import asyncio
+import collections
 import os
 import time
 import json
 import logging
 import re
 import httpx
-from typing import Dict, Any, Type, Optional, List
+from typing import Deque, Dict, Any, Type, Optional, List
 from pydantic import BaseModel, ValidationError
 
 
@@ -14,6 +15,131 @@ from src.budget.application.ports.ports import ILLMProvider
 from src.budget.domain.exceptions import AIProviderError
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# S2-A-02 — Circuit breaker para Gemini.
+#
+# Objetivo: si Gemini falla repetidamente (>3 fallos en 5 min), abrimos el
+# circuit para no quemar más tokens en una API rota. Durante 2 min en
+# `degraded`, todas las llamadas devuelven None inmediatamente. Tras 2 min,
+# probamos una call ("half-open"); si OK → `healthy`, si falla → reset el
+# período de 2 min.
+#
+# Estados:
+#   healthy: comportamiento normal.
+#   degraded: las llamadas devuelven None sin tocar la API.
+#   half_open: la próxima call será la única que llegue a la API; si
+#     funciona pasamos a healthy, si falla volvemos a degraded.
+#
+# Compartido entre instancias (módulo-level) porque DI usa un singleton del
+# adapter. Si hay tests paralelos que necesitan aislamiento, usar
+# `_reset_circuit_for_tests`.
+# ---------------------------------------------------------------------------
+
+
+CIRCUIT_HEALTHY = "healthy"
+CIRCUIT_DEGRADED = "degraded"
+CIRCUIT_HALF_OPEN = "half_open"
+
+# Ventana en la que contamos fallos consecutivos antes de abrir el circuit.
+_CIRCUIT_FAILURE_WINDOW_SECONDS: float = 300.0  # 5 min
+# Número de fallos en la ventana para abrir el circuit.
+_CIRCUIT_FAILURE_THRESHOLD: int = 3
+# Tiempo que mantenemos el circuit `degraded` antes de pasar a `half_open`.
+_CIRCUIT_OPEN_DURATION_SECONDS: float = 120.0  # 2 min
+
+
+class _CircuitBreaker:
+    """Stateful breaker compartido vía singleton de módulo.
+
+    Thread-unsafe deliberadamente (asyncio single-thread). Cualquier acceso
+    es desde el event loop principal del worker.
+    """
+
+    def __init__(self) -> None:
+        # Timestamps de los últimos fallos. Sólo guardamos los más recientes
+        # (deque con maxlen=20 — suficiente para la ventana de 5 min).
+        self.failure_timestamps: Deque[float] = collections.deque(maxlen=20)
+        self.state: str = CIRCUIT_HEALTHY
+        # Cuándo entramos a `degraded`. Usado para decidir half-open transition.
+        self.opened_at: float = 0.0
+
+    def record_success(self) -> None:
+        """Llamada exitosa: limpia el historial y vuelve a healthy."""
+        self.failure_timestamps.clear()
+        if self.state != CIRCUIT_HEALTHY:
+            logger.info(
+                f"[circuit_breaker] success in state={self.state!r}; "
+                f"transitioning to healthy"
+            )
+        self.state = CIRCUIT_HEALTHY
+        self.opened_at = 0.0
+
+    def record_failure(self) -> None:
+        """Llamada fallida: graba timestamp y, si supera el threshold dentro
+        de la ventana, abre el circuit."""
+        now = time.monotonic()
+        # Garbage-collect timestamps fuera de la ventana antes de añadir.
+        cutoff = now - _CIRCUIT_FAILURE_WINDOW_SECONDS
+        while self.failure_timestamps and self.failure_timestamps[0] < cutoff:
+            self.failure_timestamps.popleft()
+        self.failure_timestamps.append(now)
+
+        if (
+            self.state in (CIRCUIT_HEALTHY, CIRCUIT_HALF_OPEN)
+            and len(self.failure_timestamps) >= _CIRCUIT_FAILURE_THRESHOLD
+        ):
+            # Abrimos el circuit.
+            self.state = CIRCUIT_DEGRADED
+            self.opened_at = now
+            logger.warning(
+                f"[circuit_breaker] OPEN — {len(self.failure_timestamps)} failures "
+                f"in last {_CIRCUIT_FAILURE_WINDOW_SECONDS:.0f}s; entering degraded "
+                f"for {_CIRCUIT_OPEN_DURATION_SECONDS:.0f}s"
+            )
+
+    def should_allow_call(self) -> bool:
+        """Returns True si se permite la llamada al API; False si el circuit
+        está abierto y aún en período de degradación.
+
+        Side-effect: si llevamos en `degraded` más de `_CIRCUIT_OPEN_DURATION_SECONDS`,
+        transicionamos a `half_open` y devolvemos True (esa próxima call
+        será la única que llegue al API hasta que sepamos su resultado).
+        """
+        if self.state == CIRCUIT_HEALTHY:
+            return True
+        if self.state == CIRCUIT_HALF_OPEN:
+            # Ya estamos en half-open: solo permitimos UNA llamada de
+            # prueba a la vez. Aquí siempre permitimos (la primera call
+            # registrará success o failure y transicionará).
+            return True
+        # degraded.
+        now = time.monotonic()
+        if (now - self.opened_at) >= _CIRCUIT_OPEN_DURATION_SECONDS:
+            self.state = CIRCUIT_HALF_OPEN
+            logger.info(
+                f"[circuit_breaker] degraded → half_open after "
+                f"{_CIRCUIT_OPEN_DURATION_SECONDS:.0f}s; attempting probe call"
+            )
+            return True
+        # Aún degraded — bloquear.
+        return False
+
+
+# Singleton del breaker (compartido entre instancias del adapter).
+_circuit_breaker = _CircuitBreaker()
+
+
+def get_circuit_breaker() -> _CircuitBreaker:
+    """Accessor para tests y diagnostics. Devuelve la instancia módulo-level."""
+    return _circuit_breaker
+
+
+def _reset_circuit_for_tests() -> None:
+    """Resetea el breaker — solo para tests."""
+    global _circuit_breaker
+    _circuit_breaker = _CircuitBreaker()
 
 
 # S1-A-06 — defaults para el timeout y los retries por llamada LLM.
@@ -185,7 +311,26 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
         Con el valor previo de 8192 el modelo truncaba JSON a mitad de string en reformas
         multi-habitación → ValidationError EOF → retries de salida igual de truncada.
         Ajustable por el caller cuando se espere una respuesta más corta.
+
+        S2-A-02 — Circuit breaker:
+          Si el breaker está en `degraded` (>3 fallos en 5 min, dentro de los
+          últimos 2 min), devolvemos `(None_placeholder, {})` SIN llamar a la
+          API. El caller que use el resultado debe manejar el caso None (la
+          mayoría de los callers en el swarm ya lo hacen vía try/except o
+          chequeo `if eval_res and eval_res.results`).
         """
+        # S2-A-02 — circuit breaker check antes de cualquier trabajo.
+        # Si el circuit está abierto, retornamos None inmediatamente.
+        # IMPORTANTE: el contract de ILLMProvider.generate_structured es
+        # tuple[BaseModel, dict]. Para no romper el tipado, levantamos un
+        # AIProviderError específico que los call sites del swarm ya
+        # capturan (igual que cualquier otro fallo del LLM).
+        if not _circuit_breaker.should_allow_call():
+            raise AIProviderError(
+                "circuit_breaker_open: Gemini in degraded state; "
+                f"retry in {max(0.0, _CIRCUIT_OPEN_DURATION_SECONDS - (time.monotonic() - _circuit_breaker.opened_at)):.0f}s"
+            )
+
         schema_json = json.dumps(response_schema.model_json_schema(), ensure_ascii=False)
 
         full_system = (
@@ -247,6 +392,10 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                     )
 
                 if response.status_code in [400, 401, 403, 404]:
+                    # S2-A-02 — terminal error: cuenta como failure (cliente
+                    # mal configurado o cuota agotada deberían abrir el circuit
+                    # rápido para no quemar más recursos).
+                    _circuit_breaker.record_failure()
                     raise AIProviderError(f"Terminal API Error {response.status_code} on GenAI API: {response.text}")
                     
                 response.raise_for_status()
@@ -282,8 +431,10 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                         raw_json = f'{{"{only_key}": {raw_json}}}'
                 
                 parsed = response_schema.model_validate_json(raw_json)
+                # S2-A-02 — éxito: limpia el contador del circuit breaker.
+                _circuit_breaker.record_success()
                 return parsed, usage_metadata
-                
+
             except asyncio.TimeoutError:
                 # S1-A-06 — per-call timeout. Loggeamos elapsed real para que el
                 # operador pueda calibrar `LLM_CALL_TIMEOUT_SECONDS`. Marcamos
@@ -312,6 +463,9 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                             f"[adapter] Rescatados {recovered} items del JSON truncado (sin retry)."
                         )
                         salvaged_usage = {**usage_metadata, "_salvaged": True, "_items_recovered": recovered}
+                        # S2-A-02 — salvage cuenta como éxito (la API respondió,
+                        # solo el output estaba truncado pero usable).
+                        _circuit_breaker.record_success()
                         return salvaged, salvaged_usage
                     else:
                         # Cuando salvage falla, dumpeamos los últimos 200 chars del raw_json
@@ -328,15 +482,21 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
 
             attempt += 1
             if attempt >= self.max_retries:
+                # S2-A-02 — agotamos retries: marcamos un fallo en el circuit
+                # breaker. Si llevamos >3 fallos en 5 min, el próximo call
+                # se bloqueará en `should_allow_call`.
+                _circuit_breaker.record_failure()
                 raise AIProviderError(f"Unknown AI API error after {self.max_retries} retries: {error_str}")
-            
+
             delay = self.base_delay * (2 ** (attempt - 1))
             jitter = random.uniform(0, 1)
             total_delay = delay + jitter
-            
+
             logger.warning(f"Retrying in {total_delay:.2f} seconds...")
             await asyncio.sleep(total_delay)
-                
+
+        # S2-A-02 — defensa adicional (no debería llegar aquí).
+        _circuit_breaker.record_failure()
         raise AIProviderError("Fell through retry loop unexpectedly.")
 
     async def get_embedding(self, text: str) -> List[float]:
