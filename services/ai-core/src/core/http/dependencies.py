@@ -27,6 +27,7 @@ from src.budget.application.services.pdf_extractor_service import (
 from src.budget.application.services.budget_metadata_extractor import (
     BudgetMetadataExtractor,
 )
+from src.budget.application.services.pricing_cache import PricingCache
 from src.budget.application.services.swarm_pricing_service import SwarmPricingService
 from src.budget.catalog.application.services.hybrid_catalog_search import (
     HybridCatalogSearch,
@@ -201,6 +202,14 @@ def get_bge_reranker() -> Optional[BgeReranker]:
     return _bge_reranker_singleton
 
 
+# S1-A-04 — PricingCache singleton sobre Firestore.
+_pricing_cache_singleton: PricingCache = PricingCache(db=_db_client)
+
+
+def get_pricing_cache() -> PricingCache:
+    return _pricing_cache_singleton
+
+
 _swarm_pricing = SwarmPricingService(
     llm_provider=_llm_adapter,
     vector_search=_vector_search_adapter,
@@ -212,6 +221,7 @@ _swarm_pricing = SwarmPricingService(
     price_book_repo=_price_book_repo,
     hybrid_search=None,  # poblado al boot por bootstrap_hybrid_catalog_search()
     reranker=_bge_reranker_singleton,
+    pricing_cache=_pricing_cache_singleton,
 )
 _architect = ArchitectService(llm_provider=_llm_adapter)
 _budget_metadata_extractor = BudgetMetadataExtractor(llm_provider=_llm_adapter)

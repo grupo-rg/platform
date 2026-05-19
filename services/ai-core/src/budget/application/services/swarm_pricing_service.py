@@ -2,6 +2,7 @@ import logging
 import asyncio
 import json
 import os
+import time
 import uuid
 import inspect
 from typing import Awaitable, Callable, List, Dict, Any, Optional, Literal
@@ -16,6 +17,7 @@ from src.budget.catalog.domain.construction_dag import ConstructionDag
 from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem, BudgetBreakdownComponent, HeuristicFragment
 from src.budget.application.services.reconciliation import reconcile_breakdown
 from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
+from src.budget.application.services.pricing_cache import PricingCache
 from src.budget.infrastructure.adapters.reranking.bge_reranker import BgeReranker
 from src.budget.learning.application.ports.heuristic_fragment_repository import IHeuristicFragmentRepository
 
@@ -533,6 +535,7 @@ class SwarmPricingService:
         price_book_repo: Optional[IPriceBookRepository] = None,
         hybrid_search: Optional[HybridCatalogSearch] = None,
         reranker: Optional[BgeReranker] = None,
+        pricing_cache: Optional[PricingCache] = None,
     ):
         self.llm = llm_provider
         self.vector_search = vector_search
@@ -559,6 +562,9 @@ class SwarmPricingService:
         # Opcional para tests offline; cuando es None, el rerank sigue siendo
         # vía Flash. En producción se inyecta vía `dependencies.py`.
         self.reranker = reranker
+        # S1-A-04 — Caché de pricing por hash (descripción + unidad). Opcional;
+        # cuando es None, el swarm no consulta ni persiste cache (camino legacy).
+        self.pricing_cache = pricing_cache
 
     async def _rerank_candidates(
         self,
@@ -856,8 +862,110 @@ class SwarmPricingService:
                     {"resumed_count": skipped, "remaining_count": len(items)},
                 )
 
+        # S1-A-04 — Cache lookup en lote ANTES del swarm.
+        # Para cada item, intentamos un hit de cache; los que aciertan no
+        # entran al swarm. Estado para enriquecer `item_resolved` después:
+        cache_metadata_by_code: Dict[str, Dict[str, Any]] = {}
+        cached_partidas: List[BudgetPartida] = []
+        if self.pricing_cache is not None and items:
+            remaining: List[RestructuredItem] = []
+            for it in items:
+                lookup_start = time.monotonic()
+                try:
+                    hit = await self.pricing_cache.lookup(
+                        description=it.description, unit=it.unit,
+                    )
+                except Exception as e:
+                    logger.warning(f"[cache] lookup crashed for {it.code}: {e}")
+                    hit = None
+                lookup_ms = int((time.monotonic() - lookup_start) * 1000)
+                if hit is not None:
+                    # Cache hit: short-circuit, no LLM call.
+                    cache_metadata_by_code[it.code or ""] = {
+                        "cache_hit": True,
+                        "cost_usd": 0.0,
+                        "latency_ms": lookup_ms,
+                    }
+                    # Reconstruimos un BudgetPartida desde el payload cacheado.
+                    # `partida` viene como dict de `model_dump()` previo.
+                    try:
+                        partida = BudgetPartida.model_validate(hit.partida)
+                        cached_partidas.append(partida)
+                        self._emit(budget_id, 'pricing_cache_hit', {
+                            "code": it.code,
+                            "hash": hit.hash[:16],
+                            "hits_count": hit.hits_count,
+                            "confidence_score": hit.confidence_score,
+                            "latency_ms": lookup_ms,
+                        })
+                    except Exception as build_err:
+                        # Si el doc cacheado está corrupto, lo ignoramos y
+                        # reprocesamos vía swarm (no rompemos el batch).
+                        logger.warning(
+                            f"[cache] hit for {it.code} no parsea como "
+                            f"BudgetPartida: {build_err}; reprocesando."
+                        )
+                        remaining.append(it)
+                else:
+                    cache_metadata_by_code[it.code or ""] = {
+                        "cache_hit": False,
+                        "cost_usd": None,  # poblado tras el LLM swarm
+                        "latency_ms": None,
+                        "lookup_ms": lookup_ms,
+                    }
+                    remaining.append(it)
+            items = remaining
+            if cached_partidas:
+                self._emit(budget_id, 'pricing_cache_batch_summary', {
+                    "cache_hits": len(cached_partidas),
+                    "cache_misses": len(items),
+                    "hit_rate": (
+                        len(cached_partidas)
+                        / (len(cached_partidas) + len(items))
+                        if (len(cached_partidas) + len(items)) > 0
+                        else 0.0
+                    ),
+                })
+                # Emitimos `item_resolved` para cada partida cacheada con
+                # `cache_hit=True` para que Agent B pueda enriquecer
+                # `partida_resolved_v2` con métricas reales. También invocamos
+                # el callback `on_partida_resolved` para que el use case
+                # persista checkpoint (mismo flujo que las resueltas vía LLM).
+                for cached_partida in cached_partidas:
+                    code = cached_partida.code or ""
+                    meta = cache_metadata_by_code.get(code, {})
+                    self._emit(budget_id, 'item_resolved', {
+                        "type": "PARTIDA",
+                        "item": cached_partida.model_dump(),
+                        "pricing_metadata": {
+                            "cache_hit": True,
+                            "cost_usd": 0.0,
+                            "latency_ms": meta.get("latency_ms", 0),
+                            "match_kind": cached_partida.match_kind,
+                        },
+                    })
+                    if on_partida_resolved is not None:
+                        try:
+                            await on_partida_resolved(cached_partida)
+                        except Exception as cb_err:
+                            logger.warning(
+                                f"[pricing] on_partida_resolved callback failed "
+                                f"for cached {cached_partida.code}: "
+                                f"{type(cb_err).__name__}: {cb_err}"
+                            )
+
         logger.info(f"Starting Swarm Pricing Phase for {len(items)} items...")
         self._emit(budget_id, 'vector_search_started', {"query": f"Invocando al cerebro Flash para romper {len(items)} partidas en queries atómicas..."})
+
+        # S1-A-04 — snapshot per-item start time + pre-call cost para poder
+        # calcular `cost_usd` y `latency_ms` por partida cuando el LLM la
+        # resuelva. Para cache misses únicamente.
+        item_start_times: Dict[str, float] = {}
+        item_pre_call_cost: Dict[str, float] = {}
+        for it in items:
+            code = it.code or ""
+            item_start_times[code] = time.monotonic()
+            item_pre_call_cost[code] = float(metrics.get("cost") or 0.0)
 
         # Obtenemos candidatos masivos
         async def fetch_item_candidates(item: RestructuredItem):
@@ -1436,7 +1544,52 @@ class SwarmPricingService:
                     )
                     priced_partidas.append(partida)
 
-                    self._emit(budget_id, 'item_resolved', {"type": "PARTIDA", "item": partida.model_dump()})
+                    # S1-A-04 — calcular y exponer pricing_metadata por partida.
+                    # ``cost_usd`` se aproxima por diferencia del coste total
+                    # acumulado entre antes y después de procesar este item.
+                    # ``latency_ms`` desde que se inició la fase de pricing
+                    # para esta partida. Ambos best-effort: el coste real
+                    # depende de paralelismo de Gemini y puede ser ruidoso.
+                    pricing_metadata: Dict[str, Any] = {
+                        "cache_hit": False,
+                        "cost_usd": max(
+                            0.0,
+                            float(metrics.get("cost") or 0.0)
+                            - item_pre_call_cost.get(safe_code, 0.0),
+                        ),
+                        "latency_ms": int(
+                            (time.monotonic() - item_start_times.get(safe_code, time.monotonic()))
+                            * 1000
+                        ),
+                        "match_kind": val.match_kind,
+                        "confidence_score": confidence,
+                    }
+
+                    # Persistir en caché si confidence >= threshold.
+                    if self.pricing_cache is not None and not needs_human_review:
+                        try:
+                            persisted = await self.pricing_cache.persist(
+                                description=item.description,
+                                unit=item.unit,
+                                partida=partida.model_dump(),
+                                confidence_score=float(confidence) / 100.0 if confidence > 1 else float(confidence),
+                                match_kind=val.match_kind or "1:1",
+                            )
+                            if persisted:
+                                self._emit(budget_id, 'pricing_cache_persisted', {
+                                    "code": safe_code,
+                                    "confidence_score": float(confidence),
+                                })
+                        except Exception as cache_err:
+                            logger.warning(
+                                f"[cache] persist failed for {safe_code}: {cache_err}"
+                            )
+
+                    self._emit(budget_id, 'item_resolved', {
+                        "type": "PARTIDA",
+                        "item": partida.model_dump(),
+                        "pricing_metadata": pricing_metadata,
+                    })
                     # P4.b — checkpoint hook. The use case persists the
                     # partida to Firestore so a retry can resume from here.
                     # Errors are logged but do NOT abort the swarm; the
@@ -1464,5 +1617,5 @@ class SwarmPricingService:
         self._emit(budget_id, 'batch_pricing_completed', {"query": "Swarm finalizado. Ensamblando Presupuesto Real..."})
         # Caller sees the full picture: resumed partidas (from prior attempts)
         # concatenated with newly resolved ones. Order: resumed first, then
-        # new, matching their original creation order.
-        return resume_from + priced_partidas
+        # cached (S1-A-04, no LLM cost), then newly resolved via LLM.
+        return resume_from + cached_partidas + priced_partidas
