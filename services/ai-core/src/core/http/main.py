@@ -122,7 +122,16 @@ from src.budget.application.services.budget_metadata_extractor import (
     BudgetMetadataExtractor,
     ExtractedBudgetMetadata,
 )
+from src.pipeline_jobs.application.ports.job_executor import (
+    IJobExecutor,
+    JobExecutorError,
+)
+from src.pipeline_jobs.application.ports.job_repository import (
+    IPipelineJobRepository,
+)
 from src.pipeline_jobs.application.ports.pdf_storage import IPdfStorage
+from src.pipeline_jobs.domain.entities import JobType, PipelineJob
+import uuid
 
 app.include_router(_build_dispatch_router())
 # The dispatch_router declares its own get_* stubs that raise NotImplementedError.
@@ -211,71 +220,147 @@ async def process_vision_budget(
 
 @app.post("/api/v1/jobs/measurements")
 async def process_measurement_job(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     leadId: str = Form("anonymous"),
     budgetId: str = Form(None),
     strategy: str = Form("ANNEXED"),
-    restructure_uc: RestructureBudgetUseCase = Depends(get_restructure_budget_uc)
+    storage: IPdfStorage = Depends(_deps_get_pdf_storage),
+    repo: IPipelineJobRepository = Depends(_deps_get_pipeline_job_repository),
+    executor: IJobExecutor = Depends(_deps_get_job_executor),
+    worker_job_name: str = Depends(_deps_get_worker_job_name),
 ):
+    """Legacy `multipart/form-data` PDF endpoint.
+
+    Refactored (P5.a) to stop running the budget pipeline inside the Service
+    via BackgroundTasks — that approach OOM-killed the Cloud Run Service even
+    with 8GiB because the Sprint 1 swarm now keeps the BGE reranker + the
+    1,661-item catalog resident. We instead:
+
+      1. Materialise the PDF bytes in memory just long enough to upload them
+         to the `pipeline_uploads` bucket.
+      2. Create a `pipeline_jobs/{jobId}` Firestore doc with jobType=
+         `measurements` and payload `{gcsUri, strategy, ...}`.
+      3. Dispatch a fresh execution of the `ai-core-worker` Cloud Run Job
+         with `JOB_ID={jobId}` so the worker picks it up.
+      4. Return 202 with `{status, jobId, message, leadId, budgetId}` so the
+         UI keeps the existing wire shape (`budgetId`, `leadId` preserved).
+
+    Heavy work (Fitz page rendering, Gemini swarm) now lives in the Job
+    worker, which has its own 2GiB memory budget isolated from the Service.
     """
-    1. Spatial PDF Extraction (Synchronous Conversion to Mapped Images via Fitz)
-    2. Spawns Background AI Job (Asynchronous) into Map-Reduce 'ANNEXED' workflow.
-    Returns 202 Accepted instantly.
-    """
-    if not file.filename.endswith(".pdf"):
+    if not file.filename or not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     try:
         pdf_bytes = await file.read()
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        total_pages = doc.page_count
-        
-        raw_items = []
-        logger.info(f"Recibido archivo {file.filename} ({total_pages} páginas). Convirtiendo PDF a imágenes B64...")
-        for p in range(total_pages):
-            page = doc.load_page(p)
-            matrix = fitz.Matrix(150 / 72, 150 / 72)
-            pix = page.get_pixmap(matrix=matrix)
-            img_data = pix.tobytes("png")
-            b64 = base64.b64encode(img_data).decode('utf-8')
-            
-            # Heurística temporal general para separar cuadros de texto de sumatorios BC3
-            is_summatory = True if p >= (total_pages / 2) else False
-            raw_items.append({"image_base64": b64, "page_number": p, "is_summatory": is_summatory})
-            
-        doc.close()
-        logger.info(f"Generados {len(raw_items)} visual chunks en memoria. Traspasando trabajo pesado a worker Asíncrono.")
-
-        # Fase 9.2 — pasamos los bytes del PDF al pipeline para habilitar el
-        # fast path heurístico del INLINE extractor. ANNEXED ignora el kwarg.
-        pdf_bytes_for_pipeline = pdf_bytes
-
-        async def run_ai_vision_job():
-            try:
-                logger.info(f"Swarm Pricing Strategy: {strategy} ({len(raw_items)} chunks) INICIANDO...")
-                await restructure_uc.execute(
-                    raw_items, lead_id=leadId, budget_id=budgetId, strategy=strategy,
-                    pdf_bytes=pdf_bytes_for_pipeline,
-                )
-                logger.info("🎉 Background AI Budget Processing Exitóso!")
-            except Exception as e:
-                logger.error(f"Background AI Job Failed: {e}")
-                import traceback
-                traceback.print_exc()
-            
-        background_tasks.add_task(run_ai_vision_job)
-
-        return JSONResponse(status_code=202, content={
-            "status": "processing",
-            "message": "NexoAI Vision Swarm is now deconstructing the PDF budget.",
-            "leadId": leadId,
-            "budgetId": budgetId
-        })
-
     except Exception as e:
-         logger.error(f"Error procesando PDF: {e}")
-         raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to read uploaded PDF: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
+
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Empty PDF body")
+
+    job_id = str(uuid.uuid4())
+    budget_id_value = (budgetId or "").strip() or job_id
+    # Use `leadId` as `uid` until the frontend passes a real auth uid — this
+    # mirrors the placeholder that Next.js currently sends (`leadId="admin-user"`).
+    uid = (leadId or "").strip() or "anonymous"
+
+    # 1. Upload the PDF to GCS so the worker can fetch it.
+    try:
+        gcs_uri = await storage.upload_pdf(
+            uid=uid,
+            job_id=job_id,
+            filename=file.filename,
+            pdf_bytes=pdf_bytes,
+        )
+    except Exception as e:
+        logger.error(
+            "measurements_dispatch_upload_failed",
+            extra={"jobId": job_id, "uid": uid, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to upload PDF to GCS: {e}"
+        )
+
+    # 2. Persist the PipelineJob entity. Worker reads this when JOB_ID arrives.
+    job = PipelineJob.new(
+        jobId=job_id,
+        jobType=JobType.MEASUREMENTS,
+        leadId=leadId,
+        budgetId=budget_id_value,
+        uid=uid,
+        payload={
+            "gcsUri": gcs_uri,
+            "strategy": (strategy or "ANNEXED").upper(),
+            "filename": file.filename,
+        },
+    )
+    try:
+        await repo.create(job)
+    except Exception as e:
+        logger.error(
+            "measurements_dispatch_create_job_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to persist pipeline job: {e}"
+        )
+    logger.info(
+        "measurements_dispatch_queued",
+        extra={
+            "jobId": job_id,
+            "budgetId": budget_id_value,
+            "leadId": leadId,
+            "strategy": strategy,
+            "gcsUri": gcs_uri,
+        },
+    )
+
+    # 3. Spawn a Cloud Run Jobs execution. If the executor refuses, mark the
+    #    job as `failed` so the UI surfaces a real error instead of a phantom
+    #    `queued` job. Pattern lifted from `dispatch_router.dispatch`.
+    try:
+        execution_name = await executor.run_execution(
+            job_name=worker_job_name,
+            env_overrides={"JOB_ID": job_id},
+        )
+    except JobExecutorError as e:
+        try:
+            await repo.mark_dispatch_failed(
+                job_id,
+                error_message=str(e),
+                error_type=type(e).__name__,
+            )
+        except Exception:
+            logger.exception(
+                "measurements_dispatch_mark_failed_error",
+                extra={"jobId": job_id},
+            )
+        logger.error(
+            "measurements_dispatch_executor_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start Cloud Run Job: {e}",
+        )
+
+    await repo.attach_execution_name(job_id, execution_name)
+    logger.info(
+        "measurements_dispatch_started",
+        extra={"jobId": job_id, "executionName": execution_name},
+    )
+
+    return JSONResponse(status_code=202, content={
+        "status": "processing",
+        "message": (
+            "Measurements pipeline dispatched to Cloud Run Job worker."
+        ),
+        "jobId": job_id,
+        "leadId": leadId,
+        "budgetId": budget_id_value,
+    })
 
 
 # -----------------------------------------------------------------------------

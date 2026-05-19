@@ -165,3 +165,101 @@ class TestGetMetadata:
         storage_client.bucket.return_value = bucket
         with pytest.raises(PdfNotFoundError):
             await storage.get_metadata("gs://b/u/j/x.pdf")
+
+
+# ---------------------------------------------------------------------------
+# upload_pdf
+# ---------------------------------------------------------------------------
+
+
+class TestUploadPdf:
+    @pytest.fixture
+    def storage_with_bucket(self, storage_client):
+        return GcsPdfStorage(
+            storage_client=storage_client,
+            upload_bucket="grupo-rg-a9929-pipeline-uploads",
+        )
+
+    async def test_uploads_to_expected_path_and_returns_gs_uri(
+        self, storage_with_bucket, storage_client
+    ):
+        bucket = MagicMock()
+        blob = MagicMock()
+        bucket.blob.return_value = blob
+        storage_client.bucket.return_value = bucket
+
+        uri = await storage_with_bucket.upload_pdf(
+            uid="user-1",
+            job_id="job-abc",
+            filename="m.pdf",
+            pdf_bytes=b"%PDF-FAKE",
+        )
+
+        assert (
+            uri
+            == "gs://grupo-rg-a9929-pipeline-uploads/pipeline_uploads/user-1/job-abc/m.pdf"
+        )
+        storage_client.bucket.assert_called_once_with(
+            "grupo-rg-a9929-pipeline-uploads"
+        )
+        bucket.blob.assert_called_once_with(
+            "pipeline_uploads/user-1/job-abc/m.pdf"
+        )
+        blob.upload_from_string.assert_called_once()
+        # Verify the body bytes + content type were forwarded.
+        args, kwargs = blob.upload_from_string.call_args
+        assert args[0] == b"%PDF-FAKE"
+        assert kwargs.get("content_type") == "application/pdf"
+
+    async def test_strips_path_traversal_in_filename(
+        self, storage_with_bucket, storage_client
+    ):
+        bucket = MagicMock()
+        blob = MagicMock()
+        bucket.blob.return_value = blob
+        storage_client.bucket.return_value = bucket
+
+        uri = await storage_with_bucket.upload_pdf(
+            uid="u",
+            job_id="j",
+            filename="../../etc/passwd",
+            pdf_bytes=b"x",
+        )
+
+        # Should land under pipeline_uploads/u/j/passwd — no escape.
+        assert uri.endswith("/pipeline_uploads/u/j/passwd")
+
+    async def test_raises_when_no_upload_bucket_configured(
+        self, storage_client
+    ):
+        from src.pipeline_jobs.application.ports.pdf_storage import (
+            PdfStorageError,
+        )
+
+        bare = GcsPdfStorage(storage_client=storage_client)  # no upload_bucket
+        with pytest.raises(PdfStorageError):
+            await bare.upload_pdf(
+                uid="u",
+                job_id="j",
+                filename="x.pdf",
+                pdf_bytes=b"%PDF-FAKE",
+            )
+
+    async def test_gcloud_error_maps_to_pdf_storage_error(
+        self, storage_with_bucket, storage_client
+    ):
+        bucket = MagicMock()
+        blob = MagicMock()
+        blob.upload_from_string.side_effect = gcloud_exceptions.PermissionDenied(
+            "denied"
+        )
+        bucket.blob.return_value = blob
+        storage_client.bucket.return_value = bucket
+
+        with pytest.raises(PdfStorageError):
+            await storage_with_bucket.upload_pdf(
+                uid="u",
+                job_id="j",
+                filename="x.pdf",
+                pdf_bytes=b"%PDF-FAKE",
+            )

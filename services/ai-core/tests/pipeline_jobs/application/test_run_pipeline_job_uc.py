@@ -44,6 +44,7 @@ class FakePdfStorage(IPdfStorage):
     def __init__(self, payload: bytes = b"%PDF-FAKE") -> None:
         self.payload = payload
         self.calls: list[str] = []
+        self.uploads: list[dict[str, Any]] = []
 
     async def download_to_bytes(
         self, gcs_uri: str, *, max_bytes: int = 100 * 1024 * 1024,
@@ -58,6 +59,26 @@ class FakePdfStorage(IPdfStorage):
             contentType="application/pdf",
             generation=1,
         )
+
+    async def upload_pdf(
+        self,
+        *,
+        uid: str,
+        job_id: str,
+        filename: str,
+        pdf_bytes: bytes,
+        content_type: str = "application/pdf",
+    ) -> str:
+        self.uploads.append(
+            {
+                "uid": uid,
+                "jobId": job_id,
+                "filename": filename,
+                "size": len(pdf_bytes),
+                "contentType": content_type,
+            }
+        )
+        return f"gs://fake-bucket/pipeline_uploads/{uid}/{job_id}/{filename}"
 
 
 class FakePipelineRunner(IPipelineRunner):

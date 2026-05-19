@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+import os
+from typing import Any, Optional
 
 from google.api_core import exceptions as gcloud_exceptions
 
@@ -25,14 +26,36 @@ logger = logging.getLogger(__name__)
 
 
 class GcsPdfStorage(IPdfStorage):
-    def __init__(self, *, storage_client: Any) -> None:
+    def __init__(
+        self,
+        *,
+        storage_client: Any,
+        upload_bucket: Optional[str] = None,
+    ) -> None:
         self._client = storage_client
+        # Default upload bucket — used by `upload_pdf` when the dispatcher
+        # hands off a PDF received via the legacy endpoints. `download_to_bytes`
+        # doesn't need this; it parses the bucket out of the `gs://` URI.
+        self._upload_bucket = upload_bucket
 
     @classmethod
     def from_env(cls) -> "GcsPdfStorage":
         from google.cloud import storage
 
-        return cls(storage_client=storage.Client())
+        # PIPELINE_UPLOADS_BUCKET is the bucket the browser uploads to (per
+        # `storage-uploader.ts`). The dispatcher uses the same bucket so the
+        # Storage rules + path layout stay consistent across both flows.
+        # Falls back to FIREBASE_STORAGE_BUCKET (the default Firebase bucket
+        # name) so existing prod environments work without a new env var.
+        bucket = (
+            os.environ.get("PIPELINE_UPLOADS_BUCKET", "").strip()
+            or os.environ.get("FIREBASE_STORAGE_BUCKET", "").strip()
+            or None
+        )
+        return cls(
+            storage_client=storage.Client(),
+            upload_bucket=bucket,
+        )
 
     # ------------------------------------------------------------------
     # download_to_bytes
@@ -112,6 +135,54 @@ class GcsPdfStorage(IPdfStorage):
             contentType=blob.content_type or "",
             generation=blob.generation or 0,
         )
+
+    # ------------------------------------------------------------------
+    # upload_pdf
+    # ------------------------------------------------------------------
+
+    async def upload_pdf(
+        self,
+        *,
+        uid: str,
+        job_id: str,
+        filename: str,
+        pdf_bytes: bytes,
+        content_type: str = "application/pdf",
+    ) -> str:
+        if not self._upload_bucket:
+            raise PdfStorageError(
+                "GcsPdfStorage.upload_pdf called but no upload_bucket "
+                "configured. Set PIPELINE_UPLOADS_BUCKET or "
+                "FIREBASE_STORAGE_BUCKET in the Service env."
+            )
+        # Safety net — strip any leading separators so we can't accidentally
+        # write outside the namespace.
+        safe_filename = filename.replace("\\", "/").rsplit("/", 1)[-1].strip()
+        if not safe_filename:
+            safe_filename = f"{job_id}.pdf"
+        object_path = f"pipeline_uploads/{uid}/{job_id}/{safe_filename}"
+        blob = self._client.bucket(self._upload_bucket).blob(object_path)
+        try:
+            await asyncio.to_thread(
+                blob.upload_from_string, pdf_bytes, content_type=content_type
+            )
+        except gcloud_exceptions.GoogleAPICallError as e:
+            raise PdfStorageError(
+                f"upload_from_string failed for "
+                f"gs://{self._upload_bucket}/{object_path}: {e}"
+            ) from e
+
+        gcs_uri = f"gs://{self._upload_bucket}/{object_path}"
+        logger.info(
+            "PDF uploaded",
+            extra={
+                "gcsUri": gcs_uri,
+                "size": len(pdf_bytes),
+                "uid": uid,
+                "jobId": job_id,
+            },
+        )
+        return gcs_uri
 
     # ------------------------------------------------------------------
     # Internal
