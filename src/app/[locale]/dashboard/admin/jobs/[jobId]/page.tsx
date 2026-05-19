@@ -8,11 +8,11 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import {
-    getJobMetricsAction,
-    type JobMetricsFinal,
-    type PartidaResolvedV2,
-} from '@/actions/admin/get-job-metrics.action';
+import { getJobMetricsAction } from '@/actions/admin/get-job-metrics.action';
+import type {
+    JobMetricsFinal,
+    PartidaResolvedV2,
+} from '@/actions/admin/_job-metrics-helpers';
 
 interface JobDetailPageProps {
     params: Promise<{

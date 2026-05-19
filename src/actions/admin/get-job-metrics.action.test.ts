@@ -204,7 +204,7 @@ describe('getJobMetricsAction', () => {
 describe('percentile helper', () => {
     async function loadHelpers() {
         vi.resetModules();
-        return await import('./get-job-metrics.action');
+        return await import('./_job-metrics-helpers');
     }
 
     it('returns 0 on empty input', async () => {
