@@ -28,6 +28,7 @@ Note: el cron de limpieza de entradas expiradas se introduce en Sprint 2
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -141,7 +142,9 @@ class PricingCache:
         """
         h = compute_partida_hash(description, unit)
         try:
-            snap = await self._doc_ref(h).get()
+            # firebase-admin firestore client es síncrono; envolvemos en thread
+            # para no bloquear el event loop y devolver una coroutine awaitable.
+            snap = await asyncio.to_thread(self._doc_ref(h).get)
         except Exception as e:
             logger.warning(f"[PricingCache] lookup get failed for {h[:8]}: {e}")
             return None
@@ -170,10 +173,13 @@ class PricingCache:
         # Side-effects: bump hits_count + last_used.
         new_hits = int(data.get("hits_count") or 0) + 1
         try:
-            await self._doc_ref(h).update({
-                "hits_count": new_hits,
-                "last_used": datetime.now(timezone.utc).isoformat(),
-            })
+            await asyncio.to_thread(
+                self._doc_ref(h).update,
+                {
+                    "hits_count": new_hits,
+                    "last_used": datetime.now(timezone.utc).isoformat(),
+                },
+            )
         except Exception as e:
             # No-fatal: el hit es válido aunque el side-effect falle.
             logger.warning(f"[PricingCache] hit update failed for {h[:8]}: {e}")
@@ -215,7 +221,7 @@ class PricingCache:
 
         # Reaprovecha el hash si ya existe.
         try:
-            existing = await self._doc_ref(h).get()
+            existing = await asyncio.to_thread(self._doc_ref(h).get)
         except Exception as e:
             logger.warning(f"[PricingCache] persist get failed for {h[:8]}: {e}")
             existing = None
@@ -236,7 +242,7 @@ class PricingCache:
                     "match_kind": match_kind,
                 })
             try:
-                await self._doc_ref(h).update(update_payload)
+                await asyncio.to_thread(self._doc_ref(h).update, update_payload)
             except Exception as e:
                 logger.warning(f"[PricingCache] persist update failed for {h[:8]}: {e}")
                 return False
@@ -256,7 +262,7 @@ class PricingCache:
             "expires_at": expires_at.isoformat(),
         }
         try:
-            await self._doc_ref(h).set(payload)
+            await asyncio.to_thread(self._doc_ref(h).set, payload)
         except Exception as e:
             logger.warning(f"[PricingCache] persist set failed for {h[:8]}: {e}")
             return False
