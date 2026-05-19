@@ -887,6 +887,7 @@ class SwarmPricingService:
         *,
         resume_from: Optional[List[BudgetPartida]] = None,
         on_partida_resolved: Optional[Callable[[BudgetPartida], Awaitable[None]]] = None,
+        cancellation_event: Optional[asyncio.Event] = None,
     ) -> List[BudgetPartida]:
         """Price every item in `items` against the swarm; return the resolved
         partidas.
@@ -931,6 +932,7 @@ class SwarmPricingService:
                 on_partida_resolved=on_partida_resolved,
                 _resolved_telemetry=_resolved_telemetry,
                 _tier_per_code=_tier_per_code,
+                cancellation_event=cancellation_event,
             )
         finally:
             duration_seconds = time.monotonic() - _start
@@ -974,6 +976,7 @@ class SwarmPricingService:
         on_partida_resolved: Optional[Callable[[BudgetPartida], Awaitable[None]]],
         _resolved_telemetry: List[Dict[str, Any]],
         _tier_per_code: Dict[str, Dict[str, str]],
+        cancellation_event: Optional[asyncio.Event] = None,
     ) -> List[BudgetPartida]:
         """Original `evaluate_batch` body extracted verbatim. Wrapped by the
         public `evaluate_batch` so we can guarantee `job_metrics_final`
@@ -981,6 +984,17 @@ class SwarmPricingService:
         keyword args (`_resolved_telemetry`, `_tier_per_code`) are populated
         as side effects for the outer aggregator.
         """
+        # S2-A-01 — early-out: si el evento ya está set antes de empezar,
+        # no quemamos ni tokens de extracción de candidates.
+        if cancellation_event is not None and cancellation_event.is_set():
+            self._emit(budget_id, 'cancellation_acknowledged', {
+                "stage": "pricing_start",
+                "items_total": len(items),
+            })
+            raise asyncio.CancelledError(
+                "swarm_pricing: cancellation_event set before start"
+            )
+
         resumed_codes = {p.code for p in resume_from if p.code}
         if resumed_codes:
             before = len(items)
@@ -1293,6 +1307,20 @@ class SwarmPricingService:
 
         async def evaluate_chunk(chunk_idx: int, task_group: List[Dict]):
             async with semaphore_pricing:
+                # S2-A-01 — cooperative cancellation check between partidas.
+                # El runner crea un `asyncio.Event` y un poller que lo flipea
+                # cuando Firestore tiene `cancellation_requested=true`. Aquí
+                # checkeamos ANTES de cada partida nueva — si el event está
+                # set, paramos limpio sin gastar más tokens.
+                if cancellation_event is not None and cancellation_event.is_set():
+                    self._emit(budget_id, 'cancellation_acknowledged', {
+                        "stage": "pricing",
+                        "code": task_group[0]["id"] if task_group else None,
+                    })
+                    raise asyncio.CancelledError(
+                        "swarm_pricing: cancellation_event set; aborting chunk"
+                    )
+
                 grouped_tasks_str = "\n\n".join(t["prompt"] for t in task_group)
 
                 # v005: contexto DAG + tools precomputadas, por cada partida del chunk.
@@ -1512,13 +1540,19 @@ class SwarmPricingService:
         # Pass 1: non-medios en paralelo (comportamiento histórico).
         non_medios_tasks = [evaluate_chunk(idx, g) for idx, g in non_medios_indexed]
         non_medios_results = await asyncio.gather(*non_medios_tasks, return_exceptions=True)
+        # S2-A-01 — si alguno raiseó CancelledError, propagamos para
+        # abortar limpio. Los gather() con return_exceptions=True devuelven
+        # CancelledError como objeto en la lista (no lo re-raisean).
+        for res in non_medios_results:
+            if isinstance(res, asyncio.CancelledError):
+                raise res
         for (idx, _), res in zip(non_medios_indexed, non_medios_results):
             results_group[idx] = res
 
         # Calcular PEM acumulado por capítulo desde resultados pass 1.
         if medios_indexed:
             for res in non_medios_results:
-                if isinstance(res, Exception):
+                if isinstance(res, (Exception, asyncio.CancelledError)):
                     continue
                 eval_res, _usage = res
                 if not eval_res or not eval_res.results:
@@ -1537,16 +1571,23 @@ class SwarmPricingService:
             # Pass 2: medios en paralelo, ya con dict poblado.
             medios_tasks = [evaluate_chunk(idx, g) for idx, g in medios_indexed]
             medios_results = await asyncio.gather(*medios_tasks, return_exceptions=True)
+            # S2-A-01 — misma protección que pass 1.
+            for res in medios_results:
+                if isinstance(res, asyncio.CancelledError):
+                    raise res
             for (idx, _), res in zip(medios_indexed, medios_results):
                 results_group[idx] = res
-        
+
         # Ensamblaje final de Pydantic Entities
         priced_partidas = []
         global_order = 1
-        
+
         for chunk_idx, res in enumerate(results_group):
-            if isinstance(res, Exception):
-                logger.error(f"Error parseo pro {chunk_idx}: {res}")
+            # S2-A-01 — CancelledError no es subclase de Exception, lo
+            # tratamos explícitamente igual que cualquier error.
+            if isinstance(res, (Exception, asyncio.CancelledError)) or res is None:
+                if isinstance(res, Exception):
+                    logger.error(f"Error parseo pro {chunk_idx}: {res}")
                 continue
                 
             eval_res, usage = res

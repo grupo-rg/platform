@@ -205,6 +205,7 @@ class BudgetPipelineRunner(IPipelineRunner):
             on_partida_resolved=_on_resolved,
             client_name=client_name,
             budget_title=budget_title,
+            cancellation_event=cancellation_event,
         )
 
     # ------------------------------------------------------------------
