@@ -288,24 +288,6 @@ def _resolve_pricing_model(
     return MODEL_FLASH, reason
 
 
-def _resolve_pricing_model(intended: str) -> str:
-    """Aplica el override `FORCE_FLASH_PRICING` si está activo en el entorno.
-
-    Razón de existir: incidente 2026-05-18. Con PDFs muy grandes (250+ pp →
-    876 partidas) y Gemini Pro 2.5 sufriendo 503s intermitentes, las cadenas
-    internas de retry de Genkit bloqueaban los 4 slots del semáforo y el
-    job se quedaba zombi (heartbeat vivo, cero partidas nuevas).
-
-    El override permite degradar Pro→Flash sin redeploy: basta con setear
-    la env var `FORCE_FLASH_PRICING=true` en el Cloud Run Job y reintentar.
-    Para revertir, quitar la env var. La heurística `_select_tier` sigue
-    intacta — solo se sustituye el modelo destino en el momento de la
-    llamada.
-    """
-    import os
-    if intended == MODEL_PRO and os.environ.get("FORCE_FLASH_PRICING") == "true":
-        return MODEL_FLASH
-    return intended
 
 
 def _group_tasks_adaptively(
