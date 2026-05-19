@@ -53,6 +53,17 @@ service cloud.firestore {
     // `/api/budget/stream` endpoint tails. Anything sensitive lives in
     // `pipeline_jobs/*` above.
 
+    // Wizard sessions — persisted chat state so a reload mid-job doesn't
+    // lose context. Reads only for the owner (uid match); writes are
+    // admin-SDK only because they go through `appendWizardMessageAction`
+    // and friends. We still leave the create rule open to a future
+    // direct-write path; today it's denied because the action creates the
+    // doc with the admin SDK.
+    match /wizard_sessions/{sessionId} {
+      allow read: if request.auth != null
+                  && resource.data.uid == request.auth.uid;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
