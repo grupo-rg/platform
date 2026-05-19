@@ -389,6 +389,51 @@ def _select_tier(
     )
 
 
+# S1-A-05 — capítulos que NO aportan señal estructural y por tanto no se
+# usan como filtro pre-vector (el filtro degradaría la cobertura del
+# retrieval sin reducir ruido). Coincide con la lista que ``stabilize_chapter_name``
+# considera alucinación o sin valor.
+_LOW_CONFIDENCE_CHAPTERS: set = {
+    "VARIOS",
+    "VARIOS Y OTROS",
+    "[UNKNOWN]",
+    "SIN CAPÍTULO",
+    "SIN CAPITULO",
+    "OTROS",
+    "GENERAL",
+}
+
+
+def _derive_structural_filters(item: RestructuredItem) -> Dict[str, Optional[str]]:
+    """S1-A-05 — Construye filtros estructurales pre-vector para una partida.
+
+    Reduce el espacio de búsqueda al BM25/vector limitándolos a:
+      - el ``chapter`` cuando es confiable (no está en ``_LOW_CONFIDENCE_CHAPTERS``
+        y no contiene marcadores de alucinación);
+      - la ``unit_dimension`` cuando la partida la tiene clara.
+
+    Ambos filtros son opcionales: cuando faltan, el retrieval cae al
+    comportamiento original (sin filtro).
+    """
+    chapter_filter: Optional[str] = None
+    raw_chapter = (item.chapter or "").strip()
+    if raw_chapter:
+        upper = raw_chapter.upper()
+        is_hallucination = any(
+            marker in upper
+            for marker in ("[", "NOT FOUND", "NO ESPECIFICADO", "NO IDENTIFICADO",
+                          "NO ENCONTRADO", "UNKNOWN", "UNDEFINED")
+        )
+        if not is_hallucination and upper not in _LOW_CONFIDENCE_CHAPTERS:
+            chapter_filter = raw_chapter
+
+    unit_dimension_filter: Optional[str] = item.unit_dimension or None
+    return {
+        "chapter_filter": chapter_filter,
+        "unit_dimension_filter": unit_dimension_filter,
+    }
+
+
 def _is_medios_partida(item: Optional[RestructuredItem]) -> bool:
     """Fase 14.B — detecta si la partida es 'Medios para ejecución'.
 
@@ -701,10 +746,16 @@ class SwarmPricingService:
                     )
                 else:
                     # Path legacy.
+                    # S1-A-05 — propagamos chapter_filter al adapter legacy
+                    # también; el adapter Firestore acepta `chapter_filters` (lista).
+                    legacy_chapter_filters = (
+                        [chapter_filter] if chapter_filter else None
+                    )
                     res = self.vector_search.search_similar_items(
                         query_vector=vector,
                         query_text=q,
                         limit=4,
+                        chapter_filters=legacy_chapter_filters,
                         partida_unit_dimension=partida_unit_dimension,
                     )
                     cands = await res if inspect.isawaitable(res) else (res or [])
@@ -781,9 +832,24 @@ class SwarmPricingService:
         # Obtenemos candidatos masivos
         async def fetch_item_candidates(item: RestructuredItem):
             queries = await self._analyze_and_deconstruct(item, metrics)
+            # S1-A-05 — Filtros estructurales pre-vector. Reducen el pool de
+            # candidatos antes del retrieval, lo que ahorra coste en partidas
+            # con `chapter` confiable (la mayoría tras `stabilize_chapter_name`).
+            filters = _derive_structural_filters(item)
+            chapter_filter = filters["chapter_filter"]
+            unit_dim_filter = filters["unit_dimension_filter"]
+            # Trazabilidad post-filter para validar la reducción de ≥30% que
+            # menciona el plan. ``candidates`` ya viene filtrado por la propia
+            # query; aquí solo emitimos los filtros aplicados.
+            self._emit(budget_id, 'structural_filters_applied', {
+                "code": item.code,
+                "chapter_filter": chapter_filter,
+                "unit_dimension_filter": unit_dim_filter,
+            })
             candidates = await self._firestore_vector_swarm(
                 queries,
-                partida_unit_dimension=item.unit_dimension,
+                partida_unit_dimension=unit_dim_filter,
+                chapter_filter=chapter_filter,
             )
             return item, candidates
             
