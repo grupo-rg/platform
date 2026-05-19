@@ -182,6 +182,11 @@ async def bootstrap_hybrid_catalog_search() -> Optional[HybridCatalogSearch]:
 # `sentence-transformers` no está disponible (entorno sin ML deps, p.ej.
 # tests locales antes de `pip install -r requirements.txt`), capturamos el
 # ImportError y dejamos `None` — el swarm cae al rerank Flash legacy.
+#
+# S2-A-00 — tras instanciar, hacemos `pre_warm()` para forzar la
+# inicialización de torch + cacheo del grafo. Sin esto, el primer rerank
+# tarda ~30s (cold-start de torch en CPU); con pre-warm, ~150-300ms
+# desde el primer call. Coste amortizado: ~3s al boot del worker.
 _bge_reranker_singleton: Optional[BgeReranker] = None
 try:
     _bge_reranker_singleton = BgeReranker.get()
@@ -189,6 +194,17 @@ try:
     _logging.getLogger(__name__).info(
         "[bootstrap] BgeReranker ready (cross-encoder BAAI/bge-reranker-v2-m3)"
     )
+    # S2-A-00 — pre-warm para amortizar el cold-start de torch.
+    try:
+        _bge_reranker_singleton.pre_warm()
+        _logging.getLogger(__name__).info(
+            "[bootstrap] BgeReranker pre-warmed (torch graph cached)"
+        )
+    except Exception as _bge_warm_err:  # pragma: no cover
+        _logging.getLogger(__name__).warning(
+            f"[bootstrap] BgeReranker pre_warm failed ({_bge_warm_err}); "
+            f"first rerank will pay cold-start"
+        )
 except Exception as _bge_err:  # pragma: no cover (depends on host env)
     import logging as _logging
     _logging.getLogger(__name__).warning(

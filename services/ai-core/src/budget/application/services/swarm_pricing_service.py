@@ -18,7 +18,10 @@ from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem
 from src.budget.application.services.reconciliation import reconcile_breakdown
 from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
 from src.budget.application.services.pricing_cache import PricingCache
-from src.budget.infrastructure.adapters.reranking.bge_reranker import BgeReranker
+from src.budget.infrastructure.adapters.reranking.bge_reranker import (
+    BgeReranker,
+    is_enabled as _bge_is_enabled,
+)
 from src.budget.learning.application.ports.heuristic_fragment_repository import IHeuristicFragmentRepository
 
 # -------------------------------------------------------------------------------------------------
@@ -623,12 +626,25 @@ class SwarmPricingService:
         el cross-encoder local (~50-200ms, $0/partida). Si no, se cae al
         path con Gemini Flash (legacy, ~500ms-1s, $0.01/partida).
 
-        Si hay ≤ 3 candidatos: passthrough sin reranker (no aporta valor).
+        S2-A-00: kill-switch via ``ENABLE_BGE_RERANK=false`` salta el
+        rerank por completo y devuelve los top-3 del hybrid search
+        directamente (asumiendo que ya viene ordenado por score). Si hay
+        ≤ 3 candidatos: passthrough sin reranker (no aporta valor).
         Cualquier fallo: passthrough con los originales (no se rompe el pipeline).
         IDs inventados por el LLM se descartan defensivamente.
         """
         if len(candidates) <= 3:
             return candidates
+
+        # S2-A-00 — kill-switch. Si BGE rerank está desactivado por env,
+        # devolvemos los top-3 del hybrid search sin pasar por el LLM ni
+        # por el cross-encoder. Útil para A/B y emergencias.
+        if not _bge_is_enabled():
+            logger.info(
+                "[BgeReranker] disabled by ENABLE_BGE_RERANK=false; "
+                "returning top-3 from hybrid search"
+            )
+            return candidates[:3]
 
         # S1-A-03 — cross-encoder local path.
         if self.reranker is not None:
@@ -1163,8 +1179,74 @@ class SwarmPricingService:
                 })
             return item, reranked
 
-        rerank_tasks = [_rerank_for_item(it, cs) for it, cs in items_with_cands]
-        reranked_pairs = await asyncio.gather(*rerank_tasks)
+        # S2-A-00 — fast path: si tenemos BGE inyectado Y el kill-switch
+        # está ON, hacemos un solo `batch_rerank` con TODOS los pairs
+        # (partidas concurrentes × max 5 candidates c/u) en un solo
+        # forward pass del cross-encoder. Speedup esperado: ~6-8x vs
+        # 1 rerank por partida.
+        use_batch_rerank = (
+            self.reranker is not None
+            and _bge_is_enabled()
+            and len(items_with_cands) > 1
+        )
+        if use_batch_rerank:
+            # Construimos la lista de (query, candidates) solo para las
+            # partidas que pasan el threshold de >3 candidates (el resto
+            # son passthrough sin rerank, igual que single-item path).
+            rerankable: List[tuple[RestructuredItem, List[Dict[str, Any]]]] = []
+            passthrough: List[tuple[RestructuredItem, List[Dict[str, Any]]]] = []
+            for it, cs in items_with_cands:
+                if len(cs) > 3:
+                    rerankable.append((it, cs))
+                else:
+                    passthrough.append((it, cs))
+
+            try:
+                if rerankable:
+                    queries_with_cands = [
+                        (
+                            f"{(it.description or '')} ({it.unit or '?'})",
+                            cs,
+                        )
+                        for it, cs in rerankable
+                    ]
+                    # Llamada única — el cross-encoder hace batching nativo.
+                    batched = await asyncio.to_thread(
+                        self.reranker.batch_rerank,
+                        queries_with_cands,
+                        top_n=3,
+                    )
+                    reranked_pairs_batched: List[tuple[Any, List[Dict[str, Any]]]] = []
+                    for (it, original_cs), ranked in zip(rerankable, batched):
+                        reranked_cands = [c for c, _ in ranked] if ranked else original_cs[:3]
+                        if not reranked_cands:
+                            reranked_cands = original_cs[:3]
+                        self._emit(budget_id, 'rerank_applied', {
+                            "code": it.code,
+                            "input_size": len(original_cs),
+                            "output_size": len(reranked_cands),
+                            "selected_ids": [c.get("id") for c in reranked_cands],
+                            "batched": True,
+                        })
+                        reranked_pairs_batched.append((it, reranked_cands))
+                    reranked_pairs = list(reranked_pairs_batched) + list(passthrough)
+                else:
+                    # Nada que rerankear: passthrough completo.
+                    reranked_pairs = list(passthrough)
+            except Exception as e:
+                # Si el batch revienta, caemos al path uno-a-uno por
+                # robustez. No queremos que un crash en batching tumbe
+                # un job de 74 partidas.
+                logger.warning(
+                    f"[BgeReranker] batch_rerank failed ({type(e).__name__}: {e}); "
+                    f"falling back to per-item rerank"
+                )
+                rerank_tasks = [_rerank_for_item(it, cs) for it, cs in items_with_cands]
+                reranked_pairs = await asyncio.gather(*rerank_tasks)
+        else:
+            # Path legacy / single-item / kill-switch off: uno por uno.
+            rerank_tasks = [_rerank_for_item(it, cs) for it, cs in items_with_cands]
+            reranked_pairs = await asyncio.gather(*rerank_tasks)
 
         for item, candidates in reranked_pairs:
             candidates_map[item.code] = {"item": item, "candidates": candidates}

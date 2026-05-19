@@ -15,6 +15,12 @@ Tests:
   4. Singleton (``BgeReranker.get()``) no recarga el modelo en llamadas
      repetidas.
   5. Lazy loading: importar el módulo NO instancia `sentence_transformers`.
+
+S2-A-00 (sprint 2):
+  6. ``pre_warm`` ejecuta un dummy predict y marca `_warmed=True`.
+  7. ``rerank`` con max_input_candidates trunca el input al cross-encoder.
+  8. ``batch_rerank`` acumula pairs y los procesa en un solo predict.
+  9. ``is_enabled`` devuelve False con ENABLE_BGE_RERANK=false.
 """
 from __future__ import annotations
 
@@ -24,19 +30,28 @@ import pytest
 
 from src.budget.infrastructure.adapters.reranking.bge_reranker import (
     BgeReranker,
+    is_enabled,
 )
 
 
 class _CrossEncoderLike:
     """Fake del `sentence_transformers.CrossEncoder` para tests sin instalar
-    el modelo de ~280MB. Devuelve scores predecibles según la posición."""
+    el modelo de ~280MB. Devuelve scores predecibles según la posición.
+
+    S2-A-00 — el fake acepta `batch_size` kwarg como hace el real
+    CrossEncoder. Lo ignora pero lo registra para que el test verifique
+    que se pasa.
+    """
 
     def __init__(self, scores_per_call: List[List[float]]):
         self._scores = scores_per_call
         self.predict_calls: List[List[tuple[str, str]]] = []
+        self.batch_sizes_seen: List[int] = []
 
-    def predict(self, pairs: Sequence[tuple[str, str]]):
+    def predict(self, pairs: Sequence[tuple[str, str]], batch_size: int = 0):
         self.predict_calls.append(list(pairs))
+        if batch_size:
+            self.batch_sizes_seen.append(batch_size)
         # Devuelve los scores en orden.
         return self._scores.pop(0)
 
@@ -264,3 +279,228 @@ def test_swarm_uses_bge_when_injected(monkeypatch):
     assert flash_rerank_invocations == [], (
         f"Se esperaba 0 llamadas Flash rerank con BGE inyectado, got {len(flash_rerank_invocations)}"
     )
+
+
+# ---- S2-A-00 — Optimizations: pre-warm, top-k, batching, kill-switch -----
+
+
+def test_pre_warm_runs_dummy_predict_and_marks_warmed():
+    """`pre_warm()` invokes model.predict once with a dummy pair."""
+    ce = _CrossEncoderLike([[0.1]])  # one warmup result
+    reranker = BgeReranker(model=ce)
+    assert reranker._warmed is False
+    reranker.pre_warm()
+    assert reranker._warmed is True
+    # El dummy pair llegó al modelo.
+    assert len(ce.predict_calls) == 1
+    assert ce.predict_calls[0] == [("warmup", "warmup")]
+
+
+def test_pre_warm_is_idempotent():
+    """Llamar `pre_warm()` dos veces no ejecuta predict dos veces."""
+    ce = _CrossEncoderLike([[0.1]])
+    reranker = BgeReranker(model=ce)
+    reranker.pre_warm()
+    reranker.pre_warm()
+    # Solo se llamó al modelo una vez.
+    assert len(ce.predict_calls) == 1
+
+
+def test_pre_warm_handles_model_exception_gracefully():
+    """Si el modelo revienta en pre_warm, no propagamos."""
+    class _BoomModel:
+        def predict(self, pairs, batch_size=0):
+            raise RuntimeError("torch not ready")
+
+    reranker = BgeReranker(model=_BoomModel())
+    # No raise — el boot del worker debe continuar.
+    reranker.pre_warm()
+    assert reranker._warmed is False
+
+
+def test_pre_warm_with_no_model_is_noop():
+    """`pre_warm` con `model=None` es no-op."""
+    reranker = BgeReranker(model=None)
+    reranker.pre_warm()  # no raise
+    assert reranker._warmed is False
+
+
+def test_rerank_truncates_input_to_max_input_candidates():
+    """S2-A-00 — `max_input_candidates` limita los pairs al cross-encoder."""
+    # Pasamos 10 candidates pero limitamos a 3. El predict debe recibir
+    # solo 3 pairs.
+    ce = _CrossEncoderLike([[0.9, 0.7, 0.5]])
+    reranker = BgeReranker(model=ce)
+    cands = [_cand(f"C{i}", f"desc {i}") for i in range(10)]
+    ranked = reranker.rerank(
+        query="q", candidates=cands, top_n=3, max_input_candidates=3
+    )
+    assert len(ranked) == 3
+    # El predict recibió solo 3 pairs (los primeros 3 candidates).
+    assert len(ce.predict_calls[0]) == 3
+    assert [p[1] for p in ce.predict_calls[0]] == ["desc 0", "desc 1", "desc 2"]
+
+
+def test_rerank_default_max_input_is_5():
+    """`DEFAULT_TOP_N=5` — sin pasar el kwarg, se limita a 5."""
+    ce = _CrossEncoderLike([[0.9, 0.8, 0.7, 0.6, 0.5]])
+    reranker = BgeReranker(model=ce)
+    cands = [_cand(f"C{i}", f"desc {i}") for i in range(10)]
+    ranked = reranker.rerank(query="q", candidates=cands, top_n=3)
+    # El predict recibió 5 pairs (no 10) y devolvió 3.
+    assert len(ce.predict_calls[0]) == 5
+    assert len(ranked) == 3
+
+
+def test_rerank_passes_batch_size_kwarg():
+    """El reranker pasa `batch_size` al `model.predict` cuando el modelo lo soporta."""
+    ce = _CrossEncoderLike([[0.1, 0.2]])
+    reranker = BgeReranker(model=ce, batch_size=8)
+    cands = [_cand("A", "a"), _cand("B", "b")]
+    reranker.rerank(query="q", candidates=cands, top_n=2)
+    # El fake registró que recibió batch_size=8.
+    assert ce.batch_sizes_seen == [8]
+
+
+def test_batch_rerank_single_predict_call():
+    """S2-A-00 — `batch_rerank` colapsa todas las queries en un solo predict."""
+    # 3 queries × 2 candidates = 6 pairs en un único predict call.
+    ce = _CrossEncoderLike([[0.5, 0.1, 0.9, 0.2, 0.3, 0.7]])
+    reranker = BgeReranker(model=ce)
+
+    queries_with_cands = [
+        ("q1", [_cand("A1", "a1"), _cand("A2", "a2")]),
+        ("q2", [_cand("B1", "b1"), _cand("B2", "b2")]),
+        ("q3", [_cand("C1", "c1"), _cand("C2", "c2")]),
+    ]
+    results = reranker.batch_rerank(queries_with_cands, top_n=2)
+
+    # Un solo call al modelo.
+    assert len(ce.predict_calls) == 1
+    # Los 6 pairs llegan en orden.
+    assert ce.predict_calls[0] == [
+        ("q1", "a1"), ("q1", "a2"),
+        ("q2", "b1"), ("q2", "b2"),
+        ("q3", "c1"), ("q3", "c2"),
+    ]
+
+    # Resultados por query, ordenados por score descendente.
+    assert len(results) == 3
+    # q1: A1=0.5, A2=0.1 → orden A1, A2
+    assert [c["id"] for c, _ in results[0]] == ["A1", "A2"]
+    assert results[0][0][1] == pytest.approx(0.5)
+    # q2: B1=0.9, B2=0.2 → B1, B2
+    assert [c["id"] for c, _ in results[1]] == ["B1", "B2"]
+    # q3: C1=0.3, C2=0.7 → C2, C1
+    assert [c["id"] for c, _ in results[2]] == ["C2", "C1"]
+
+
+def test_batch_rerank_respects_top_n_per_query():
+    """`batch_rerank` aplica top_n por cada query individualmente."""
+    # 2 queries × 3 candidates → 6 pairs.
+    ce = _CrossEncoderLike([[0.1, 0.9, 0.5, 0.2, 0.8, 0.3]])
+    reranker = BgeReranker(model=ce)
+    qc = [
+        ("q1", [_cand("A", "a"), _cand("B", "b"), _cand("C", "c")]),
+        ("q2", [_cand("D", "d"), _cand("E", "e"), _cand("F", "f")]),
+    ]
+    results = reranker.batch_rerank(qc, top_n=1)
+    assert len(results) == 2
+    # q1 top1: B (0.9). q2 top1: E (0.8).
+    assert results[0][0][0]["id"] == "B"
+    assert results[1][0][0]["id"] == "E"
+
+
+def test_batch_rerank_truncates_input_per_query():
+    """`batch_rerank` aplica `max_input_candidates` por query."""
+    # 2 queries × 10 candidates → limitamos a 3 por query → 6 pairs.
+    ce = _CrossEncoderLike([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]])
+    reranker = BgeReranker(model=ce)
+    qc = [
+        ("q1", [_cand(f"A{i}", f"a{i}") for i in range(10)]),
+        ("q2", [_cand(f"B{i}", f"b{i}") for i in range(10)]),
+    ]
+    reranker.batch_rerank(qc, top_n=3, max_input_candidates=3)
+    # Solo 6 pairs llegaron al modelo (2 × 3).
+    assert len(ce.predict_calls[0]) == 6
+
+
+def test_batch_rerank_handles_empty_input():
+    """`batch_rerank` con lista vacía devuelve lista vacía sin llamar al modelo."""
+    ce = _CrossEncoderLike([])
+    reranker = BgeReranker(model=ce)
+    out = reranker.batch_rerank([], top_n=3)
+    assert out == []
+    assert ce.predict_calls == []
+
+
+def test_batch_rerank_handles_query_with_empty_candidates():
+    """Una query con candidates vacíos devuelve `[]` para esa posición."""
+    # 2 queries; la primera sin candidates, la segunda con 2.
+    ce = _CrossEncoderLike([[0.5, 0.7]])
+    reranker = BgeReranker(model=ce)
+    qc = [
+        ("q1", []),  # sin candidates
+        ("q2", [_cand("A", "a"), _cand("B", "b")]),
+    ]
+    results = reranker.batch_rerank(qc, top_n=2)
+    assert results[0] == []
+    assert len(results[1]) == 2
+
+
+def test_batch_rerank_handles_predict_exception_with_fallback():
+    """Si el predict revienta, devolvemos top_n por query con score=0."""
+    class _BoomModel:
+        def predict(self, pairs, batch_size=0):
+            raise RuntimeError("oom")
+
+    reranker = BgeReranker(model=_BoomModel())
+    qc = [
+        ("q1", [_cand("A", "a"), _cand("B", "b")]),
+        ("q2", [_cand("C", "c")]),
+    ]
+    results = reranker.batch_rerank(qc, top_n=2)
+    assert len(results) == 2
+    assert [c["id"] for c, _ in results[0]] == ["A", "B"]
+    assert [c["id"] for c, _ in results[1]] == ["C"]
+    # Todos los scores fallback son 0.
+    assert all(s == 0.0 for _, s in results[0])
+
+
+def test_is_enabled_default_true():
+    """`is_enabled()` devuelve True por defecto."""
+    assert is_enabled(env={}) is True
+
+
+def test_is_enabled_false_with_explicit_falsy():
+    """`is_enabled()` devuelve False con valores falsy explícitos."""
+    for val in ["false", "False", "FALSE", "0", "no", "NO", "off", "OFF"]:
+        assert is_enabled(env={"ENABLE_BGE_RERANK": val}) is False, val
+
+
+def test_is_enabled_true_with_truthy_or_unrecognized():
+    """`is_enabled()` devuelve True con valores no falsy."""
+    for val in ["true", "1", "yes", "on", "anything", ""]:
+        # Empty string también True (defaults a habilitado).
+        result = is_enabled(env={"ENABLE_BGE_RERANK": val})
+        if val == "":
+            # Empty falls through to default = True.
+            assert result is True, val
+        else:
+            assert result is True, val
+
+
+def test_batch_rerank_speedup_over_sequential():
+    """Sanity: con N queries, `batch_rerank` hace 1 call vs N calls."""
+    # 8 queries × 5 candidates = 40 pairs.
+    ce = _CrossEncoderLike([[float(i) for i in range(40)]])
+    reranker = BgeReranker(model=ce)
+    qc = [
+        (f"q{q}", [_cand(f"C{q}_{i}", f"desc {q}_{i}") for i in range(5)])
+        for q in range(8)
+    ]
+    reranker.batch_rerank(qc, top_n=3)
+    # Asserción crítica: UN SOLO predict call (no 8).
+    assert len(ce.predict_calls) == 1
+    # 40 pairs en ese único call.
+    assert len(ce.predict_calls[0]) == 40
