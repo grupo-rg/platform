@@ -480,46 +480,106 @@ class NlBudgetRequest(BaseModel):
 
 @app.post("/api/v1/jobs/nl-budget")
 async def process_nl_budget_job(
-    background_tasks: BackgroundTasks,
     payload: NlBudgetRequest,
-    nl_uc: GenerateBudgetFromNlUseCase = Depends(get_generate_budget_from_nl_uc),
+    repo: IPipelineJobRepository = Depends(_deps_get_pipeline_job_repository),
+    executor: IJobExecutor = Depends(_deps_get_job_executor),
+    worker_job_name: str = Depends(_deps_get_worker_job_name),
 ):
-    """
-    Dispara el pipeline NL → Budget (Architect → SwarmPricing → Assembly).
-    Responde 202 inmediatamente; la telemetría llega al UI vía Firestore
-    pipeline_telemetry/{budgetId}/events.
+    """Legacy NL → Budget endpoint.
+
+    Refactored (P5.a) to stop running `GenerateBudgetFromNlUseCase` inline
+    via BackgroundTasks. Same OOM rationale as the PDF endpoints: the
+    SwarmPricing service keeps BGE reranker + catalog resident, so even
+    no-PDF NL jobs spike memory above the Service quota.
+
+    Steps:
+      1. Create `pipeline_jobs/{jobId}` with jobType=`nl-budget` and payload
+         `{narrative, clientName, budgetTitle}`.
+      2. Dispatch a Cloud Run Jobs execution of `ai-core-worker`.
+      3. Return 202.
+
+    Telemetry continues to land on `pipeline_telemetry/{jobId}/events` —
+    the Worker emits the same events as the old BackgroundTasks path.
     """
     if not payload.narrative or len(payload.narrative.strip()) < 10:
         raise HTTPException(status_code=400, detail="narrative demasiado corta")
 
-    async def run_nl_job():
-        try:
-            logger.info(f"[NL→Budget] Starting job for lead={payload.leadId} budget={payload.budgetId}")
-            await nl_uc.execute(
-                narrative=payload.narrative,
-                lead_id=payload.leadId,
-                budget_id=payload.budgetId,
-                client_name=(payload.clientName or "").strip() or None,
-                budget_title=(payload.budgetTitle or "").strip() or None,
-            )
-            logger.info(f"[NL→Budget] Completed job budget={payload.budgetId}")
-        except AskingForClarificationError as asking:
-            logger.info(f"[NL→Budget] Architect asks: {asking.question}")
-            # No hay forma limpia de devolver la pregunta al cliente una vez el
-            # request ya respondió 202. Dejamos el evento extraction_failed_chunk
-            # que el use case emitió; la UI lo pintará como error con el texto.
-        except Exception as e:
-            logger.error(f"[NL→Budget] Job failed: {e}")
-            import traceback
-            traceback.print_exc()
+    job_id = str(uuid.uuid4())
+    budget_id_value = (payload.budgetId or "").strip() or job_id
+    uid = (payload.leadId or "").strip() or "anonymous"
 
-    background_tasks.add_task(run_nl_job)
+    # 1. Persist PipelineJob entity.
+    job = PipelineJob.new(
+        jobId=job_id,
+        jobType=JobType.NL_BUDGET,
+        leadId=payload.leadId,
+        budgetId=budget_id_value,
+        uid=uid,
+        payload={
+            "narrative": payload.narrative,
+            "clientName": (payload.clientName or "").strip() or None,
+            "budgetTitle": (payload.budgetTitle or "").strip() or None,
+        },
+    )
+    try:
+        await repo.create(job)
+    except Exception as e:
+        logger.error(
+            "nl_budget_create_job_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to persist pipeline job: {e}"
+        )
+    logger.info(
+        "nl_budget_dispatch_queued",
+        extra={
+            "jobId": job_id,
+            "budgetId": budget_id_value,
+            "leadId": payload.leadId,
+            "narrativeLen": len(payload.narrative),
+        },
+    )
+
+    # 2. Dispatch worker.
+    try:
+        execution_name = await executor.run_execution(
+            job_name=worker_job_name,
+            env_overrides={"JOB_ID": job_id},
+        )
+    except JobExecutorError as e:
+        try:
+            await repo.mark_dispatch_failed(
+                job_id,
+                error_message=str(e),
+                error_type=type(e).__name__,
+            )
+        except Exception:
+            logger.exception(
+                "nl_budget_mark_failed_error",
+                extra={"jobId": job_id},
+            )
+        logger.error(
+            "nl_budget_executor_failed",
+            extra={"jobId": job_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start Cloud Run Job: {e}",
+        )
+
+    await repo.attach_execution_name(job_id, execution_name)
+    logger.info(
+        "nl_budget_dispatch_started",
+        extra={"jobId": job_id, "executionName": execution_name},
+    )
 
     return JSONResponse(status_code=202, content={
         "status": "processing",
-        "message": "NL → Budget pipeline started.",
+        "message": "NL → Budget pipeline dispatched to Cloud Run Job worker.",
+        "jobId": job_id,
         "leadId": payload.leadId,
-        "budgetId": payload.budgetId,
+        "budgetId": budget_id_value,
     })
 
 

@@ -1,52 +1,65 @@
 """Tests del endpoint POST /api/v1/jobs/nl-budget.
 
-Usa FastAPI TestClient con un use case stub para evitar tocar LLM/Firestore.
-Valida:
+P5.a — refactor que migra el endpoint a Cloud Run Jobs dispatch.
+Ahora el handler crea un PipelineJob en Firestore y dispara un worker; ya no
+corre `GenerateBudgetFromNlUseCase` inline. Estos tests validan el shape
+externo (status codes, response body) usando un repo en memoria y un mock
+del executor.
+
+Cobertura:
   - narrativa corta → 400
-  - payload válido + auth OK → 202 + devuelve budgetId
+  - payload válido → 202 + devuelve {jobId, leadId, budgetId}
   - error de schema del body → 422 (Pydantic automático)
+  - middleware INTERNAL_WORKER_TOKEN sigue funcionando
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+import os
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-# Forzamos que el middleware acepte todo en tests (token vacío = dev mode)
-import os
+# Forzamos que el middleware acepte todo en tests (token vacío = dev mode).
 os.environ.pop("INTERNAL_WORKER_TOKEN", None)
 
-from src.core.http.main import app
-from src.core.http.dependencies import get_generate_budget_from_nl_uc
+# main.py inicializa Firebase Admin al importarse — IMPORTANTE que se importe
+# antes que dependencies.py para no romper `firestore.client()`.
+from src.core.http.main import app  # noqa: E402
+from src.core.http.dependencies import (  # noqa: E402
+    get_job_executor as _deps_get_job_executor,
+    get_pipeline_job_repository as _deps_get_pipeline_job_repository,
+    get_worker_job_name as _deps_get_worker_job_name,
+)
+from src.pipeline_jobs.infrastructure.in_memory_pipeline_job_repository import (  # noqa: E402
+    InMemoryPipelineJobRepository,
+)
 
-
-class _StubUseCase:
-    """Captura las llamadas y no ejecuta nada real."""
-
-    def __init__(self):
-        self.calls = []
-
-    async def execute(self, narrative: str, lead_id: str = "anonymous", budget_id=None):
-        self.calls.append({"narrative": narrative, "lead_id": lead_id, "budget_id": budget_id})
-        # Devolvemos un Budget mock mínimo — el endpoint no lo inspecciona porque
-        # el job corre en background.
-        return None
+WORKER_JOB_NAME = (
+    "projects/grupo-rg-a9929/locations/europe-southwest1/jobs/ai-core-worker"
+)
+EXEC_NAME = WORKER_JOB_NAME + "/executions/exec-test"
 
 
 @pytest.fixture
-def client_with_stub():
-    stub = _StubUseCase()
-    app.dependency_overrides[get_generate_budget_from_nl_uc] = lambda: stub
+def client_with_dispatcher(monkeypatch):
+    """Mocks the dispatcher dependencies — no real Firestore / Cloud Run."""
+    monkeypatch.delenv("INTERNAL_WORKER_TOKEN", raising=False)
+    repo = InMemoryPipelineJobRepository()
+    executor = MagicMock()
+    executor.run_execution = AsyncMock(return_value=EXEC_NAME)
+    app.dependency_overrides[_deps_get_pipeline_job_repository] = lambda: repo
+    app.dependency_overrides[_deps_get_job_executor] = lambda: executor
+    app.dependency_overrides[_deps_get_worker_job_name] = lambda: WORKER_JOB_NAME
     try:
-        yield TestClient(app), stub
+        yield TestClient(app), repo, executor
     finally:
         app.dependency_overrides.clear()
 
 
-def test_rejects_narrative_too_short(client_with_stub):
-    client, _ = client_with_stub
+def test_rejects_narrative_too_short(client_with_dispatcher):
+    client, _, _ = client_with_dispatcher
     r = client.post("/api/v1/jobs/nl-budget", json={
         "leadId": "l1",
         "budgetId": "b1",
@@ -56,8 +69,8 @@ def test_rejects_narrative_too_short(client_with_stub):
     assert "narrative" in r.json()["detail"]
 
 
-def test_accepts_valid_payload_and_returns_202(client_with_stub):
-    client, _ = client_with_stub
+def test_accepts_valid_payload_and_returns_202(client_with_dispatcher):
+    client, repo, executor = client_with_dispatcher
     r = client.post("/api/v1/jobs/nl-budget", json={
         "leadId": "lead-42",
         "budgetId": "bid-42",
@@ -68,17 +81,23 @@ def test_accepts_valid_payload_and_returns_202(client_with_stub):
     assert body["status"] == "processing"
     assert body["budgetId"] == "bid-42"
     assert body["leadId"] == "lead-42"
+    # New contract: jobId returned so the UI can subscribe to telemetry.
+    assert body["jobId"]
+    # Worker dispatched with JOB_ID env override.
+    executor.run_execution.assert_awaited_once()
+    kwargs = executor.run_execution.call_args.kwargs
+    assert kwargs.get("env_overrides") == {"JOB_ID": body["jobId"]}
 
 
-def test_rejects_malformed_body_with_422(client_with_stub):
-    client, _ = client_with_stub
+def test_rejects_malformed_body_with_422(client_with_dispatcher):
+    client, _, _ = client_with_dispatcher
     # Falta el campo `narrative` requerido
     r = client.post("/api/v1/jobs/nl-budget", json={"leadId": "x"})
     assert r.status_code == 422
 
 
-def test_defaults_lead_id_when_missing(client_with_stub):
-    client, _ = client_with_stub
+def test_defaults_lead_id_when_missing(client_with_dispatcher):
+    client, _, _ = client_with_dispatcher
     r = client.post("/api/v1/jobs/nl-budget", json={
         "narrative": "Reforma cualquiera con al menos diez caracteres.",
     })
@@ -89,8 +108,12 @@ def test_defaults_lead_id_when_missing(client_with_stub):
 def test_endpoint_requires_token_when_configured(monkeypatch):
     """Con INTERNAL_WORKER_TOKEN configurado, sin header el endpoint devuelve 401."""
     monkeypatch.setenv("INTERNAL_WORKER_TOKEN", "required-token")
-    stub = _StubUseCase()
-    app.dependency_overrides[get_generate_budget_from_nl_uc] = lambda: stub
+    repo = InMemoryPipelineJobRepository()
+    executor = MagicMock()
+    executor.run_execution = AsyncMock(return_value=EXEC_NAME)
+    app.dependency_overrides[_deps_get_pipeline_job_repository] = lambda: repo
+    app.dependency_overrides[_deps_get_job_executor] = lambda: executor
+    app.dependency_overrides[_deps_get_worker_job_name] = lambda: WORKER_JOB_NAME
     try:
         client = TestClient(app)
         r = client.post("/api/v1/jobs/nl-budget", json={"narrative": "Reforma ya definida y suficiente."})
