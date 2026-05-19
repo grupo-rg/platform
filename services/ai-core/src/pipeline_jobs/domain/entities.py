@@ -56,6 +56,14 @@ class PipelineJob(BaseModel):
     updatedAt: datetime
     startedAt: Optional[datetime] = None
     finishedAt: Optional[datetime] = None
+    # S2-A-04 — adaptive chunking. Cuando un budget tiene >500 partidas se
+    # parte en sub-jobs ≤200 items cada uno (por capítulo, con un sub-job
+    # especial para `[UNKNOWN]` o `VARIOS`). El parent_job_id apunta al job
+    # original; chunk_index/chunk_total identifican la posición del sub-job.
+    # En el path single-job legacy, los 3 son None.
+    parent_job_id: Optional[str] = None
+    chunk_index: Optional[int] = None
+    chunk_total: Optional[int] = None
 
     # ------------------------------------------------------------------
     # Factories
@@ -71,6 +79,9 @@ class PipelineJob(BaseModel):
         budgetId: str,
         uid: str,
         payload: dict[str, Any],
+        parent_job_id: Optional[str] = None,
+        chunk_index: Optional[int] = None,
+        chunk_total: Optional[int] = None,
     ) -> "PipelineJob":
         now = datetime.utcnow()
         return cls(
@@ -80,6 +91,9 @@ class PipelineJob(BaseModel):
             budgetId=budgetId,
             uid=uid,
             payload=payload,
+            parent_job_id=parent_job_id,
+            chunk_index=chunk_index,
+            chunk_total=chunk_total,
             createdAt=now,
             updatedAt=now,
         )
