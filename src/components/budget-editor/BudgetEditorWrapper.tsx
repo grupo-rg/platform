@@ -330,10 +330,14 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
     const isDemoLocked = !isAdmin && localPdfCount > 0;
 
     const editorContextValue = {
-        state, updateItem, addItem, reorderItems, removeItem, duplicateItem, undo, redo, 
-        saveStart, saveSuccess, saveError, canUndo, canRedo, addChapter, removeChapter, 
+        state, updateItem, addItem, reorderItems, removeItem, duplicateItem, undo, redo,
+        saveStart, saveSuccess, saveError, canUndo, canRedo, addChapter, removeChapter,
         renameChapter, reorderChapters, setExecutionMode, updateConfig, applyMarkup,
-        isAdmin, isReadOnly: isDemoLocked, leadId: budget.leadId === 'unassigned' ? undefined : budget.leadId
+        isAdmin, isReadOnly: isDemoLocked,
+        leadId: budget.leadId === 'unassigned' ? undefined : budget.leadId,
+        // Sprint 3 — S3-07: budgetId disponible para los hijos que registran
+        // pares de corrección RLHF (TableRowItem → logCorrectionPairAction).
+        budgetId: budget.id,
     };
 
     return (

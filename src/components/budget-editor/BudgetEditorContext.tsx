@@ -9,6 +9,12 @@ export type BudgetEditorContextType = ReturnType<typeof useBudgetEditor> & {
     isReadOnly?: boolean;
     isAdmin?: boolean;
     leadId?: string;
+    /**
+     * Sprint 3 — S3-07: id del budget actual, requerido para registrar
+     * pares de corrección RLHF (action `logCorrectionPairAction`). Si está
+     * ausente (demo anónima), el logger hace short-circuit silencioso.
+     */
+    budgetId?: string;
 };
 
 const BudgetEditorContext = createContext<BudgetEditorContextType | undefined>(undefined);
