@@ -185,6 +185,34 @@ TIER_FLASH_SCORE_THRESHOLD: float = 0.85
 MODEL_FLASH: str = "gemini-2.5-flash"
 MODEL_PRO: str = "gemini-2.5-pro"
 
+# S1-A-07 — concurrencia del swarm de pricing. Configurable vía
+# ``SWARM_CONCURRENCY`` (default 8). El valor previo era 4, que el incidente
+# 2026-05-18 demostró insuficiente (los 4 slots se atascaron en Pro/503).
+# Con Flash como default (S1-A-01) + timeout (S1-A-06), 8 es seguro.
+_DEFAULT_SWARM_CONCURRENCY: int = 8
+
+
+def _read_swarm_concurrency() -> int:
+    """Lee ``SWARM_CONCURRENCY`` del entorno; sanity [1, 64]; default 8."""
+    raw = (os.environ.get("SWARM_CONCURRENCY") or "").strip()
+    if not raw:
+        return _DEFAULT_SWARM_CONCURRENCY
+    try:
+        v = int(raw)
+        if v < 1 or v > 64:
+            logger.warning(
+                "SWARM_CONCURRENCY=%s fuera de rango [1,64]; usando default %d",
+                raw, _DEFAULT_SWARM_CONCURRENCY,
+            )
+            return _DEFAULT_SWARM_CONCURRENCY
+        return v
+    except ValueError:
+        logger.warning(
+            "SWARM_CONCURRENCY=%s no es int válido; usando default %d",
+            raw, _DEFAULT_SWARM_CONCURRENCY,
+        )
+        return _DEFAULT_SWARM_CONCURRENCY
+
 
 def _env_truthy(value: Optional[str]) -> bool:
     """Helper to interpret env-var strings as boolean flags.
@@ -797,7 +825,13 @@ class SwarmPricingService:
         # Fase 6.C → 6.D: qué fragments se inyectaron al prompt de qué partida.
         # Poblado en evaluate_chunk, leído en el assembly de BudgetPartida (6.D).
         fragments_used_per_code: Dict[str, List[str]] = {}
-        semaphore_pricing = asyncio.Semaphore(4)
+        # S1-A-07 — concurrencia del swarm configurable. Default 8 (era 4
+        # hardcodeado). Con Flash como default + timeout por llamada, 8 slots
+        # son seguros y duplican el throughput sin saturar la API.
+        swarm_concurrency = _read_swarm_concurrency()
+        logger.info(f"[swarm] concurrency={swarm_concurrency}")
+        self._emit(budget_id, 'swarm_concurrency_set', {"value": swarm_concurrency})
+        semaphore_pricing = asyncio.Semaphore(swarm_concurrency)
 
         # Fase 14.B — PEM acumulado por capítulo, poblado tras la 1ª pasada
         # (no-medios) y leído por evaluate_chunk en la 2ª pasada (medios).
