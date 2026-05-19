@@ -19,7 +19,14 @@ export async function verifyAuth(requireAdmin = false): Promise<AuthResult | nul
         // Verify the session cookie
         const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
 
-        const role = decodedClaims.admin ? 'admin' : 'user';
+        // Accept either the legacy `{ admin: true }` claim or the actual
+        // claim that scripts/set-admin.js writes: `{ role: 'super-admin' }`.
+        // Both mean "admin"; without this OR the admin pages reject every
+        // user even though set-admin.js was run.
+        const isAdmin = decodedClaims.admin === true
+            || decodedClaims.role === 'super-admin'
+            || decodedClaims.role === 'admin';
+        const role: 'admin' | 'user' = isAdmin ? 'admin' : 'user';
 
         if (requireAdmin && role !== 'admin') {
             return null; // or throw forbidden
