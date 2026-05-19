@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import json
+import time
 import uuid
 import inspect
 from typing import Awaitable, Callable, List, Dict, Any, Optional, Literal
@@ -185,6 +186,26 @@ MODEL_FLASH: str = "gemini-2.5-flash"
 MODEL_PRO: str = "gemini-2.5-pro"
 
 
+def _resolve_pricing_model(intended: str) -> str:
+    """Aplica el override `FORCE_FLASH_PRICING` si está activo en el entorno.
+
+    Razón de existir: incidente 2026-05-18. Con PDFs muy grandes (250+ pp →
+    876 partidas) y Gemini Pro 2.5 sufriendo 503s intermitentes, las cadenas
+    internas de retry de Genkit bloqueaban los 4 slots del semáforo y el
+    job se quedaba zombi (heartbeat vivo, cero partidas nuevas).
+
+    El override permite degradar Pro→Flash sin redeploy: basta con setear
+    la env var `FORCE_FLASH_PRICING=true` en el Cloud Run Job y reintentar.
+    Para revertir, quitar la env var. La heurística `_select_tier` sigue
+    intacta — solo se sustituye el modelo destino en el momento de la
+    llamada.
+    """
+    import os
+    if intended == MODEL_PRO and os.environ.get("FORCE_FLASH_PRICING") == "true":
+        return MODEL_FLASH
+    return intended
+
+
 def _group_tasks_adaptively(
     batch_tasks: List[Dict[str, Any]],
     candidates_map: Dict[str, Dict[str, Any]],
@@ -366,6 +387,48 @@ def _format_fragments_as_icl(fragments: list[HeuristicFragment]) -> str:
             )
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 1 (S1-B-01) — telemetry aggregators
+#
+# Pure helpers used by `evaluate_batch` to populate `job_metrics_final`. They
+# accept the raw per-partida telemetry list (built by `partida_resolved_v2`
+# emits) and return aggregates the admin UI consumes for cost/latency/quality
+# KPIs. Kept at module level so the test suite can target them directly.
+# ---------------------------------------------------------------------------
+def _calc_cache_hit_rate(resolved_telemetry: List[Dict[str, Any]]) -> float:
+    """Fraction of partidas whose pricing came from the cache (0.0..1.0).
+
+    `cache_hit` may be None for entries emitted before Agent A's S1-A-04
+    cache integration lands; those are excluded from both numerator and
+    denominator so the rate is meaningful once data is available.
+    """
+    eligible = [t for t in resolved_telemetry if t.get('cache_hit') is not None]
+    if not eligible:
+        return 0.0
+    hits = sum(1 for t in eligible if t.get('cache_hit') is True)
+    return round(hits / len(eligible), 4)
+
+
+def _calc_percentile(samples: List[float], pct: int) -> float:
+    """Return the `pct` percentile (0-100) of `samples` using a linear
+    interpolation between adjacent ranks. Empty input returns 0.0; degenerate
+    `pct` is clamped to [0, 100]. Used to surface latency_p50/p95 in the
+    `job_metrics_final` payload without pulling in numpy as a dependency.
+    """
+    if not samples:
+        return 0.0
+    pct = max(0, min(100, int(pct)))
+    ordered = sorted(float(s or 0) for s in samples)
+    if len(ordered) == 1:
+        return round(ordered[0], 2)
+    rank = (pct / 100.0) * (len(ordered) - 1)
+    low = int(rank)
+    high = min(low + 1, len(ordered) - 1)
+    fraction = rank - low
+    value = ordered[low] + (ordered[high] - ordered[low]) * fraction
+    return round(value, 2)
 
 
 class SwarmPricingService:
@@ -630,8 +693,83 @@ class SwarmPricingService:
 
         Calling without either kwarg preserves the legacy behaviour, so
         the existing extractor / NL UC paths are untouched.
+
+        Sprint 1 (S1-B-01): emits `partida_resolved_v2` per resolved partida
+        with tier/tokens/match_kind context and a `job_metrics_final` event
+        in a `finally` block so the admin job-detail page always has KPIs
+        even when the swarm partially fails. Hooks marked `# TODO: connect
+        to S1-A-04` are placeholders for Agent A's per-partida cost/latency
+        cache integration (separate iteration).
         """
-        resume_from = resume_from or []
+        _start = time.monotonic()
+        # Populated alongside each `partida_resolved_v2` emit so we can
+        # compute aggregated KPIs (cache hit rate, p50/p95 latency, tier
+        # counts) for `job_metrics_final` even on partial failure paths.
+        _resolved_telemetry: List[Dict[str, Any]] = []
+        # Per-chunk tier metadata captured inside the `evaluate_chunk`
+        # closure (populated once the tier is selected) and read at
+        # assembly time when we materialise BudgetPartida instances.
+        _tier_per_code: Dict[str, Dict[str, str]] = {}
+
+        try:
+            return await self._evaluate_batch_inner(
+                items=items,
+                budget_id=budget_id,
+                metrics=metrics,
+                resume_from=resume_from or [],
+                on_partida_resolved=on_partida_resolved,
+                _resolved_telemetry=_resolved_telemetry,
+                _tier_per_code=_tier_per_code,
+            )
+        finally:
+            duration_seconds = time.monotonic() - _start
+            try:
+                self._emit(budget_id, 'job_metrics_final', {
+                    'total_tokens_in': metrics.get('prompt', 0),
+                    'total_tokens_out': metrics.get('completion', 0),
+                    'total_cost_usd': metrics.get('cost', 0),
+                    'duration_seconds': round(duration_seconds, 2),
+                    'partidas_total': len(_resolved_telemetry),
+                    'cache_hit_rate': _calc_cache_hit_rate(_resolved_telemetry),
+                    'latency_p50': _calc_percentile(
+                        [t.get('latency_ms', 0) for t in _resolved_telemetry], 50
+                    ),
+                    'latency_p95': _calc_percentile(
+                        [t.get('latency_ms', 0) for t in _resolved_telemetry], 95
+                    ),
+                    'tier_flash_count': sum(
+                        1 for t in _resolved_telemetry if t.get('tier_used') == 'flash'
+                    ),
+                    'tier_pro_count': sum(
+                        1 for t in _resolved_telemetry if t.get('tier_used') == 'pro'
+                    ),
+                    'needs_review_count': sum(
+                        1 for t in _resolved_telemetry if t.get('match_kind') == 'needs_review'
+                    ),
+                })
+            except Exception as _final_err:
+                # Never let telemetry break the swarm contract. Log and move on.
+                logger.warning(
+                    f"[telemetry] job_metrics_final emit failed: "
+                    f"{type(_final_err).__name__}: {_final_err}"
+                )
+
+    async def _evaluate_batch_inner(
+        self,
+        items: List[RestructuredItem],
+        budget_id: str,
+        metrics: Dict,
+        resume_from: List[BudgetPartida],
+        on_partida_resolved: Optional[Callable[[BudgetPartida], Awaitable[None]]],
+        _resolved_telemetry: List[Dict[str, Any]],
+        _tier_per_code: Dict[str, Dict[str, str]],
+    ) -> List[BudgetPartida]:
+        """Original `evaluate_batch` body extracted verbatim. Wrapped by the
+        public `evaluate_batch` so we can guarantee `job_metrics_final`
+        emission via a `try`/`finally` even on partial failure. Two new
+        keyword args (`_resolved_telemetry`, `_tier_per_code`) are populated
+        as side effects for the outer aggregator.
+        """
         resumed_codes = {p.code for p in resume_from if p.code}
         if resumed_codes:
             before = len(items)
@@ -813,10 +951,20 @@ class SwarmPricingService:
                         "tier": tier,
                         "reason": tier_reason,
                     })
+                # Sprint 1 (S1-B-01) — propagate the selected tier to the
+                # assembly stage so `partida_resolved_v2` can label each
+                # partida. Flash easy clusters share a tier across all items
+                # of the group, so we record it for every code in the chunk.
+                for _task in task_group:
+                    _tier_per_code[_task["id"]] = {
+                        "tier": tier,
+                        "reason": tier_reason,
+                    }
 
                 # Respetando cuota
                 await asyncio.sleep(1.0)
-                model_to_use = MODEL_FLASH if tier == "flash" else MODEL_PRO
+                intended_model = MODEL_FLASH if tier == "flash" else MODEL_PRO
+                model_to_use = _resolve_pricing_model(intended_model)
                 eval_res, usage = await self.llm.generate_structured(
                     system_prompt=sys_prompt,
                     user_prompt=user_prompt,
@@ -845,12 +993,20 @@ class SwarmPricingService:
                             f"→ re-tasando con Pro"
                         ),
                     })
+                    # Sprint 1 (S1-B-01) — reflect the escalation in the
+                    # tier map so the final telemetry attributes the partida
+                    # to Pro (the model that actually produced the result).
+                    for _task in task_group:
+                        _tier_per_code[_task["id"]] = {
+                            "tier": "pro",
+                            "reason": f"escalated from flash: {tier_reason}",
+                        }
                     eval_res_pro, usage_pro = await self.llm.generate_structured(
                         system_prompt=sys_prompt,
                         user_prompt=user_prompt,
                         response_schema=BatchPricingEvaluatorResultV3,
                         temperature=0.0,
-                        model=MODEL_PRO,
+                        model=_resolve_pricing_model(MODEL_PRO),
                     )
                     if eval_res_pro and eval_res_pro.results:
                         eval_res = eval_res_pro
@@ -1173,6 +1329,27 @@ class SwarmPricingService:
                     priced_partidas.append(partida)
 
                     self._emit(budget_id, 'item_resolved', {"type": "PARTIDA", "item": partida.model_dump()})
+
+                    # Sprint 1 (S1-B-01) — strongly-typed companion event the
+                    # admin job-detail page consumes for cost/latency/quality
+                    # KPIs. Kept additive next to the legacy `item_resolved`.
+                    _chunk_usage = usage or {}
+                    _tier_meta = _tier_per_code.get(safe_code, {})
+                    _partida_telemetry = {
+                        'code': partida.code,
+                        'tier_used': _tier_meta.get('tier'),
+                        'tier_reason': _tier_meta.get('reason'),
+                        'tokens_in': _chunk_usage.get('promptTokenCount', 0),
+                        'tokens_out': _chunk_usage.get('candidatesTokenCount', 0),
+                        'cost_usd': 0,         # TODO: connect to S1-A-04
+                        'latency_ms': 0,        # TODO: connect to S1-A-04
+                        'cache_hit': None,       # TODO: connect to S1-A-04
+                        'match_kind': val.match_kind if val else None,
+                        'confidence_score': confidence,
+                    }
+                    self._emit(budget_id, 'partida_resolved_v2', _partida_telemetry)
+                    _resolved_telemetry.append(_partida_telemetry)
+
                     # P4.b — checkpoint hook. The use case persists the
                     # partida to Firestore so a retry can resume from here.
                     # Errors are logged but do NOT abort the swarm; the

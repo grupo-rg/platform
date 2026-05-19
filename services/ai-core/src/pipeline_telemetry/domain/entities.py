@@ -1,7 +1,21 @@
 from typing import Dict, Any, Optional
+from enum import Enum
 from pydantic import BaseModel, Field
 from datetime import datetime
 import uuid
+
+
+class PipelineEventType(str, Enum):
+    """Additive catalogue of strongly-typed pipeline telemetry events.
+
+    Legacy emits remain free-form `str` (see `TelemetryEvent.event_type`).
+    New events introduced by Sprint 1 (S1-B-01) should reference these
+    constants in producers/consumers so the admin job-detail page can rely
+    on stable identifiers for cost/latency/quality KPIs.
+    """
+    PARTIDA_RESOLVED_V2 = "partida_resolved_v2"
+    JOB_METRICS_FINAL = "job_metrics_final"
+
 
 class TelemetryEvent(BaseModel):
     """
