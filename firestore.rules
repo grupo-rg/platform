@@ -88,6 +88,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // S2-B-03 — Wizard sessions persisted so a reload mid-job doesn't lose
+    // context. Reads only for the owner (uid match); writes are admin-SDK
+    // only because they go through `appendWizardMessageAction` and friends.
+    match /wizard_sessions/{sessionId} {
+      allow read: if request.auth != null
+                  && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

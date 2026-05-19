@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/recover-scheduled-blog-posts",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/detect-zombie-jobs",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

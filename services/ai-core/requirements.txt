@@ -21,3 +21,5 @@ sentence-transformers==3.0.1
 # Pin a la versión CPU-only de torch para `sentence-transformers`. En entornos
 # de desarrollo locales puede aceptarse el wheel default (con CUDA opcional).
 torch==2.3.0
+# S2-B-06 — Cloud Monitoring custom metrics emitter.
+google-cloud-monitoring==2.21.0
