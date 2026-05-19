@@ -1,16 +1,69 @@
 # Plan de implementación — Sprints 1 + 2 + 3
 
-> **Versión:** 1.0 · 2026-05-19
-> **Estado:** aprobado, listo para ejecución por agentes paralelos
+> **Versión:** 1.1 · 2026-05-19
+> **Estado:** Sprint 1 COMPLETO ✅ — Sprint 2 listo para ejecución
 > **Sprints incluidos:**
-> - **Sprint 1** — Viabilidad económica (coste + tiempo) — 1 semana
-> - **Sprint 2** — Robustez operacional — 1-2 semanas
-> - **Sprint 3** — Calidad sostenida y data ownership — 2-3 semanas
+> - **Sprint 1** — Viabilidad económica (coste + tiempo) — 1 semana — ✅ DONE
+> - **Sprint 2** — Robustez operacional — 1-2 semanas — 🟡 IN PROGRESS
+> - **Sprint 3** — Calidad sostenida y data ownership — 2-3 semanas — ⏳ PENDING
 >
 > Este documento es **autoejecutable**: cada tarea tiene paths exactos,
 > criterios de aceptación verificables y dependencias. Un agente puede
 > trabajar leyendo solo esta sección, sin contexto previo de
 > conversación.
+
+---
+
+## Progress log (2026-05-19)
+
+### Sprint 1 — COMPLETADO ✅
+
+**Agent A — Retrieval & Pricing**:
+- ✅ S1-A-01 — Force Flash as default pricing model
+- ✅ S1-A-02 — HybridCatalogSearch BM25 + Vector + RRF
+- ✅ S1-A-03 — Cross-encoder BGE local reranker
+- ✅ S1-A-04 — Pricing cache by hash en Firestore
+- ✅ S1-A-05 — Filtro estructural pre-vector (chapter + unit_dimension)
+- ✅ S1-A-06 — Timeout por llamada LLM (asyncio.wait_for)
+- ✅ S1-A-07 — Semaphore subido a 8 (env var SWARM_CONCURRENCY)
+- ✅ S1-A-08 — Tests unitarios + cobertura ≥70%
+
+**Agent B — Orchestration & UX**:
+- ✅ S1-B-01 — Métricas validación UI (4 partes: event types + server action + admin page + tests)
+
+**Deploy/Manual**:
+- ✅ S1-DEPLOY-01 — Build + deploy + smoke (imagen `25654d17` en producción)
+- 🟡 S1-VAL-01 — Validación con 5-10 PDFs reales (PARCIAL: 1 PDF probado, smoke happy path)
+
+### Bugs descubiertos y resueltos durante Sprint 1
+
+Estos eran deuda pre-existente que Sprint 1 destapó al añadir carga al sistema:
+
+1. ✅ `FORCE_FLASH_PRICING` env var no estaba en código (era solo runtime override)
+2. ✅ INLINE strategy procesaba pricing en Service → migración a Cloud Run Job dispatch
+3. ✅ Telemetry parent doc no se creaba en Firestore → admin list vacío
+4. ✅ Server-side session cookie nunca implementado → todos los `verifyAuth(true)` fallaban
+5. ✅ Mismatch claim name (`set-admin.js` usa `role:'super-admin'`, `verifyAuth` busca `admin:true`)
+6. ✅ PricingCache usaba `await` sobre client síncrono → 100% cache miss
+7. ✅ Server Actions exportaban funciones sync → build error Next.js
+8. ✅ `_resolve_pricing_model` duplicada → unpack bug, 0 partidas válidas
+9. ✅ `cloudbuild.yaml` reseteaba memory Service en cada deploy
+10. ✅ Bucket `PIPELINE_UPLOADS_BUCKET` env var no estaba seteado
+
+### Sprint 2 — adiciones HOT descubiertas durante validación
+
+- 🔥 **S2-A-00 (NUEVO, HOT)** — Optimización BGE rerank (batching + top-k=5 + pre-warm + kill-switch). El smoke reveló BGE en CPU = ~10-30s/partida → ~28 min para 74 partidas. Inviable a escala.
+- 🔥 **S2-A-06 (NUEVO)** — Fix `_tier_per_code` que reporta tier sugerido en lugar del modelo real ejecutado. Panel admin muestra "Tier Pro: 74" cuando realmente fueron todos Flash. Bug cosmético, fix 15 min.
+
+### Hallazgos para Sprint 3 (priorizar)
+
+Los problemas de **calidad del budget** descubiertos durante validación:
+- 68 de 74 partidas fueron a "Sin Capítulo" (extracción del Architect falla con headers PAT.X, ACTUACIONES PREVIAS).
+- Cantidades incorrectas (partida 1.2.12 cotizó "1" cuando el PDF dice "5000").
+
+Ambos son problema del **extractor de PDF (LLM Vision)**, NO del pricing. Se atacan en:
+- **S3-06** (Layout-aware parser pdfplumber-first) — fix definitivo para PDFs nativos.
+- **S2-A-03** (Determinismo extracción) — palia parcialmente con `temperature=0.0`.
 
 ---
 
