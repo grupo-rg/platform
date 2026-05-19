@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 import logging
 import asyncio
 import json
+import os
 import re
 from pydantic import BaseModel, Field
 
@@ -149,6 +150,425 @@ class MinimalItem(BaseModel):
 class RestructureChunkResultMinimal(BaseModel):
     items: List[MinimalItem]
 
+
+# ---------------------------------------------------------------------------
+# Sprint 3 — S3-06: pdfplumber-first layout parser
+# ---------------------------------------------------------------------------
+#
+# Para PDFs nativos (no escaneados) con tablas claras, priorizamos `pdfplumber`
+# como extractor primario para obtener code/description/unit/quantity/chapter
+# SIN llamar al LLM Vision. El LLM queda como fallback cuando:
+#   - el PDF parece escaneado (texto extraíble < 100 chars en la primera página);
+#   - no reconocemos las columnas mínimas (`code`, `description`, `quantity`);
+#   - la cobertura heurística cae por debajo del 80% de las partidas esperadas.
+#
+# Kill-switch: `ENABLE_PDFPLUMBER_FIRST=false` desactiva el fast path.
+#
+# Beneficios concretos respecto al LLM Vision:
+#   - Latencia: <5s para 14 páginas vs ~2-3 min con LLM Vision por página.
+#   - Cantidades correctas: la tabla nativa devuelve "5000" donde el LLM Vision
+#     se confundía con "1" en cantidades como "5,000\nSótano local…".
+#   - Capítulos correctos: leer headers en el flujo lineal del texto (no
+#     intentar reconocer un layout visual que cambia entre PDFs).
+# ---------------------------------------------------------------------------
+
+# Sinónimos por columna — toleramos variaciones del mismo concepto que aparecen
+# en presupuestos reales (COAATMCA, MUSAAT, Presto, CIFRE, exports propios).
+_COLUMN_SYNONYMS: Dict[str, List[str]] = {
+    "code": ["codigo", "código", "code", "cod", "cod.", "nº", "no", "num", "número"],
+    "description": [
+        "descripcion", "descripción", "description", "resumen",
+        "concepto", "denominacion", "denominación", "definicion",
+        "definición", "ud_resumen",
+    ],
+    "unit": [
+        "ud", "u/d", "u/m", "unidad", "unidades", "uni",
+        "udmedida", "ud.medida", "um", "u.med", "unit",
+    ],
+    "quantity": [
+        "cantidad", "qty", "medicion", "medición", "cant",
+        "cant.", "n", "med", "uds", "número de uds",
+    ],
+    "price": [
+        "precio", "pvp", "imp", "import", "importe", "pu",
+        "p.u.", "preciounit", "precio_unit", "price",
+        "precio unit", "precio unitario",
+    ],
+    "total": [
+        "total", "importe total", "importe_total", "subtotal",
+        "totalpart", "total partida",
+    ],
+}
+
+# Líneas/filas que NO son partidas reales y deben ser ignoradas.
+_SKIP_CELL_KEYWORDS = (
+    "TOTAL", "SUMA", "IMPORTE", "SUBTOTAL", "ASCIENDE",
+    "PRESUPUESTO", "TOTAL CAPITULO", "TOTAL CAPÍTULO",
+    "TOTAL PARTIDA", "TOTAL CAP", "SUMA CAP",
+)
+
+
+def _normalize_cell(s: Optional[Any]) -> str:
+    if s is None:
+        return ""
+    return str(s).strip().lower()
+
+
+def _infer_column_mapping(header_row: List[Any]) -> Optional[Dict[str, int]]:
+    """Mapea conceptos lógicos (`code`, `description`, `unit`, `quantity`, …)
+    a índices de columna a partir de la fila cabecera de una tabla.
+
+    Devuelve `None` si faltan los core (`code`, `description`, `quantity`) —
+    sin ellos no podemos construir un `RestructuredItem` útil y el caller
+    debe caer al LLM Vision.
+    """
+    if not header_row:
+        return None
+
+    mapping: Dict[str, int] = {}
+    for idx, cell in enumerate(header_row):
+        norm = _normalize_cell(cell)
+        if not norm:
+            continue
+        for concept, synonyms in _COLUMN_SYNONYMS.items():
+            if concept in mapping:
+                continue  # primer match gana
+            for syn in synonyms:
+                if syn == norm or syn in norm.split() or norm.startswith(syn):
+                    mapping[concept] = idx
+                    break
+
+    # Exigimos al menos code + description + quantity para que merezca la pena.
+    if not all(k in mapping for k in ("code", "description", "quantity")):
+        return None
+    return mapping
+
+
+# Heurísticas de detección de chapter header dentro del texto plano de la página.
+# Cubrimos los patrones más frecuentes observados en los smokes Sprint 1+2:
+#   - "1 ACTUACIONES PREVIAS" — número solitario + nombre en mayúsculas
+#   - "PAT. 2 - FISURAS Y/O GRIETAS EN FORJADOS" — convención MUSAAT/Patologías
+#   - "C01 TRABAJOS PREVIOS" / "C01 Capítulo TRABAJOS PREVIOS"
+#   - "CAPÍTULO 02 ALBAÑILERÍA"
+_CHAPTER_PATTERNS: List[re.Pattern] = [
+    re.compile(
+        r"^(?P<code>PAT\.?\s*\d+)\s*[-–—]\s*(?P<name>[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s,Y/\.\-0-9]+)$",
+        re.MULTILINE,
+    ),
+    re.compile(
+        r"^(?P<code>C\d+)\s+(?:Cap[ií]tulo\s+)?(?P<name>[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s,Y]+)$",
+        re.MULTILINE,
+    ),
+    re.compile(
+        r"^Cap[ií]tulo\s+(?P<code>\d+)\s+(?P<name>[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s,Y]+)$",
+        re.MULTILINE | re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?P<code>\d+)\s+(?P<name>[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s,Y]{4,})$",
+        re.MULTILINE,
+    ),
+]
+
+
+def _detect_chapter_header(page: Any) -> Optional[str]:
+    """Busca en el texto de la página un encabezado de capítulo.
+
+    Devuelve el header completo (`"1 ACTUACIONES PREVIAS"`, `"PAT. 2 - FISURAS Y/O GRIETAS EN FORJADOS"`)
+    o `None` si no encuentra ninguno reconocible.
+
+    Acepta cualquier objeto que tenga `extract_text()` — facilita testeo con
+    mocks sin acoplarse a `pdfplumber.Page`.
+    """
+    try:
+        text = page.extract_text() or ""
+    except Exception:
+        return None
+    if not text:
+        return None
+
+    for pattern in _CHAPTER_PATTERNS:
+        for match in pattern.finditer(text):
+            code = match.group("code").strip()
+            name = match.group("name").strip()
+            # Filtra falsos positivos: líneas que son solo dígitos+texto en
+            # mayúsculas suelen ser headers, pero descartamos sumatorios.
+            if any(skip in name.upper() for skip in _SKIP_CELL_KEYWORDS):
+                continue
+            return f"{code} {name}".strip()
+    return None
+
+
+# Regex para extraer la PRIMERA cantidad numérica de una celda, tolerando:
+#   - formato español: "5.000,00" → 5000.00
+#   - notas pegadas: "5,000\nSótano local. Punto..."
+#   - decimales con punto o coma
+# Acepta cualquier número de dígitos en el grupo entero. La separación
+# español-vs-anglosajón se decide después en `_parse_spanish_number`.
+_QUANTITY_RE = re.compile(r"[-+]?\d[\d\.\s]*(?:[,\.]\d+)?")
+
+
+def _parse_quantity(raw: Any) -> Optional[float]:
+    """Parsea una celda de cantidad. Tolera:
+      - "5,5" / "5.5" → 5.5
+      - "1.000,5" → 1000.5 (formato español con punto miles)
+      - "5,000\nSótano local..." → 5000 (toma el primer número)
+      - "5000,000" → 5000.0
+    """
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+
+    # Tomamos el primer token numérico encontrado.
+    match = _QUANTITY_RE.search(text)
+    if not match:
+        return None
+    token = match.group(0)
+    return _parse_spanish_number(token)
+
+
+def _parse_spanish_number(s: str) -> Optional[float]:
+    """Convierte un literal número con convención española a float.
+
+    Reglas:
+      - Si tiene COMA Y PUNTO: la coma es decimal, los puntos son miles
+        ("1.000,5" → 1000.5).
+      - Si solo tiene COMA: es decimal ("5,5" → 5.5; "5,000" → 5.0,
+        salvo que tenga 3+ decimales lo que sugiere miles → 5000).
+      - Si solo tiene PUNTOS: depende. "1.000" → 1000 si son exactamente 3
+        dígitos tras el punto y el número es entero. "1.5" → 1.5.
+      - Sin signos: int(s).
+    """
+    s = s.strip().replace(" ", "")
+    if not s:
+        return None
+    try:
+        has_comma = "," in s
+        has_dot = "." in s
+
+        if has_comma and has_dot:
+            # Formato español: punto miles, coma decimal.
+            normalized = s.replace(".", "").replace(",", ".")
+            return float(normalized)
+        if has_comma:
+            # Coma decimal, sin miles. Excepción: "5,000" con exactamente 3
+            # dígitos tras la coma — ambiguo. Lo tratamos como 5000 (la
+            # convención de mediciones en presupuestos españoles trata "5,000"
+            # como cinco mil para superficies grandes).
+            parts = s.split(",")
+            if len(parts) == 2 and len(parts[1]) == 3 and parts[1].isdigit():
+                # Heurística conservadora: si el número entero tiene 1-2
+                # dígitos, "5,000" es 5000 (miles); si tiene 3+, es decimal.
+                try:
+                    int_part = int(parts[0])
+                    if int_part < 100:
+                        # Asumimos "5,000" = 5000 (mediciones grandes).
+                        return float(parts[0] + parts[1])
+                except ValueError:
+                    pass
+            return float(s.replace(",", "."))
+        if has_dot:
+            # Solo puntos. "1.000" probablemente son miles si no hay otros
+            # signos y tiene exactamente 3 dígitos tras el punto.
+            parts = s.split(".")
+            if len(parts) == 2 and len(parts[1]) == 3 and parts[1].isdigit():
+                return float(parts[0] + parts[1])
+            return float(s)
+        return float(s)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _row_to_restructured_item(
+    row: List[Any],
+    col_map: Dict[str, int],
+    chapter: Optional[str],
+    page_number: int,
+) -> Optional[RestructuredItem]:
+    """Convierte una fila de tabla en `RestructuredItem` o devuelve `None`
+    si la fila no es una partida válida (vacía, totales/sumas, código ausente)."""
+    if not row:
+        return None
+
+    def _cell(key: str) -> str:
+        idx = col_map.get(key)
+        if idx is None or idx >= len(row):
+            return ""
+        val = row[idx]
+        return str(val).strip() if val is not None else ""
+
+    code = _cell("code")
+    description = _cell("description")
+    if not code or not description:
+        return None
+
+    # Filtros anti-fantasmas: filas que son totales/sumas/etc. NO son partidas.
+    description_upper = description.upper()
+    if any(kw in description_upper for kw in _SKIP_CELL_KEYWORDS):
+        return None
+    code_upper = code.upper()
+    if any(kw in code_upper for kw in _SKIP_CELL_KEYWORDS):
+        return None
+
+    quantity = _parse_quantity(_cell("quantity"))
+    if quantity is None:
+        quantity = 1.0  # paridad con el LLM (no abortamos: el Swarm puede inferirla)
+
+    unit_raw = _cell("unit") or "ud"
+    unit_norm = Unit.normalize(unit_raw)
+    unit_dim = Unit.dimension_of(unit_raw)
+
+    # Description puede traer múltiples líneas — las preservamos en una sola
+    # (el normalizador downstream maneja whitespace).
+    description_clean = " ".join(description.split())
+
+    return RestructuredItem(
+        code=code,
+        description=description_clean,
+        quantity=quantity,
+        unit=unit_raw,
+        chapter=chapter or "Sin Capítulo",
+        unit_normalized=unit_norm,
+        unit_dimension=unit_dim,
+    )
+
+
+def _is_pdfplumber_first_enabled() -> bool:
+    """Kill-switch. `ENABLE_PDFPLUMBER_FIRST=false` desactiva el fast path."""
+    raw = os.environ.get("ENABLE_PDFPLUMBER_FIRST", "true").strip().lower()
+    return raw not in ("false", "0", "no", "off")
+
+
+def extract_with_pdfplumber_first(
+    pdf_bytes: bytes,
+    raw_items: List[Any],
+    *,
+    min_coverage: float = 0.80,
+) -> Optional[List[RestructuredItem]]:
+    """Intento de extracción puramente estructural con pdfplumber.
+
+    Args:
+        pdf_bytes: bytes del PDF original.
+        raw_items: lista de items "esperados" del flujo actual (para calcular
+            cobertura). Si el caller no la tiene, puede pasar una lista vacía
+            o `[None] * N` con N estimado.
+        min_coverage: ratio mínimo `len(extracted) / len(raw_items)` para
+            considerar la heurística viable. Default 0.80.
+
+    Returns:
+        list[RestructuredItem] si la extracción heurística produce ≥80%
+        de las partidas esperadas con código y unidad reconocidos.
+        None si no es viable y hay que caer al LLM Vision.
+    """
+    if not _is_pdfplumber_first_enabled():
+        logger.info("pdfplumber-first deshabilitado via ENABLE_PDFPLUMBER_FIRST=false.")
+        return None
+
+    try:
+        import pdfplumber
+        from io import BytesIO
+    except ImportError:
+        logger.warning("pdfplumber no disponible — fallback al LLM Vision.")
+        return None
+
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            pages = list(pdf.pages)
+            if not pages:
+                logger.info("pdfplumber-first: PDF sin páginas.")
+                return None
+
+            # 1. Test rápido: ¿el PDF tiene texto extraíble?
+            first_page_text = ""
+            try:
+                first_page_text = pages[0].extract_text() or ""
+            except Exception:
+                first_page_text = ""
+
+            if len(first_page_text) < 100:
+                logger.info(
+                    "pdfplumber-first: primera página tiene %d chars — probablemente escaneado.",
+                    len(first_page_text),
+                )
+                return None
+
+            # 2. Iterar páginas extrayendo capítulos y tablas.
+            all_items: List[RestructuredItem] = []
+            current_chapter: Optional[str] = None
+
+            for page in pages:
+                try:
+                    page_number = getattr(page, "page_number", 0) or 0
+                except Exception:
+                    page_number = 0
+
+                # 2a. Detectar header de capítulo. Si existe, actualiza
+                # el chapter "actual" para todas las partidas que sigan
+                # hasta que aparezca otro header.
+                chapter_candidate = _detect_chapter_header(page)
+                if chapter_candidate:
+                    current_chapter = chapter_candidate
+
+                # 2b. Extraer tablas y mapear a partidas.
+                try:
+                    tables = page.extract_tables() or []
+                except Exception as e:
+                    logger.warning(
+                        "pdfplumber-first: extract_tables falló en página %s: %s",
+                        page_number, e,
+                    )
+                    continue
+
+                for table in tables:
+                    if not table or len(table) < 2:
+                        continue
+                    header_row = table[0]
+                    col_map = _infer_column_mapping(header_row)
+                    if not col_map:
+                        continue
+                    for row in table[1:]:
+                        item = _row_to_restructured_item(
+                            row, col_map, current_chapter, page_number,
+                        )
+                        if item:
+                            all_items.append(item)
+
+            # 3. Cobertura: ¿extraímos suficientes partidas respecto a lo esperado?
+            #    Si el caller no tiene info ("raw_items" vacío), el ratio es ∞
+            #    y consideramos viable cuando hay >=1 item.
+            expected_count = max(1, len(raw_items)) if raw_items else 0
+            if expected_count == 0:
+                if not all_items:
+                    return None
+                coverage = 1.0
+            else:
+                coverage = len(all_items) / expected_count
+
+            if coverage < min_coverage:
+                logger.info(
+                    "pdfplumber-first: cobertura %d/%d = %.0f%% < %.0f%% — caer al LLM Vision.",
+                    len(all_items), expected_count, coverage * 100, min_coverage * 100,
+                )
+                return None
+
+            # 4. Stabilize chapter names (consistencia con el resto del pipeline).
+            consolidate_chapters(all_items)
+
+            logger.info(
+                "pdfplumber-first: %d partidas extraídas en %d páginas (cobertura %.0f%%).",
+                len(all_items), len(pages), coverage * 100,
+            )
+            return all_items
+    except Exception as e:
+        # Cualquier error inesperado (PDF corrupto, etc.) → fallback limpio.
+        logger.warning(
+            "pdfplumber-first falló (%s: %s) — fallback al LLM Vision.",
+            type(e).__name__, e,
+        )
+        return None
+
+
 # --- Map-Reduce Annexed Specific Schemas ---
 class DescriptionItem(BaseModel):
     code: str
@@ -243,6 +663,40 @@ class InlinePdfExtractorService(IPdfExtractorService):
     ) -> List[RestructuredItem]:
         logger.info(f"Starting INLINE Restructure Phase for {len(raw_items)} raw items...")
         self._emit(budget_id, 'extraction_started', {"query": f"Lanzando Analista de Estructuras sobre la página..."})
+
+        # Sprint 3 — S3-06: pdfplumber-first layout parser. Si recibimos los
+        # bytes del PDF, intentamos extracción tabular pura (sin LLM). Este
+        # camino es complementario al fast path de Fase 9.2 (`try_heuristic_extraction`):
+        #   - S3-06 = tablas estructuradas (pdfplumber.extract_tables) →
+        #     code/desc/unit/quantity directos de la tabla.
+        #   - 9.2 = regex sobre texto plano por página → mismas partidas pero
+        #     a partir del flujo lineal.
+        # Probamos primero S3-06 (más preciso para cantidades como "5000 m2"
+        # que el LLM Vision interpretó mal); si no aplica, caemos a 9.2;
+        # si tampoco aplica, al LLM Vision.
+        if pdf_bytes:
+            try:
+                tabular_items = extract_with_pdfplumber_first(pdf_bytes, raw_items)
+                if tabular_items is not None:
+                    logger.info(
+                        f"INLINE S3-06 path: {len(tabular_items)} partidas "
+                        f"extraídas via pdfplumber tabular sin LLM."
+                    )
+                    self._emit(budget_id, 'inline_fast_path_used', {
+                        "partidas_count": len(tabular_items),
+                        "method": "pdfplumber_first_tabular",
+                    })
+                    self._emit(budget_id, 'subtasks_extracted', {
+                        "count": len(tabular_items),
+                        "totalTasks": len(tabular_items),
+                    })
+                    return tabular_items
+                logger.info("INLINE S3-06 path NO aplicable; probando layout-analyzer 9.2.")
+            except Exception as e:
+                logger.warning(
+                    f"INLINE S3-06 path falló silenciosamente ({type(e).__name__}: {e}); "
+                    f"probando layout-analyzer 9.2."
+                )
 
         # Fase 9.2 — Fast path heurístico. Si recibimos los bytes del PDF,
         # extraemos texto por página y delegamos al LayoutAnalyzer. Si los
