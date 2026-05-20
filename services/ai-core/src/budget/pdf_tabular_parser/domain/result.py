@@ -64,6 +64,11 @@ class TabularExtractionResult:
     annexed_totals_found: int = 0  # nº de totales detectados en fase ANNEXED
     annexed_matched: int = 0  # nº de cabeceras que matchean con totals
     annexed_orphans: int = 0  # nº de cabeceras sin match en totals
+    # Modo del parser: "INLINE" (Fase A), "ANNEXED" (Fase D) o "MU02_INLINE" (Fase E).
+    # Si None, el parser no completó (typically antes de la decisión de modo).
+    mode: Optional[str] = None
+    # Métricas específicas MU02 (Fase E).
+    mu02_pages_with_header: int = 0
 
     @property
     def partidas_count(self) -> int:
@@ -111,6 +116,16 @@ class TabularExtractionResult:
         if self.partidas_count == 0:
             self.reason = "no_partidas_extracted"
             return False
+
+        if self.mode == "MU02_INLINE":
+            # MU02_INLINE (Fase E): qty_rate >= 0.80, chapter_rate sin umbral
+            # (MU02 siempre tiene capítulos numerados explícitos, pero por
+            # robustez aceptamos extracción aunque algunos no se mapeen).
+            if self.qty_rate < 0.80:
+                self.reason = f"low_qty_rate_mu02 ({self.qty_rate:.2%} < 80%)"
+                return False
+            self.reason = None
+            return True
 
         if self.annexed:
             # ANNEXED: relax qty threshold to 0.50, no chapter requirement.

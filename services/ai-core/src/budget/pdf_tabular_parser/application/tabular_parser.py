@@ -33,6 +33,13 @@ from src.budget.pdf_tabular_parser.application.hierarchy_tracker import (
     apply_detection_to_hierarchy,
     detect_hierarchy_in_line,
 )
+from src.budget.pdf_tabular_parser.application.mu02_detector import (
+    count_mu02_pages_with_header,
+    detect_mu02_layout,
+)
+from src.budget.pdf_tabular_parser.application.mu02_extractor import (
+    extract_mu02_partidas,
+)
 from src.budget.pdf_tabular_parser.application.partida_extractor import (
     detect_partida_header_from_text,
     detect_summary_row,
@@ -65,16 +72,21 @@ class TabularParser:
     Idempotente — instanciar una vez y reusar es seguro. No mantiene estado
     entre llamadas a `parse()`.
 
-    El parser soporta DOS modos:
+    El parser soporta TRES modos (en orden de prioridad):
 
-    1. **INLINE / TABULAR** (Fase A): cabecera CIFRE/PRESTO con columnas
-       (CÓDIGO, RESUMEN, ..., CANTIDAD), descripciones y mediciones inline
-       en cada partida. Activado cuando se detecta la cabecera en una página.
+    1. **MU02_INLINE** (Fase E): cabecera tabular MU02
+       (`Nº Ud Descripción Cantidad Precio Total`) en >=2 páginas. Partidas
+       con código jerárquico, descripción multilínea y total final inline
+       (`720,00 m²`). Va PRIMERO porque su cabecera es muy específica.
 
     2. **PRESTO ANNEXED** (Fase D): cabeceras de partida en primer tercio del
        PDF + totales `Total <code> <qty>` en último tercio. Activado cuando
-       no hay cabecera CIFRE pero `detect_annexed_transition_page` retorna un
-       page number válido (>= 50% del PDF).
+       `detect_annexed_transition_page` retorna un page number válido
+       (>= 50% del PDF).
+
+    3. **INLINE / TABULAR** (Fase A): cabecera CIFRE/PRESTO con columnas
+       (CÓDIGO, RESUMEN, ..., CANTIDAD), descripciones y mediciones inline
+       en cada partida. Activado cuando se detecta la cabecera en una página.
 
     Si ninguno aplica, retorna `result.reason="no_layout_recognized"`.
     """
@@ -124,6 +136,32 @@ class TabularParser:
         if not pages_buffer:
             result.duration_seconds = time.time() - start
             result.reason = "empty_pdf"
+            return result
+
+        # --- DETECCIÓN DE MODO MU02 (Fase E) ---
+        # MU02 va PRIMERO porque su cabecera tabular
+        # `Nº Ud Descripción Cantidad Precio Total` es muy específica y no se
+        # confunde con CIFRE ni ANNEXED.
+        if detect_mu02_layout(text_per_page):
+            pages_with_mu02_header = count_mu02_pages_with_header(text_per_page)
+            logger.info(
+                "TabularParser: modo MU02_INLINE detectado (%d/%d páginas con cabecera)",
+                pages_with_mu02_header,
+                len(text_per_page),
+            )
+            _emit(event_callback, "mu02_layout_detected", {
+                "pagesWithHeader": pages_with_mu02_header,
+                "totalPages": len(text_per_page),
+            })
+            self._parse_mu02(
+                text_per_page=text_per_page,
+                pages_with_mu02_header=pages_with_mu02_header,
+                result=result,
+                event_callback=event_callback,
+            )
+            result.duration_seconds = time.time() - start
+            result.pages_total = len(text_per_page)
+            result.is_viable()
             return result
 
         # --- DETECCIÓN DE MODO ANNEXED ---
@@ -255,6 +293,7 @@ class TabularParser:
         result.duration_seconds = time.time() - start
         result.pages_total = pages_seen
         result.pages_with_header = pages_with_header
+        result.mode = "INLINE"
         # Llamamos a is_viable() para que pueble `result.reason` si aplica.
         result.is_viable()
         return result
@@ -357,6 +396,69 @@ class TabularParser:
         }
 
 
+    # --- MU02 MODE METHODS (Fase E) ---
+
+    def _parse_mu02(
+        self,
+        text_per_page: List[str],
+        pages_with_mu02_header: int,
+        result: TabularExtractionResult,
+        event_callback: Optional[Callable[[str, dict], None]] = None,
+    ) -> None:
+        """Parsea un PDF en modo MU02_INLINE.
+
+        Estrategia:
+        1. `extract_mu02_partidas` recorre el texto línea por línea
+           detectando cabeceras tabulares (skip), capítulos, cabeceras de
+           partida y totales inline.
+        2. Devuelve la lista completa de partidas con quantity, chapter,
+           code, unit, title y page_number.
+        3. Emit evento `mu02_extraction_complete` con métricas.
+
+        Args:
+            text_per_page: texto por página (1-indexed implícito).
+            pages_with_mu02_header: número de páginas con cabecera MU02
+                detectada (para telemetría).
+            result: TabularExtractionResult a poblar.
+            event_callback: callback opcional para eventos SSE.
+        """
+        partidas = extract_mu02_partidas(text_per_page)
+
+        result.partidas = partidas
+        result.mode = "MU02_INLINE"
+        result.mu02_pages_with_header = pages_with_mu02_header
+        # Reutilizamos pages_with_header como métrica equivalente al modo INLINE,
+        # de modo que las heurísticas downstream que la inspeccionan sigan funcionando.
+        result.pages_with_header = pages_with_mu02_header
+
+        partidas_count = len(partidas)
+        qty_rate = (
+            sum(1 for p in partidas if p.quantity is not None) / partidas_count
+            if partidas_count
+            else 0.0
+        )
+        chapter_rate = (
+            sum(
+                1 for p in partidas
+                if p.chapter and p.chapter.strip()
+            ) / partidas_count
+            if partidas_count
+            else 0.0
+        )
+
+        _emit(event_callback, "mu02_extraction_complete", {
+            "partidasCount": partidas_count,
+            "qtyRate": round(qty_rate, 4),
+            "chapterRate": round(chapter_rate, 4),
+        })
+
+        logger.info(
+            "MU02_INLINE: %d partidas, qty_rate=%.2f%% chapter_rate=%.2f%% pages_with_header=%d/%d",
+            partidas_count, 100.0 * qty_rate, 100.0 * chapter_rate,
+            pages_with_mu02_header, len(text_per_page),
+        )
+
+
     # --- ANNEXED MODE METHODS (Fase D) ---
 
     def _parse_annexed(
@@ -394,6 +496,7 @@ class TabularParser:
             text_per_page, start_page=transition_page,
         )
         result.annexed = True
+        result.mode = "ANNEXED"
         result.annexed_transition_page = transition_page
         result.annexed_totals_found = len(totals)
 
