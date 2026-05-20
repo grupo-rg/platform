@@ -1,0 +1,61 @@
+{
+  "applied_at": "2026-05-20",
+  "source_audit": "data/catalog_source/coverage_report.json",
+  "fixes_target_json": "prices/coaatmca_2025_price_book.json (gitignored)",
+  "total_fixes": 15,
+  "summary": {
+    "unit_suffix_removed": 11,
+    "truncated_disambiguated": 4
+  },
+  "fixes": [
+    { "type": "unit_suffix", "buggy": "D3001.0120m", "corrected": "D3001.0120", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3002.0070m", "corrected": "D3002.0070", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3002.0080m", "corrected": "D3002.0080", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3002.0090m", "corrected": "D3002.0090", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3002.0100m", "corrected": "D3002.0100", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3002.0140m", "corrected": "D3002.0140", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3005.0070m", "corrected": "D3005.0070", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3006.0030m", "corrected": "D3006.0030", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3006.0050m", "corrected": "D3006.0050", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3006.0060m", "corrected": "D3006.0060", "chapter": "PAVIMENTOS DE MADERA" },
+    { "type": "unit_suffix", "buggy": "D3005.0040m", "corrected": "D3005.0040", "chapter": "RED DE SANEAMIENTO" },
+    {
+      "type": "truncated_disambiguated",
+      "buggy": "UXH010c…",
+      "corrected": "UXH010ca",
+      "chapter": "SOLADOS Y ALICATADOS",
+      "description_preview": "Solado losetas hormigón para uso exterior, panot, direccional (acanalada) 20x20x5...",
+      "needs_human_validation": true
+    },
+    {
+      "type": "truncated_disambiguated",
+      "buggy": "UXH010c…",
+      "corrected": "UXH010cb",
+      "chapter": "SOLADOS Y ALICATADOS",
+      "description_preview": "Solado losetas hormigón para uso exterior, panot, podotáctil 16 tacos, 20x20x5...",
+      "needs_human_validation": true
+    },
+    {
+      "type": "truncated_disambiguated",
+      "buggy": "UXH010c…",
+      "corrected": "UXH010cc",
+      "chapter": "SOLADOS Y ALICATADOS",
+      "description_preview": "Solado losetas hormigón para uso exterior, panot, liso peatonal y trafico ligero 20x20x5...",
+      "needs_human_validation": true
+    },
+    {
+      "type": "truncated_disambiguated",
+      "buggy": "UXH010c…",
+      "corrected": "UXH010cd",
+      "chapter": "SOLADOS Y ALICATADOS",
+      "description_preview": "Solado losetas hormigón para uso exterior, panot, liso trafico pesado, 20x20x7.5...",
+      "needs_human_validation": true
+    }
+  ],
+  "next_steps": [
+    "Re-ingest prices/coaatmca_2025_price_book.json into Firestore price_book_2025",
+    "Delete old documents with the buggy codes from Firestore (D3001.0120m, ...)",
+    "Re-vectorise the 15 changed items so embedding lookup hits the new doc id",
+    "Validate UXH010ca/cb/cc/cd disambiguation against the original PDF (page 166-167)"
+  ]
+}
