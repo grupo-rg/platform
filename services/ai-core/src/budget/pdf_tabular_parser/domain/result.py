@@ -1,0 +1,122 @@
+"""TabularExtractionResult — output del parser TABULAR.
+
+Encapsula partidas extraídas + métricas de viabilidad. El caller usa
+`is_viable()` para decidir si seguir con el resultado o caer a LLM Vision.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import List, Optional
+
+from src.budget.pdf_tabular_parser.domain.hierarchy import ChapterHierarchy
+
+
+@dataclass
+class TabularPartida:
+    """Partida individual extraída por el parser TABULAR.
+
+    Estructura intermedia (no es RestructuredItem todavía — la conversión
+    final ocurre en el adapter al pipeline).
+    """
+
+    code: str
+    description: str
+    unit: str
+    quantity: Optional[float]  # None = no se pudo extraer (NO 1.0 default — explicit fail)
+    chapter: str               # capítulo nivel 1, formato `XX NOMBRE`
+    sub_chapter: Optional[str] = None  # subcapítulo nivel 2, formato `XX.YY Nombre`
+    apartado: Optional[str] = None     # apartado nivel 3, formato `XX.YY.ZZ Nombre`
+    page_number: Optional[int] = None  # 1-indexed
+    notes: Optional[str] = None
+    # Hierarchy snapshot al momento de extraer la partida — debugging.
+    hierarchy_snapshot: Optional[ChapterHierarchy] = None
+
+
+@dataclass
+class PageMetrics:
+    """Métricas de extracción de una sola página."""
+
+    page_number: int
+    has_header: bool
+    rows_found: int
+    partidas_extracted: int
+    qty_found: int  # cuántas partidas tienen qty != None
+
+
+@dataclass
+class TabularExtractionResult:
+    """Resultado del parseo tabular completo de un PDF.
+
+    `is_viable()` aplica las heurísticas A6 del spec:
+    - ≥80% partidas con qty real (no None).
+    - ≥80% partidas con capítulo detectado.
+    - Si NO se encontró cabecera en ninguna página → no viable, `reason=no_header`.
+    """
+
+    partidas: List[TabularPartida] = field(default_factory=list)
+    page_metrics: List[PageMetrics] = field(default_factory=list)
+    duration_seconds: float = 0.0
+    pages_total: int = 0
+    pages_with_header: int = 0
+    reason: Optional[str] = None  # filled if not viable
+
+    @property
+    def partidas_count(self) -> int:
+        return len(self.partidas)
+
+    @property
+    def qty_rate(self) -> float:
+        """Fracción de partidas con qty no-None (sobre total partidas).
+
+        Si no hay partidas, retorna 0.0 (no NaN, no excepciones).
+        """
+        if not self.partidas:
+            return 0.0
+        with_qty = sum(1 for p in self.partidas if p.quantity is not None)
+        return with_qty / len(self.partidas)
+
+    @property
+    def chapter_rate(self) -> float:
+        """Fracción de partidas con capítulo no-vacío y no-"Sin Capítulo"."""
+        if not self.partidas:
+            return 0.0
+        with_chapter = sum(
+            1 for p in self.partidas
+            if p.chapter and p.chapter.strip() and p.chapter != "Sin Capítulo"
+        )
+        return with_chapter / len(self.partidas)
+
+    def is_viable(self) -> bool:
+        """¿El resultado es lo suficientemente bueno para reemplazar LLM Vision?
+
+        Criterios (spec A6):
+        - Al menos una página tiene cabecera detectada.
+        - qty_rate >= 0.80.
+        - chapter_rate >= 0.80.
+        - partidas_count >= 1 (no es trivialmente vacío).
+        """
+        if self.pages_with_header == 0:
+            self.reason = "no_header_detected"
+            return False
+        if self.partidas_count == 0:
+            self.reason = "no_partidas_extracted"
+            return False
+        if self.qty_rate < 0.80:
+            self.reason = f"low_qty_rate ({self.qty_rate:.2%} < 80%)"
+            return False
+        if self.chapter_rate < 0.80:
+            self.reason = f"low_chapter_rate ({self.chapter_rate:.2%} < 80%)"
+            return False
+        self.reason = None
+        return True
+
+    def to_restructured_items(self):
+        """Conversión a `RestructuredItem` del pipeline existente.
+
+        Import lazy para no acoplar el dominio al adapter en import time.
+        """
+        from src.budget.pdf_tabular_parser.application.restructured_adapter import (
+            tabular_to_restructured_items,
+        )
+
+        return tabular_to_restructured_items(self.partidas)

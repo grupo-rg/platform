@@ -118,6 +118,18 @@ def _stable_sort_items(items: List["RestructuredItem"]) -> List["RestructuredIte
         ),
     )
 
+
+# Sprint 4 Fase A — parser TABULAR coord-based feature flag.
+# `USE_TABULAR_PARSER=false` por defecto. Solo se activa en prod tras validar.
+def _is_tabular_parser_enabled() -> bool:
+    """Kill-switch para el parser TABULAR (Sprint 4 Fase A).
+
+    Lee `USE_TABULAR_PARSER` (default false). Reconoce `true|1|yes|on`
+    case-insensitive como "encendido".
+    """
+    raw = os.environ.get("USE_TABULAR_PARSER", "false").strip().lower()
+    return raw in ("true", "1", "yes", "on")
+
 # --- Chapter Stabilization Logic (Anti-Hallucination) ---
 def extract_chapter_prefix(chapter_str: str) -> str:
     s = str(chapter_str).strip().upper()
@@ -771,16 +783,63 @@ class InlinePdfExtractorService(IPdfExtractorService):
         logger.info(f"Starting INLINE Restructure Phase for {len(raw_items)} raw items...")
         self._emit(budget_id, 'extraction_started', {"query": f"Lanzando Analista de Estructuras sobre la página..."})
 
-        # Sprint 3 — S3-06: pdfplumber-first layout parser. Si recibimos los
-        # bytes del PDF, intentamos extracción tabular pura (sin LLM). Este
-        # camino es complementario al fast path de Fase 9.2 (`try_heuristic_extraction`):
-        #   - S3-06 = tablas estructuradas (pdfplumber.extract_tables) →
-        #     code/desc/unit/quantity directos de la tabla.
-        #   - 9.2 = regex sobre texto plano por página → mismas partidas pero
-        #     a partir del flujo lineal.
-        # Probamos primero S3-06 (más preciso para cantidades como "5000 m2"
-        # que el LLM Vision interpretó mal); si no aplica, caemos a 9.2;
-        # si tampoco aplica, al LLM Vision.
+        # Sprint 4 Fase A — parser TABULAR coord-based. Controlado por feature flag
+        # `USE_TABULAR_PARSER=false` por defecto. Si activo y el PDF es PRESTO
+        # tabular (cabecera CÓDIGO RESUMEN CANTIDAD IMPORTE detectada), procesa
+        # con extract_words coord-based — mucho más fiable que LLM Vision para
+        # cantidades. Si parser no es viable (<80% qty o <80% chapter), cae a
+        # los siguientes fast-paths.
+        if pdf_bytes and _is_tabular_parser_enabled():
+            try:
+                from src.budget.pdf_tabular_parser.application.tabular_parser import TabularParser
+                _tabular_parser = TabularParser()
+                _tabular_result = _tabular_parser.parse(pdf_bytes)
+                self._emit(budget_id, 'tabular_parser_started', {
+                    "totalPages": _tabular_result.pages_total,
+                })
+                if _tabular_result.is_viable():
+                    _items = _tabular_result.to_restructured_items()
+                    logger.info(
+                        f"TABULAR parser: {len(_items)} partidas "
+                        f"(qty_rate={_tabular_result.qty_rate:.0%}, "
+                        f"chapter_rate={_tabular_result.chapter_rate:.0%}, "
+                        f"duration={_tabular_result.duration_seconds:.2f}s)."
+                    )
+                    self._emit(budget_id, 'inline_fast_path_used', {
+                        "partidas_count": len(_items),
+                        "method": "tabular_parser_coord_based",
+                        "qty_rate": _tabular_result.qty_rate,
+                        "chapter_rate": _tabular_result.chapter_rate,
+                    })
+                    self._emit(budget_id, 'tabular_parser_completed', {
+                        "partidasCount": len(_items),
+                        "qtyRate": _tabular_result.qty_rate,
+                        "chapterRate": _tabular_result.chapter_rate,
+                        "durationSeconds": _tabular_result.duration_seconds,
+                    })
+                    self._emit(budget_id, 'subtasks_extracted', {
+                        "count": len(_items),
+                        "totalTasks": len(_items),
+                    })
+                    return _items
+                logger.info(
+                    f"TABULAR parser viable=False (reason={_tabular_result.reason}); "
+                    f"fallback a heurística legacy."
+                )
+                self._emit(budget_id, 'tabular_parser_aborted', {
+                    "reason": _tabular_result.reason,
+                    "partidasExtracted": _tabular_result.partidas_count,
+                })
+            except Exception as e:
+                logger.warning(
+                    f"TABULAR parser falló silenciosamente "
+                    f"({type(e).__name__}: {e}); fallback a heurística legacy."
+                )
+
+        # Sprint 3 — S3-06: pdfplumber-first layout parser legacy. Kill-switch
+        # `ENABLE_PDFPLUMBER_FIRST=false` por defecto en prod (genera falsos
+        # positivos). Se conserva como capa de fallback secundaria; el parser
+        # TABULAR de Sprint 4 es el primary path cuando `USE_TABULAR_PARSER=true`.
         if pdf_bytes:
             try:
                 tabular_items = extract_with_pdfplumber_first(pdf_bytes, raw_items)
