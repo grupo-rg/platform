@@ -222,6 +222,13 @@ class RestructuredItem(BaseModel):
     quantity: float = Field(default=1.0, description='La cantidad total acumulada para esta partida.')
     unit: Optional[str] = Field(default="ud", description='La unidad de medida de la partida (ej. m2, m3, ud, ml).')
     chapter: Optional[str] = Field(default="Sin Capítulo", description='Nombre del capítulo al que pertenece.')
+    # Sprint 4 — sub-capítulo opcional (PRESTO/CIFRE jerarquía 4 niveles).
+    # Si el PDF tiene SUBCAPÍTULO XX.YY <name>, se llena aquí. El matcher
+    # downstream lo puede usar para mejor contexto sin contaminar description.
+    sub_chapter: Optional[str] = Field(
+        default=None,
+        description='Sub-capítulo opcional (ej. "04.02 Tabiquería de entramado autoportante").',
+    )
     # v005: campos de normalización + hints de conversión, opcionales hacia atrás.
     # Los rellena el extractor aguas arriba; el Swarm los lee para habilitar
     # matching 1:N con conversiones físicas.

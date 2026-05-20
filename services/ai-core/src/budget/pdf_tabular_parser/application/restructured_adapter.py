@@ -5,18 +5,12 @@ sigue devolviendo `List[RestructuredItem]`. Solo cambia el productor.
 
 Mapeo:
 - code → code
-- description → description (= título de cabecera; el cuerpo descriptivo se
-  preserva si está disponible).
+- description → description (limpio, sin prefijo de jerarquía).
 - quantity → quantity (1.0 default si None — RestructuredItem.quantity es float).
 - unit → unit (sin normalizar; downstream Unit.normalize lo cubre).
 - chapter → chapter (= label nivel 1).
-- sub_chapter (nuevo en spec v1.2) — NO existe aún en RestructuredItem,
-  lo agregamos como prefijo a description si está presente.
-
-Trade-off: la pérdida de granularidad de `sub_chapter` se acepta a cambio
-de no romper retro-compatibilidad con el Swarm. La info se preserva en el
-prefijo "[Sub: XX.YY Nombre] " del description si el subcapítulo está
-disponible.
+- sub_chapter → sub_chapter (campo opcional añadido en Sprint 4; el matcher
+  downstream lo lee sin contaminar la descripción).
 """
 from __future__ import annotations
 
@@ -34,6 +28,7 @@ def tabular_to_restructured_items(partidas: List[TabularPartida]) -> List[Restru
     - `quantity` = 1.0 si `partida.quantity is None` (matchea el contrato pre-v1.2).
     - `unit_normalized` y `unit_dimension` calculados via Unit.normalize / dimension_of.
     - `chapter` = "Sin Capítulo" si la partida no tiene capítulo asignado.
+    - `sub_chapter` = None si la partida no tiene subcapítulo.
 
     NOTA: el caller (`pdf_extractor_service`) aún correrá `consolidate_chapters`
     y `stabilize_chapter_name` sobre la lista, así que no hace falta hacerlo aquí.
@@ -42,24 +37,18 @@ def tabular_to_restructured_items(partidas: List[TabularPartida]) -> List[Restru
     for p in partidas:
         # Chapter label fallback.
         chapter = (p.chapter or "").strip() or "Sin Capítulo"
-        # Description con sub_chapter como contexto (no destructivo).
-        description = p.description
-        if p.sub_chapter:
-            # Solo prefijar si no está ya prefijado (idempotente).
-            prefix = f"[Sub: {p.sub_chapter}] "
-            if not description.startswith(prefix):
-                description = prefix + description
-
+        sub_chapter = (p.sub_chapter or "").strip() or None
         # Quantity 1.0 default per contract.
         qty = p.quantity if p.quantity is not None else 1.0
 
         items.append(
             RestructuredItem(
                 code=p.code or "",
-                description=description,
+                description=p.description,
                 quantity=qty,
                 unit=p.unit or "ud",
                 chapter=chapter,
+                sub_chapter=sub_chapter,
                 unit_normalized=Unit.normalize(p.unit or "ud"),
                 unit_dimension=Unit.dimension_of(p.unit or "ud"),
             )
