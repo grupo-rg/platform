@@ -1,0 +1,2778 @@
+{
+  "pdf": "docs\\Palma47_2025_COAATMCA.pdf",
+  "total_pages": 479,
+  "explored_pages": [
+    12,
+    100,
+    250,
+    436,
+    437,
+    444,
+    471,
+    474,
+    477
+  ],
+  "pages": [
+    {
+      "page": 12,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 0,
+        "header_words": 0,
+        "body_words": 0,
+        "footer_words": 0,
+        "avg_font_size": 0.0,
+        "horizontal_lines_count": 0,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [],
+        "units": [],
+        "page_numbers": [],
+        "potential_chapter_headers": [],
+        "potential_subchapters": []
+      },
+      "horizontal_lines": [],
+      "tables": [],
+      "footer_lines": [],
+      "body_lines_sample": []
+    },
+    {
+      "page": 100,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 829,
+        "header_words": 26,
+        "body_words": 800,
+        "footer_words": 3,
+        "avg_font_size": 7.56,
+        "horizontal_lines_count": 2,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "QAD040",
+            "x0": 60.24,
+            "y0": 68.35,
+            "region": "header"
+          },
+          {
+            "text": "QAF020",
+            "x0": 60.24,
+            "y0": 451.14,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "autoportante",
+            "x0": 233.45,
+            "y0": 92.41,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 305.97,
+            "y0": 236.4,
+            "region": "body"
+          },
+          {
+            "text": "mt13ccg200ac",
+            "x0": 94.08,
+            "y0": 285.43,
+            "region": "body"
+          },
+          {
+            "text": "autoportante",
+            "x0": 206.94,
+            "y0": 285.44,
+            "region": "body"
+          },
+          {
+            "text": "mt16lrc010fb",
+            "x0": 94.08,
+            "y0": 296.59,
+            "region": "body"
+          },
+          {
+            "text": "mt16lrc010fc",
+            "x0": 94.08,
+            "y0": 307.73,
+            "region": "body"
+          },
+          {
+            "text": "mt16aab010",
+            "x0": 94.08,
+            "y0": 318.94,
+            "region": "body"
+          },
+          {
+            "text": "mt14gsa020bc",
+            "x0": 94.08,
+            "y0": 330.08,
+            "region": "body"
+          },
+          {
+            "text": "mt14lga010ec",
+            "x0": 94.08,
+            "y0": 341.24,
+            "region": "body"
+          },
+          {
+            "text": "mt15acc020",
+            "x0": 94.08,
+            "y0": 352.39,
+            "region": "body"
+          },
+          {
+            "text": "mo051",
+            "x0": 94.08,
+            "y0": 363.56,
+            "region": "body"
+          },
+          {
+            "text": "montador",
+            "x0": 194.73,
+            "y0": 363.53,
+            "region": "body"
+          },
+          {
+            "text": "mo098",
+            "x0": 94.08,
+            "y0": 374.72,
+            "region": "body"
+          },
+          {
+            "text": "montador",
+            "x0": 196.04,
+            "y0": 374.71,
+            "region": "body"
+          },
+          {
+            "text": "mo054",
+            "x0": 94.08,
+            "y0": 385.88,
+            "region": "body"
+          },
+          {
+            "text": "montador",
+            "x0": 194.73,
+            "y0": 385.85,
+            "region": "body"
+          },
+          {
+            "text": "mo101",
+            "x0": 94.08,
+            "y0": 397.04,
+            "region": "body"
+          },
+          {
+            "text": "montador",
+            "x0": 196.02,
+            "y0": 397.03,
+            "region": "body"
+          },
+          {
+            "text": "mo029",
+            "x0": 94.08,
+            "y0": 408.2,
+            "region": "body"
+          },
+          {
+            "text": "mo067",
+            "x0": 94.08,
+            "y0": 419.36,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 430.51,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 430.51,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 430.47,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 465.21,
+            "y0": 475.2,
+            "region": "body"
+          },
+          {
+            "text": "modificado",
+            "x0": 448.47,
+            "y0": 499.21,
+            "region": "body"
+          },
+          {
+            "text": "modificado",
+            "x0": 113.52,
+            "y0": 547.2,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 342.87,
+            "y0": 583.2,
+            "region": "body"
+          },
+          {
+            "text": "mt14iea020c",
+            "x0": 94.08,
+            "y0": 620.24,
+            "region": "body"
+          },
+          {
+            "text": "mt14lba010g",
+            "x0": 94.08,
+            "y0": 631.41,
+            "region": "body"
+          },
+          {
+            "text": "modificado",
+            "x0": 214.38,
+            "y0": 631.38,
+            "region": "body"
+          },
+          {
+            "text": "mt08aaa010a",
+            "x0": 94.08,
+            "y0": 642.58,
+            "region": "body"
+          },
+          {
+            "text": "mt09mif010ba",
+            "x0": 94.08,
+            "y0": 653.71,
+            "region": "body"
+          },
+          {
+            "text": "mt18rcr010a300",
+            "x0": 94.08,
+            "y0": 664.88,
+            "region": "body"
+          },
+          {
+            "text": "mt09mcr021g",
+            "x0": 94.08,
+            "y0": 676.02,
+            "region": "body"
+          },
+          {
+            "text": "mt09mcr070a",
+            "x0": 94.08,
+            "y0": 687.18,
+            "region": "body"
+          },
+          {
+            "text": "mt09mif010ka",
+            "x0": 94.08,
+            "y0": 698.34,
+            "region": "body"
+          },
+          {
+            "text": "mo029",
+            "x0": 94.08,
+            "y0": 709.52,
+            "region": "body"
+          },
+          {
+            "text": "mo067",
+            "x0": 94.08,
+            "y0": 720.68,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 731.84,
+            "region": "body"
+          },
+          {
+            "text": "mo023",
+            "x0": 94.08,
+            "y0": 743.0,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 754.15,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 754.15,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 754.11,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "%",
+            "x0": 305.97,
+            "y0": 236.4
+          },
+          {
+            "text": "m²",
+            "x0": 158.52,
+            "y0": 285.33
+          },
+          {
+            "text": "m²",
+            "x0": 158.52,
+            "y0": 296.49
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 307.71
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 318.96
+          },
+          {
+            "text": "m²",
+            "x0": 158.52,
+            "y0": 329.97
+          },
+          {
+            "text": "l",
+            "x0": 416.82,
+            "y0": 330.07
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 341.19
+          },
+          {
+            "text": "m",
+            "x0": 158.52,
+            "y0": 352.3
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 363.6
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 374.76
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 385.92
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 397.08
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 408.24
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 419.4
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 430.51
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 430.51
+          },
+          {
+            "text": "m",
+            "x0": 95.52,
+            "y0": 451.96
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 620.21
+          },
+          {
+            "text": "m²",
+            "x0": 158.52,
+            "y0": 631.29
+          },
+          {
+            "text": "t",
+            "x0": 158.52,
+            "y0": 653.76
+          },
+          {
+            "text": "m",
+            "x0": 158.52,
+            "y0": 664.78
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 676.01
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 687.17
+          },
+          {
+            "text": "m3",
+            "x0": 158.52,
+            "y0": 698.31
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 709.56
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 720.72
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 731.88
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 743.04
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 754.15
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 754.15
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "86,22",
+            "x0": 524.28,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "40,80",
+            "x0": 524.28,
+            "y0": 449.67,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "CUBIERTAS Cubiertas planas"
+      ],
+      "body_lines_sample": [
+        "SOPORTE BASE: perfil nervado autoportante de chapa de acero galvanizado S 280 de 0,7 mm de espesor,",
+        "acabado liso, con 3 nervios de 50 mm de altura separados 260 mm, inercia 18 cm4 y masa superficial 5,5",
+        "kg/m²;",
+        "AISLAMIENTO TÉRMICO: planchas rígidas de poliisocianurato (P.I.R) recubiertas ambas caras con film de",
+        "aluminio gofrado de 50 micras, una absorción de agua nula difusión de vapor de agua, con un coeficiente de",
+        "conductividad 0,023 w/mK, resistencia al fuego Euroclase B-s2-d0, de 60 mm de espesor tipo PIR AL 60,",
+        "instalado con fijaciones mecánicas;",
+        "CAPA SEPARADORA: geotextil no tejido de alta tenacidad a base de polipropileno termosoldado con",
+        "resistencia a la tracción de 9 kN/M y de resistencia al punzonamiento estático (CBR) de 1500 N con un",
+        "gramage de 120 grs/m2;",
+        "IMPERMEABILIZACIÓN: Membrana impermeabilizante sintética fijada mecánicamente, de TPO FLAGON",
+        "EP/PR 180 ENERGY PLUS de espesor 1,8 mm, estabilizada dimensionalmente con fieltro de malla de",
+        "poléstser, con un índice de reflexión solar (SRI) 99 % resistente a los rayos U.V., agentes atmosféricos y",
+        "raíces, con una resistencia a tracción = de 1100 N/5cm, elongación a rotura > 15% y una resistencia al",
+        "punzonamiento estático > 20 kg, soldada mediante termofusión con aire caliente en los solapes y reforzada",
+        "en esquinas y rincones con ANGULOS FLAG;",
+        "mt13ccg200ac 1,100 m² Perfil nervado autoportante de chapa de acero galvanizado S 280 de 0,7 mm de espesor, acabado liso, 9,86 10,85",
+        "mt16lrc010fb 1,050 m² Panel rígido de lana mineral soldable, hidrofugada, según UNE-EN 13162, revestido con betún asfáltic 14,59 15,32",
+        "mt16lrc010fc 1,050 m2 Panel rígido de poliisocianurato 60 mm 19,09 20,04",
+        "mt16aab010 3,000 u Fijación mecánica de los paneles aislantes a la chapa metálica (cubiertas deck). 0,19 0,57",
+        "mt14gsa020bc 1,100 m² Geotextil no tejido compuesto por fibras de poliéster unidas por agujeteado, con una resistencia a l 0,79 0,87",
+        "mt14lga010ec 1,250 m2 Membrana impermeabilizante sintética de 1,8 mm 11,65 14,56",
+        "mt15acc020 0,150 m Perfil de chapa de acero galvanizado, para encuentros de la impermeabilización con paramentos vertic 1,64 0,25",
+        "mo051 0,169 h Oficial 1ª montador de cerramientos industriales. 29,73 5,02",
+        "mo098 0,169 h Ayudante montador de cerramientos industriales. 23,92 4,04",
+        "mo054 0,056 h Oficial 1ª montador de aislamientos. 29,73 1,66",
+        "mo101 0,056 h Ayudante montador de aislamientos. 23,92 1,34",
+        "mo029 0,113 h Oficial 1ª aplicador de láminas impermeabilizantes. 29,73 3,36",
+        "mo067 0,113 h Ayudante aplicador de láminas impermeabilizantes. 23,92 2,70",
+        "% 7,000 % Medios auxiliares 80,58 5,64"
+      ]
+    },
+    {
+      "page": 250,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 852,
+        "header_words": 4,
+        "body_words": 843,
+        "footer_words": 5,
+        "avg_font_size": 7.66,
+        "horizontal_lines_count": 3,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "LCM015e",
+            "x0": 60.24,
+            "y0": 97.5,
+            "region": "body"
+          },
+          {
+            "text": "LCM015g",
+            "x0": 60.24,
+            "y0": 412.5,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "montaje",
+            "x0": 161.35,
+            "y0": 97.58,
+            "region": "body"
+          },
+          {
+            "text": "autoadhesiva",
+            "x0": 239.84,
+            "y0": 265.57,
+            "region": "body"
+          },
+          {
+            "text": "montada",
+            "x0": 155.98,
+            "y0": 289.57,
+            "region": "body"
+          },
+          {
+            "text": "mt22rom100abl",
+            "x0": 94.08,
+            "y0": 302.59,
+            "region": "body"
+          },
+          {
+            "text": "mt22rom030uaa",
+            "x0": 94.08,
+            "y0": 313.76,
+            "region": "body"
+          },
+          {
+            "text": "mt23xpm015a",
+            "x0": 94.08,
+            "y0": 324.91,
+            "region": "body"
+          },
+          {
+            "text": "mt13blw110a",
+            "x0": 94.08,
+            "y0": 336.08,
+            "region": "body"
+          },
+          {
+            "text": "mt22www020",
+            "x0": 94.08,
+            "y0": 347.24,
+            "region": "body"
+          },
+          {
+            "text": "mt22www010b",
+            "x0": 94.08,
+            "y0": 358.41,
+            "region": "body"
+          },
+          {
+            "text": "mo017",
+            "x0": 94.08,
+            "y0": 369.56,
+            "region": "body"
+          },
+          {
+            "text": "mo058",
+            "x0": 94.08,
+            "y0": 380.72,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 391.87,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 391.87,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 391.83,
+            "region": "body"
+          },
+          {
+            "text": "montaje",
+            "x0": 160.75,
+            "y0": 412.58,
+            "region": "body"
+          },
+          {
+            "text": "autoadhesiva",
+            "x0": 239.84,
+            "y0": 580.57,
+            "region": "body"
+          },
+          {
+            "text": "montada",
+            "x0": 113.52,
+            "y0": 604.58,
+            "region": "body"
+          },
+          {
+            "text": "mt22rom100agl",
+            "x0": 94.08,
+            "y0": 617.59,
+            "region": "body"
+          },
+          {
+            "text": "mt22rom040uaa",
+            "x0": 94.08,
+            "y0": 628.76,
+            "region": "body"
+          },
+          {
+            "text": "mt23xpm015a",
+            "x0": 94.08,
+            "y0": 639.91,
+            "region": "body"
+          },
+          {
+            "text": "mt13blw110a",
+            "x0": 94.08,
+            "y0": 651.08,
+            "region": "body"
+          },
+          {
+            "text": "mt22www020",
+            "x0": 94.08,
+            "y0": 662.24,
+            "region": "body"
+          },
+          {
+            "text": "mt22www010b",
+            "x0": 94.08,
+            "y0": 673.41,
+            "region": "body"
+          },
+          {
+            "text": "mo017",
+            "x0": 94.08,
+            "y0": 684.56,
+            "region": "body"
+          },
+          {
+            "text": "mo058",
+            "x0": 94.08,
+            "y0": 695.72,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 706.87,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 706.87,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 706.83,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "u",
+            "x0": 95.52,
+            "y0": 98.32
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 302.64
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 313.8
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 324.96
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 336.12
+          },
+          {
+            "text": "m",
+            "x0": 158.52,
+            "y0": 347.14
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 358.44
+          },
+          {
+            "text": "ml",
+            "x0": 213.92,
+            "y0": 358.4
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 369.6
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 380.76
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 391.87
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 391.87
+          },
+          {
+            "text": "u",
+            "x0": 95.52,
+            "y0": 413.32
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 617.64
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 628.8
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 639.96
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 651.12
+          },
+          {
+            "text": "m",
+            "x0": 158.52,
+            "y0": 662.14
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 673.44
+          },
+          {
+            "text": "ml",
+            "x0": 213.92,
+            "y0": 673.4
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 684.6
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 695.76
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 706.87
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 706.87
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "Puertas",
+            "x0": 64.8,
+            "y0": 67.17,
+            "size": 12.05,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          },
+          {
+            "text": "balconeras",
+            "x0": 112.33,
+            "y0": 67.17,
+            "size": 12.05,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "2.109,26",
+            "x0": 512.88,
+            "y0": 96.03,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "3.361,71",
+            "x0": 512.88,
+            "y0": 411.03,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.08,
+          "x1": 546.24,
+          "y0": 78.84,
+          "y1": 78.84,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "CARPINTERIA DE MADERA Puertas balconeras"
+      ],
+      "body_lines_sample": [
+        "2.109,26",
+        "LCM015e u Suministro y montaje de carpintería exterior de madera de pino, para puerta abisagrada, de 800x2200 mm,",
+        "hoja y marco de 68x78 mm de sección, junquillos, tapajuntas de madera maciza de 70x15 mm y vierteaguas",
+        "en el perfil inferior, con soporte de aluminio anodizado y revestimiento exterior de madera; con capacidad",
+        "para recibir un acristalamiento con un espesor mínimo de 21 mm y máximo de 32 mm, con clasificación a la",
+        "permeabilidad al aire clase 4, según UNE-EN 12207, clasificación a la estanqueidad al agua clase 9A, según",
+        "UNE-EN 12208 y clasificación a la resistencia a la carga del viento clase 5, según UNE-EN 12210; acabado",
+        "mediante sistema de barnizado translúcido, compuesto de una primera mano de impregnación para la",
+        "protección preventiva de la madera contra hongos y ataques de insectos xilófagos y posterior aplicación de",
+        "una capa de terminación de 220 micras, acabado mate satinado, de alta resistencia frente a la acción de los",
+        "rayos UV y de la intemperie; incluso aplicación de masilla selladora para juntas; herraje perimetral de cierre y",
+        "seguridad con nivel de seguridad WK1, según UNE-EN 1627, apertura mediante falleba de palanca, manilla",
+        "en colores estándar y apertura de microventilación; con premarco de madera. Incluso alojamiento, calzado y",
+        "fijación del marco en el premarco con tornillos de acero galvanizado, de cabeza cilíndrica; aplicación de",
+        "espuma de poliuretano para el sellado de la junta entre el marco y el premarco para aislamiento",
+        "termoacústico; colocación de cinta autoadhesiva previa a la fijación del premarco; sellado de la junta exterior",
+        "entre marco y obra con silicona neutra, para garantizar su estanqueidad al aire y al agua.",
+        "Totalmente montada y probada.",
+        "mt22rom100abl 1,000 u Premarco de madera para carpintería de madera de 800x2200 mm, Según UNE-EN 14351-1. 87,75 87,75",
+        "mt22rom030uaa 1,000 u Puerta de madera de pino, una hoja oscilobatiente, dimensiones 800x2200 mm, acabado mediante sistema 1.811,81 1.811,81",
+        "mt23xpm015a 12,000 u Tornillo de acero galvanizado de cabeza cilíndrica, de 6 mm de diámetro y 15 cm de longitud. 0,27 3,24",
+        "mt13blw110a 0,100 u Aerosol de 750 cm³ de espuma de poliuretano, de 25 kg/m³ de densidad, 150% de expansión, 18 N/cm² de 12,58 1,26",
+        "mt22www020 6,080 m Cinta autoadhesiva, impermeable al vapor de agua, de 70 mm de anchura, compuesta por una película de 1,10 6,69",
+        "mt22www010b 0,100 u Cartucho de 290 ml de sellador adhesivo monocomponente, neutro, superelástico, a base de polímero MS 6,37 0,64",
+        "mo017 1,798 h Oficial 1ª carpintero. 35,20 63,29",
+        "mo058 1,798 h Ayudante carpintero. 29,73 53,45",
+        "% 4,000 % Medios auxiliares 2.028,13 81,13",
+        "LCM015g Suministro y montaje de carpintería exterior de madera de pino, para puerta abisagrada, de 1500x2200 mm, 3.361,71",
+        "u",
+        "hoja y marco de 68x78 mm de sección, junquillos, tapajuntas de madera maciza de 70x15 mm y vierteaguas"
+      ]
+    },
+    {
+      "page": 436,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 583,
+        "header_words": 34,
+        "body_words": 547,
+        "footer_words": 2,
+        "avg_font_size": 7.69,
+        "horizontal_lines_count": 3,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "U07DA050",
+            "x0": 94.08,
+            "y0": 165.45,
+            "region": "body"
+          },
+          {
+            "text": "U07DA020",
+            "x0": 94.08,
+            "y0": 327.81,
+            "region": "body"
+          },
+          {
+            "text": "U01AA011",
+            "x0": 94.08,
+            "y0": 486.79,
+            "region": "body"
+          },
+          {
+            "text": "U01AA011",
+            "x0": 94.08,
+            "y0": 647.47,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "montaje",
+            "x0": 125.97,
+            "y0": 128.41,
+            "region": "body"
+          },
+          {
+            "text": "montaje",
+            "x0": 257.94,
+            "y0": 128.41,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 210.07,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 210.03,
+            "region": "body"
+          },
+          {
+            "text": "montaje",
+            "x0": 169.26,
+            "y0": 278.78,
+            "region": "body"
+          },
+          {
+            "text": "montaje",
+            "x0": 307.93,
+            "y0": 278.78,
+            "region": "body"
+          },
+          {
+            "text": "autotaladrante",
+            "x0": 453.61,
+            "y0": 290.78,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 372.43,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 372.39,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 497.95,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 497.91,
+            "region": "body"
+          },
+          {
+            "text": "mt18mva010b",
+            "x0": 94.08,
+            "y0": 591.67,
+            "region": "body"
+          },
+          {
+            "text": "mt18mva020L",
+            "x0": 94.08,
+            "y0": 602.83,
+            "region": "body"
+          },
+          {
+            "text": "auxiliar",
+            "x0": 192.28,
+            "y0": 602.82,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 658.63,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 658.59,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 176.57
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 187.8
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 198.96
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 210.07
+          },
+          {
+            "text": "m3",
+            "x0": 95.52,
+            "y0": 231.52
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 338.93
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 350.16
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 361.32
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 372.43
+          },
+          {
+            "text": "ml",
+            "x0": 95.52,
+            "y0": 393.88
+          },
+          {
+            "text": "m",
+            "x0": 158.52,
+            "y0": 442.06
+          },
+          {
+            "text": "l",
+            "x0": 158.52,
+            "y0": 453.04
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 464.52
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 475.68
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 497.95
+          },
+          {
+            "text": "ml",
+            "x0": 95.52,
+            "y0": 519.4
+          },
+          {
+            "text": "m",
+            "x0": 158.52,
+            "y0": 591.58
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 602.88
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 613.95
+          },
+          {
+            "text": "m",
+            "x0": 158.52,
+            "y0": 625.06
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 636.36
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 658.63
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "2.037,68",
+            "x0": 512.88,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "0416",
+            "x0": 60.24,
+            "y0": 230.68,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "1.622,23",
+            "x0": 512.88,
+            "y0": 229.23,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "0417",
+            "x0": 60.24,
+            "y0": 393.04,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "17,89",
+            "x0": 524.28,
+            "y0": 391.59,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "0418",
+            "x0": 60.24,
+            "y0": 518.56,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "74,11",
+            "x0": 524.28,
+            "y0": 517.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "Cubierta",
+            "x0": 64.8,
+            "y0": 688.68,
+            "size": 12.02,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.08,
+          "x1": 546.24,
+          "y0": 700.32,
+          "y1": 700.32,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "BIOCONSTRUCCIÓN Cubierta"
+      ],
+      "body_lines_sample": [
+        "PEFC o similar, con clase resistente D30 según CTE valor adecuadamente certificado de hasta 30 N/mm2,",
+        "incluyendo cepillado en taller de todas las caras, ejecución en taller o en obra del corte en largo, y trazado de",
+        "los ensambles necesarios (copetes, patillas, barbillas, espigas, gargantas etc.), incluso ayudas de albañilería",
+        "en montaje y preparación de uniones, montaje de la pieza, medios de elevación carga y descarga,según",
+        "CTE/ DB-SE-M .Considerando un 10% de mermas y cortes, incluso limpieza del lugar de trabajo y totalmente",
+        "colocado.",
+        "U07DA050 1,100 m³ Madera roble escuadría pequeña 1.567,19 1.723,91",
+        "P40 2,000 kg tornilleria 8,51 17,02",
+        "B0001.0030 3,000 h oficial 1ª 29,73 89,19",
+        "B0001.0060 3,000 h Peon especializado 24,75 74,25",
+        "%CI 7,000 % Medios auxiliares 1.904,37 133,31",
+        "0416 Elemento estructural zanca de escalera de madera, certificada para cadena de custodia con sello PEFC o 1.622,23",
+        "m3",
+        "similar, con clase resistente C18 según CTE valor adecuadamente certificado de hasta 18 N/mm2,",
+        "incluyendo cepillado en taller de todas las caras,, ejecución en taller o en obra del corte en largo, y trazado",
+        "de los ensambles necesarios (copetes, patillas, barbillas, espigas, gargantas etc.), incluso ayudas de",
+        "albañilería en montaje y preparación de uniones, montaje de la pieza, medios de elevación carga y",
+        "descarga,según CTE/ DB-SE-M. Fijación con tornilleria galvanizada de carpintería de armar autotaladrante",
+        "de rosca parcial y diametro 6 mm y herrajes galvanizados estandar, considerando un 10% de mermas y",
+        "cortes, incluso limpieza del lugar de trabajo y totalmente colocado.",
+        "U07DA020 1,100 m³ Madera pino estructural 966,58 1.063,24",
+        "P40 kg tornilleria",
+        "2,000 8,51 17,02",
+        "B0001.0030 8,000 h oficial 1ª 29,73 237,84",
+        "B0001.0060 8,000 h Peon especializado 24,75 198,00",
+        "%CI 7,000 % Medios auxiliares 1.516,10 106,13",
+        "17,89",
+        "0417 ml Zocalo de madera de pino silvestre o de durabilidad natural equivalente, certificada para cadena de custodia",
+        "con sello PEFC o similar de 4x11 cm, fijado con tornilleria galvanizada y cola de carpintero. Incluso sellado",
+        "de juntas con adesivo de poliuretano. Incluso replanteo, nivelado y mermas y limpieza de la obra y totalmente"
+      ]
+    },
+    {
+      "page": 437,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 605,
+        "header_words": 29,
+        "body_words": 574,
+        "footer_words": 2,
+        "avg_font_size": 7.52,
+        "horizontal_lines_count": 2,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "WSF40",
+            "x0": 379.46,
+            "y0": 170.75,
+            "region": "body"
+          },
+          {
+            "text": "SSM45",
+            "x0": 368.76,
+            "y0": 182.77,
+            "region": "body"
+          },
+          {
+            "text": "U04AF001",
+            "x0": 94.08,
+            "y0": 310.76,
+            "region": "body"
+          },
+          {
+            "text": "WSF40",
+            "x0": 379.46,
+            "y0": 354.59,
+            "region": "body"
+          },
+          {
+            "text": "SSM45",
+            "x0": 368.76,
+            "y0": 366.61,
+            "region": "body"
+          },
+          {
+            "text": "U04AF001",
+            "x0": 94.08,
+            "y0": 505.76,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "monocomponente",
+            "x0": 320.51,
+            "y0": 68.41,
+            "region": "header"
+          },
+          {
+            "text": "monocomponente",
+            "x0": 229.57,
+            "y0": 126.92,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 138.07,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 138.03,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 321.91,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 321.87,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 516.91,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 516.87,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 262.89,
+            "y0": 537.61,
+            "region": "body"
+          },
+          {
+            "text": "MT09PMC010B",
+            "x0": 94.08,
+            "y0": 584.93,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 170.52,
+            "y0": 584.95,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 596.11,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 596.07,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 744.79,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 744.75,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 93.48
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 104.64
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 115.8
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 126.96
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 138.07
+          },
+          {
+            "text": "m2",
+            "x0": 95.52,
+            "y0": 159.52
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 243.84
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 255.0
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 266.07
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 277.23
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 288.39
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 299.55
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 321.91
+          },
+          {
+            "text": "m2",
+            "x0": 95.52,
+            "y0": 343.36
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 427.68
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 438.84
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 449.91
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 461.07
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 472.23
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 483.39
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 494.55
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 516.91
+          },
+          {
+            "text": "ml",
+            "x0": 95.52,
+            "y0": 538.36
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 562.68
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 573.84
+          },
+          {
+            "text": "m3",
+            "x0": 158.52,
+            "y0": 584.91
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 596.11
+          },
+          {
+            "text": "ml",
+            "x0": 95.52,
+            "y0": 617.56
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 677.88
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 688.95
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 700.11
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 711.27
+          },
+          {
+            "text": "ml",
+            "x0": 158.52,
+            "y0": 722.34
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 733.61
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 744.79
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "73,02",
+            "x0": 524.28,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "0502",
+            "x0": 60.24,
+            "y0": 158.68,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "120,60",
+            "x0": 519.72,
+            "y0": 157.23,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "0503",
+            "x0": 60.24,
+            "y0": 342.52,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "122,92",
+            "x0": 519.72,
+            "y0": 341.07,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "0505",
+            "x0": 60.24,
+            "y0": 537.52,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "74,99",
+            "x0": 524.28,
+            "y0": 536.07,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "0506",
+            "x0": 60.24,
+            "y0": 616.72,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "36,21",
+            "x0": 524.28,
+            "y0": 615.27,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "BIOCONSTRUCCIÓN Cubierta"
+      ],
+      "body_lines_sample": [
+        "B0001.0030 0,750 h oficial 1ª 29,73 22,30",
+        "B0001.0060 0,750 h Peon especializado 24,75 18,56",
+        "B1108.0040 27,000 u teja arabe grande 50x22 cm 0,99 26,73",
+        "08.01.01_UIB 0,050 u espuma de poliuretano monocomponente 13,01 0,65",
+        "%0780 7,000 % Medios auxiliares 68,24 4,78",
+        "0502 Cubierta ajardinada constituida por: 120,60",
+        "m2",
+        "Lámina antirraíces sin costuras de polietileno de alta resistencia tipo WSF40 ZINCO o similar, manta",
+        "protectora y retenedora de fibra de poliéster con soporte de fieltro tipo SSM45 ZINCO o similar, elemento de",
+        "drenaje y retención de agua Floradrain FD 25-E o similar y filtro de polipropileno termosoldado tipo sistema",
+        "SF ZINCO o similar, drenaje compuesto de gravas limpias, incluyendo colocación, solapes y remates, lista",
+        "para extender la capa de tierra vegetal. Totalmente acabada, limpieza de zona de trabajo y p.p. de medios",
+        "auxiliares.",
+        "B0001.0030 0,500 h oficial 1ª 29,73 14,87",
+        "B0001.0060 Peon especializado",
+        "0,500 h 24,75 12,38",
+        "08.02.01_UIB 1,100 m2 Filtro polipropileno termosoldado 15,36 16,90",
+        "08.02.02_UIB 1,100 m2 Módulo drenante y retenedor 31,20 34,32",
+        "08.02.03_UIB 1,100 m2 Manta de fibra de poliéster con soporte de fieltro 12,54 13,79",
+        "08.02.04_UIB 1,100 m2 Lámina antirraices de polietileno 18,29 20,12",
+        "U04AF001 0,010 m³ Gravilla 5/20 mm 33,10 0,33",
+        "%0100 7,000 % Medios auxiliares 112,71 7,89",
+        "0503 Cubierta ajardinada constituida por: 122,92",
+        "m2",
+        "Lámina antirraíces sin costuras de polietileno de alta resistencia tipo WSF40 ZINCO o similar, manta",
+        "protectora y retenedora de fibra de poliéster con soporte de fieltro tipo SSM45 ZINCO o similar, elemento de",
+        "drenaje y retención de agua Floradrain FD 25-E o similar y filtro de polipropileno termosoldado tipo sistema",
+        "SF ZINCO o similar, malla biodegradable de fibra de yute, drenaje compuesto de gravas limpias, incluyendo",
+        "colocación, solapes y remates, lista para extender la capa de tierra vegetal. Totalmente acabada, limpieza de",
+        "zona de trabajo y p.p. de medios auxiliares."
+      ]
+    },
+    {
+      "page": 444,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 562,
+        "header_words": 40,
+        "body_words": 518,
+        "footer_words": 4,
+        "avg_font_size": 7.56,
+        "horizontal_lines_count": 3,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 115.75,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 115.71,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 218.95,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 218.91,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 286.99,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 286.95,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 366.19,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 366.15,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 283.74,
+            "y0": 386.89,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 170.52,
+            "y0": 458.22,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 469.39,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 469.35,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 170.52,
+            "y0": 561.42,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 170.52,
+            "y0": 572.58,
+            "region": "body"
+          },
+          {
+            "text": "mortero",
+            "x0": 170.52,
+            "y0": 583.74,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 617.23,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 617.19,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 747.31,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 93.48
+          },
+          {
+            "text": "ml",
+            "x0": 158.52,
+            "y0": 104.46
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 115.75
+          },
+          {
+            "text": "ml",
+            "x0": 95.52,
+            "y0": 137.2
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 185.52
+          },
+          {
+            "text": "ml",
+            "x0": 158.52,
+            "y0": 196.5
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 207.84
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 218.95
+          },
+          {
+            "text": "ml",
+            "x0": 95.52,
+            "y0": 240.4
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 264.72
+          },
+          {
+            "text": "ml",
+            "x0": 158.52,
+            "y0": 275.7
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 286.99
+          },
+          {
+            "text": "m2",
+            "x0": 95.52,
+            "y0": 308.44
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 332.76
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 343.92
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 355.01
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 366.19
+          },
+          {
+            "text": "m2",
+            "x0": 95.52,
+            "y0": 387.64
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 435.96
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 447.12
+          },
+          {
+            "text": "m3",
+            "x0": 158.52,
+            "y0": 458.19
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 469.39
+          },
+          {
+            "text": "m2",
+            "x0": 95.52,
+            "y0": 490.84
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 539.16
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 550.32
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 561.41
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 572.57
+          },
+          {
+            "text": "kg",
+            "x0": 158.52,
+            "y0": 583.73
+          },
+          {
+            "text": "l",
+            "x0": 158.52,
+            "y0": 594.64
+          },
+          {
+            "text": "l",
+            "x0": 158.52,
+            "y0": 605.8
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 617.23
+          },
+          {
+            "text": "m2",
+            "x0": 95.52,
+            "y0": 678.4
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 702.72
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 713.88
+          },
+          {
+            "text": "m2",
+            "x0": 158.52,
+            "y0": 724.95
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 736.2
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 747.31
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "21,22",
+            "x0": 524.28,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "1012",
+            "x0": 60.24,
+            "y0": 136.36,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "53,30",
+            "x0": 524.28,
+            "y0": 134.91,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "1013",
+            "x0": 60.24,
+            "y0": 239.56,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "17,32",
+            "x0": 524.28,
+            "y0": 238.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "1014",
+            "x0": 60.24,
+            "y0": 307.6,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "27,97",
+            "x0": 524.28,
+            "y0": 306.15,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "1015",
+            "x0": 60.24,
+            "y0": 386.8,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "33,37",
+            "x0": 524.28,
+            "y0": 385.35,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "1016",
+            "x0": 60.24,
+            "y0": 490.0,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "51,33",
+            "x0": 524.28,
+            "y0": 488.55,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "Solados",
+            "x0": 64.8,
+            "y0": 647.27,
+            "size": 12.02,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          },
+          {
+            "text": "alicatados",
+            "x0": 124.85,
+            "y0": 647.27,
+            "size": 12.02,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          },
+          {
+            "text": "1101",
+            "x0": 60.24,
+            "y0": 677.56,
+            "size": 8.16,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "71,47",
+            "x0": 524.28,
+            "y0": 676.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.08,
+          "x1": 546.24,
+          "y0": 658.92,
+          "y1": 658.92,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "BIOCONSTRUCCIÓN Solados y alicatados"
+      ],
+      "body_lines_sample": [
+        "UIB_MO_0001.1 0,200 h Oficial 1ª 29,73 5,95",
+        "13.11.01_UIB 1,000 ml Goterón con malla aluminio 13,88 13,88",
+        "%0450 7,000 % Medios auxiliares 19,83 1,39",
+        "53,30",
+        "1012 Colocación e instalación de perfil de fijación y protección de aluminio natural AP 150 de ZINCO o similar. Con",
+        "ml",
+        "distancia de preperforación para atornillamiento a muro cada 20 cm. Atornillado mediante tornillo y arandela",
+        "de acero galvanizado de 50m longitud a estructura existente cada 20 cm. Incluidos medios auxiliares,",
+        "sellado, limpieza y totalmente acabado.",
+        "UIB_MO_0001.1 0,200 h Oficial 1ª 29,73 5,95",
+        "13.12A.01_UIB 1,050 ml Perf. fijación y protec. AP 150 ZINCO 39,58 41,56",
+        "13.09.02_UIB 5,000 u Tornillo con arandela acero galvanizado 50 mm longitud 0,46 2,30",
+        "%0450 % Medios auxiliares",
+        "7,000 49,81 3,49",
+        "17,32",
+        "1013 ml Colocación de esquinero de aluminio con malla tipo STO Ángulos reforzados o similar en jambas de puertas",
+        "y ventanas exteriores. Totalmente colocado, limpieza de zona de trabajo y p.p. de medios auxiliares.",
+        "B0001.0030 0,200 h oficial 1ª 29,73 5,95",
+        "P15UIB 1,000 ml esquinero aluminio con malla 10,24 10,24",
+        "% Medios auxiliares",
+        "%0450 7,000 16,19 1,13",
+        "27,97",
+        "1014 m2 Mortero de cal hidraulica para rejuntado de piedras. Totalmente acabado, limpieza de zona de trabajo y p.p.",
+        "de medios auxiliares.",
+        "B0001.0030 0,400 h oficial 1ª 29,73 11,89",
+        "B0001.0060 0,200 h Peon especializado 24,75 4,95",
+        "B0205.0080 10,000 kg Mortero cal para relleno de juntas 0,93 9,30",
+        "%1000 7,000 % Medios auxiliares 26,14 1,83",
+        "1015 Enlucido de paramentos interiores a base de mortero fino de arccilla con pigmentaciones naturales sobre 33,37",
+        "m2"
+      ]
+    },
+    {
+      "page": 471,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 436,
+        "header_words": 41,
+        "body_words": 386,
+        "footer_words": 9,
+        "avg_font_size": 7.66,
+        "horizontal_lines_count": 2,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "XFB010q",
+            "x0": 60.24,
+            "y0": 68.33,
+            "region": "header"
+          },
+          {
+            "text": "XFB020h",
+            "x0": 94.08,
+            "y0": 152.58,
+            "region": "body"
+          },
+          {
+            "text": "XFB010r",
+            "x0": 60.24,
+            "y0": 184.39,
+            "region": "body"
+          },
+          {
+            "text": "XFB020i",
+            "x0": 94.08,
+            "y0": 268.6,
+            "region": "body"
+          },
+          {
+            "text": "XFB010s",
+            "x0": 60.24,
+            "y0": 300.41,
+            "region": "body"
+          },
+          {
+            "text": "XFB020j",
+            "x0": 94.08,
+            "y0": 384.64,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "montaje",
+            "x0": 113.52,
+            "y0": 92.42,
+            "region": "body"
+          },
+          {
+            "text": "mt49reh010hca",
+            "x0": 94.08,
+            "y0": 141.45,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 163.75,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 163.75,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 163.71,
+            "region": "body"
+          },
+          {
+            "text": "montaje",
+            "x0": 113.52,
+            "y0": 208.46,
+            "region": "body"
+          },
+          {
+            "text": "mt49reh010ica",
+            "x0": 94.08,
+            "y0": 257.47,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 279.79,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 279.79,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 279.75,
+            "region": "body"
+          },
+          {
+            "text": "montaje",
+            "x0": 113.52,
+            "y0": 324.5,
+            "region": "body"
+          },
+          {
+            "text": "mt49reh010jca",
+            "x0": 94.08,
+            "y0": 373.51,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 395.83,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 395.83,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 395.79,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 141.48
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 152.64
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 163.75
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 163.75
+          },
+          {
+            "text": "u",
+            "x0": 95.52,
+            "y0": 185.2
+          },
+          {
+            "text": "m²",
+            "x0": 175.48,
+            "y0": 196.45
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 257.52
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 268.68
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 279.79
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 279.79
+          },
+          {
+            "text": "u",
+            "x0": 95.52,
+            "y0": 301.24
+          },
+          {
+            "text": "m²",
+            "x0": 163.26,
+            "y0": 312.48
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 373.56
+          },
+          {
+            "text": "u",
+            "x0": 158.52,
+            "y0": 384.72
+          },
+          {
+            "text": "m²",
+            "x0": 417.24,
+            "y0": 384.66
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 395.83
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 395.83
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "763,13",
+            "x0": 519.72,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "784,93",
+            "x0": 519.72,
+            "y0": 182.91,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "799,46",
+            "x0": 519.72,
+            "y0": 298.95,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "ENSAYOS Y CONTROL TECNICO Estanqueidad al finalizar la obra"
+      ],
+      "body_lines_sample": [
+        "montaje y desmontaje del ventilador Blower Door en la puerta exterior de la vivienda con una altura de hasta",
+        "250 cm y una anchura de hasta 125 cm.",
+        "Incluye: Desplazamiento a obra del ventilador. Realización del ensayo.",
+        "Criterio de medición de proyecto: Ensayo a realizar, según documentación del Plan de control de calidad.",
+        "mt49reh010hca 1,000 u Ensayo Blower Door, para medir el volumen de infiltraciones de aire, en vivienda de edificio plurifa 518,11 518,11",
+        "XFB020h 1,000 u Informe de resultados del ensayo Blower Door, en vivienda de edificio plurifamiliar de entre 150 y 2 215,67 215,67",
+        "% 4,000 % Medios auxiliares 733,78 29,35",
+        "784,93",
+        "XFB010r Ensayo Blower Door, para medir el volumen de infiltraciones de aire, en vivienda de edificio plurifamiliar de",
+        "u",
+        "entre 200 y 250 m² de superficie útil, una vez finalizada la obra, método A según UNE-EN 13829. Incluso",
+        "montaje y desmontaje del ventilador Blower Door en la puerta exterior de la vivienda con una altura de hasta",
+        "250 cm y una anchura de hasta 125 cm.",
+        "Incluye: Desplazamiento a obra del ventilador. Realización del ensayo.",
+        "Criterio de medición de proyecto: Ensayo a realizar, según documentación del Plan de control de calidad.",
+        "mt49reh010ica 1,000 u Ensayo Blower Door, para medir el volumen de infiltraciones de aire, en vivienda de edificio plurifa 532,92 532,92",
+        "XFB020i 1,000 u Informe de resultados del ensayo Blower Door, en vivienda de edificio plurifamiliar de entre 200 y 2 221,82 221,82",
+        "% 4,000 % Medios auxiliares 754,74 30,19",
+        "799,46",
+        "XFB010s Ensayo Blower Door, para medir el volumen de infiltraciones de aire, en vivienda de edificio plurifamiliar de",
+        "u",
+        "más de 250 m² de superficie útil, una vez finalizada la obra, método A según UNE-EN 13829. Incluso",
+        "montaje y desmontaje del ventilador Blower Door en la puerta exterior de la vivienda con una altura de hasta",
+        "250 cm y una anchura de hasta 125 cm.",
+        "Incluye: Desplazamiento a obra del ventilador. Realización del ensayo.",
+        "Criterio de medición de proyecto: Ensayo a realizar, según documentación del Plan de control de calidad.",
+        "mt49reh010jca 1,000 u Ensayo Blower Door, para medir el volumen de infiltraciones de aire, en vivienda de edificio plurifa 542,78 542,78",
+        "XFB020j 1,000 u Informe de resultados del ensayo Blower Door, en vivienda de edificio plurifamiliar de más de 250 m² 225,93 225,93",
+        "% 4,000 % Medios auxiliares 768,71 30,75"
+      ]
+    },
+    {
+      "page": 474,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 378,
+        "header_words": 5,
+        "body_words": 364,
+        "footer_words": 9,
+        "avg_font_size": 8.18,
+        "horizontal_lines_count": 3,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [
+          {
+            "text": "MOVIMIENTO",
+            "x0": 119.47,
+            "y0": 239.67,
+            "region": "body"
+          }
+        ],
+        "units": [],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "Índice",
+            "x0": 64.8,
+            "y0": 82.17,
+            "size": 12.05,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          },
+          {
+            "text": "capítulos",
+            "x0": 120.31,
+            "y0": 82.17,
+            "size": 12.05,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          }
+        ],
+        "potential_subchapters": []
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.8,
+          "x1": 546.24,
+          "y0": 96.6,
+          "y1": 96.6,
+          "width": 484.44
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "ENSAYOS Y CONTROL TECNICO Estanqueidad al finalizar la obra"
+      ],
+      "body_lines_sample": [
+        "• DEMOLICIONES .............................................................................................................................................… 1",
+        "•• Cubiertas .....................................................................................................................................................… 1",
+        "•• Forjados .......................................................................................................................................................… 2",
+        "•• Hormigones ..................................................................................................................................................… 3",
+        "•• Cimentaciones .............................................................................................................................................… 5",
+        "•• Pavimentos ..................................................................................................................................................… 5",
+        "•• Revestimientos ............................................................................................................................................… 7",
+        "•• Fábricas .......................................................................................................................................................…",
+        "7",
+        "•• Saneamiento ................................................................................................................................................… 9",
+        "•• Carpintería y Cerrajería ................................................................................................................................… 10",
+        "•• Instalaciones ................................................................................................................................................… 11",
+        "•• Carga y recogida de escombros ...................................................................................................................… 14",
+        "•• Cantería .......................................................................................................................................................… 15",
+        "•• Estructuras de acero ....................................................................................................................................… 16",
+        "• MOVIMIENTO DE TIERRAS ...........................................................................................................................… 18",
+        "•• Desmontes ...................................................................................................................................................…",
+        "18",
+        "•• Zanjas ..........................................................................................................................................................… 19",
+        "•• Pozos ...........................................................................................................................................................… 20",
+        "•• Entibaciones ................................................................................................................................................… 21",
+        "•• Rellenos y terraplenados ..............................................................................................................................… 21",
+        "•• Carga y transporte .......................................................................................................................................… 23",
+        "•• Estabilización de taludes ..............................................................................................................................… 23",
+        "• HORMIGONES ...............................................................................................................................................… 24",
+        "•• Pilotes ..........................................................................................................................................................… 24",
+        "•• Cimentaciones .............................................................................................................................................… 28",
+        "•• Muros de contención ....................................................................................................................................… 31",
+        "•• Muros de sótano ..........................................................................................................................................… 32",
+        "•• Pilares ..........................................................................................................................................................… 33"
+      ]
+    },
+    {
+      "page": 477,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 232,
+        "header_words": 12,
+        "body_words": 211,
+        "footer_words": 9,
+        "avg_font_size": 8.14,
+        "horizontal_lines_count": 2,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [],
+        "units": [],
+        "page_numbers": [],
+        "potential_chapter_headers": [],
+        "potential_subchapters": []
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "ENSAYOS Y CONTROL TECNICO Estanqueidad al finalizar la obra"
+      ],
+      "body_lines_sample": [
+        "•• Exterior ........................................................................................................................................................… 399",
+        "• REHABILITACIÓN, REPARACIÓN Y MANTENIMIENTO ...............................................................................… 401",
+        "•• PREPARACIÓN DE SUPERFICIES ............................................................................................................… 401",
+        "•• REPARACIONES DE ELEMENTOS HORMIGÓN .......................................................................................… 403",
+        "•• REFUERZOS ESTRUCTURALES ...............................................................................................................… 404",
+        "•• MUROS, FÁBRICAS Y TABIQUES ..............................................................................................................… 405",
+        "•• FACHADAS, REVOCOS Y ENLUCIDOS .....................................................................................................… 406",
+        "•• CANTERIA ...................................................................................................................................................… 407",
+        "• BIOCONSTRUCCIÓN .....................................................................................................................................… 408",
+        "•• Actuaciones previas .....................................................................................................................................… 408",
+        "•• Movimiento de tierras ...................................................................................................................................… 409",
+        "•• Cimentaciones y hormigones .......................................................................................................................… 409",
+        "•• Estructura de madera ...................................................................................................................................… 409",
+        "•• Cubierta .......................................................................................................................................................… 413",
+        "•• Particiones ...................................................................................................................................................… 415",
+        "•• Aislamientos e impermeabilizaciones ...........................................................................................................… 416",
+        "•• Firmes y pavimentos ....................................................................................................................................… 418",
+        "•• Revestimientos ............................................................................................................................................… 419",
+        "•• Solados y alicatados ....................................................................................................................................…",
+        "421",
+        "•• Pinturas ........................................................................................................................................................… 422",
+        "• SEGURIDAD Y SALUD ...................................................................................................................................… 424",
+        "•• Instalaciones para el personal ......................................................................................................................… 424",
+        "•• Protecciones personales ..............................................................................................................................… 425",
+        "•• Protecciones colectivas ................................................................................................................................… 428",
+        "•• Señalizaciones .............................................................................................................................................… 434",
+        "•• Medicina preventiva .....................................................................................................................................… 436",
+        "•• Andamios .....................................................................................................................................................…",
+        "436",
+        "• ENSAYOS Y CONTROL TECNICO ................................................................................................................… 438"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4552 @@
+{
+  "pdf": "docs\\Palma47_2025_COAATMCA.pdf",
+  "total_pages": 479,
+  "explored_pages": [
+    12,
+    13,
+    14,
+    18,
+    19,
+    20,
+    21,
+    32,
+    33,
+    478,
+    479
+  ],
+  "pages": [
+    {
+      "page": 12,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 0,
+        "header_words": 0,
+        "body_words": 0,
+        "footer_words": 0,
+        "avg_font_size": 0.0,
+        "horizontal_lines_count": 0,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [],
+        "units": [],
+        "page_numbers": [],
+        "potential_chapter_headers": [],
+        "potential_subchapters": []
+      },
+      "horizontal_lines": [],
+      "tables": [],
+      "footer_lines": [],
+      "body_lines_sample": []
+    },
+    {
+      "page": 13,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 7,
+        "header_words": 2,
+        "body_words": 3,
+        "footer_words": 2,
+        "avg_font_size": 11.44,
+        "horizontal_lines_count": 4,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [],
+        "units": [],
+        "page_numbers": [],
+        "potential_chapter_headers": [],
+        "potential_subchapters": []
+      },
+      "horizontal_lines": [
+        {
+          "x0": 63.24,
+          "x1": 545.4,
+          "y0": 409.56,
+          "y1": 409.56,
+          "width": 482.16
+        },
+        {
+          "x0": 63.24,
+          "x1": 546.12,
+          "y0": 436.08,
+          "y1": 436.08,
+          "width": 482.88
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "DEMOLICIONES Cubiertas"
+      ],
+      "body_lines_sample": [
+        "• DEMOLICIONES •"
+      ]
+    },
+    {
+      "page": 14,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 572,
+        "header_words": 3,
+        "body_words": 567,
+        "footer_words": 2,
+        "avg_font_size": 7.67,
+        "horizontal_lines_count": 3,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "DQC040",
+            "x0": 60.24,
+            "y0": 97.51,
+            "region": "body"
+          },
+          {
+            "text": "DQC040c",
+            "x0": 60.24,
+            "y0": 165.54,
+            "region": "body"
+          },
+          {
+            "text": "DQA020",
+            "x0": 60.24,
+            "y0": 245.59,
+            "region": "body"
+          },
+          {
+            "text": "DQA010",
+            "x0": 60.24,
+            "y0": 325.63,
+            "region": "body"
+          },
+          {
+            "text": "DQC020",
+            "x0": 60.24,
+            "y0": 415.99,
+            "region": "body"
+          },
+          {
+            "text": "DQC030",
+            "x0": 60.24,
+            "y0": 472.87,
+            "region": "body"
+          },
+          {
+            "text": "DQC030b",
+            "x0": 60.24,
+            "y0": 565.74,
+            "region": "body"
+          },
+          {
+            "text": "DQC030c",
+            "x0": 60.24,
+            "y0": 658.62,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "mortero",
+            "x0": 350.42,
+            "y0": 97.56,
+            "region": "body"
+          },
+          {
+            "text": "mo020",
+            "x0": 94.08,
+            "y0": 122.6,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 133.76,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 144.91,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 144.91,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 144.87,
+            "region": "body"
+          },
+          {
+            "text": "mo020",
+            "x0": 94.08,
+            "y0": 202.64,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 213.8,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 224.95,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 224.95,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 224.91,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 282.68,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 293.84,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 304.99,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 304.99,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 304.95,
+            "region": "body"
+          },
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 350.71,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 361.88,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 373.04,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 384.2,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 395.35,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 395.35,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 395.31,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 441.08,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 452.23,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 452.23,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 452.19,
+            "region": "body"
+          },
+          {
+            "text": "autorizado",
+            "x0": 427.12,
+            "y0": 508.93,
+            "region": "body"
+          },
+          {
+            "text": "mt51cub020dba",
+            "x0": 94.08,
+            "y0": 533.97,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 545.11,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 545.11,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 545.07,
+            "region": "body"
+          },
+          {
+            "text": "autorizado",
+            "x0": 427.12,
+            "y0": 601.81,
+            "region": "body"
+          },
+          {
+            "text": "mt51cub020dbb",
+            "x0": 94.08,
+            "y0": 626.85,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 637.99,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 637.99,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 637.95,
+            "region": "body"
+          },
+          {
+            "text": "autorizado",
+            "x0": 427.12,
+            "y0": 694.69,
+            "region": "body"
+          },
+          {
+            "text": "mt51cub020dbc",
+            "x0": 94.08,
+            "y0": 719.72,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 730.87,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 730.87,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 730.83,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 98.32
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 122.64
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 133.8
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 144.91
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 144.91
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 166.36
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 202.68
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 213.84
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 224.95
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 224.95
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 246.4
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 282.72
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 293.88
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 304.99
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 304.99
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 326.44
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 350.76
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 361.92
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 373.08
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 384.24
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 395.35
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 395.35
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 416.8
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 441.12
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 452.23
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 452.23
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 473.68
+          },
+          {
+            "text": "m²",
+            "x0": 158.52,
+            "y0": 533.85
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 545.11
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 545.11
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 566.56
+          },
+          {
+            "text": "m²",
+            "x0": 158.52,
+            "y0": 626.73
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 637.99
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 637.99
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 659.44
+          },
+          {
+            "text": "m²",
+            "x0": 158.52,
+            "y0": 719.61
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 730.87
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 730.87
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "Cubiertas",
+            "x0": 64.8,
+            "y0": 67.19,
+            "size": 12.03,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "18,09",
+            "x0": 524.28,
+            "y0": 96.03,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "34,02",
+            "x0": 524.28,
+            "y0": 164.07,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "37,75",
+            "x0": 524.28,
+            "y0": 244.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "35,93",
+            "x0": 524.28,
+            "y0": 324.15,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "9,36",
+            "x0": 528.84,
+            "y0": 414.51,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "137,50",
+            "x0": 519.72,
+            "y0": 471.39,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "82,50",
+            "x0": 524.28,
+            "y0": 564.27,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "41,79",
+            "x0": 524.28,
+            "y0": 657.15,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.08,
+          "x1": 546.24,
+          "y0": 78.84,
+          "y1": 78.84,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "DEMOLICIONES Forjados"
+      ],
+      "body_lines_sample": [
+        "18,09",
+        "DQC040 m² Desmontaje de cobertura de teja cerámica curva, colocada con mortero en cubierta inclinada; con medios",
+        "manuales y carga manual sobre camión o contenedor.",
+        "mo020 0,123 h Oficial 1ª construcción. 29,73 3,66",
+        "mo113 0,554 h Peón ordinario construcción. 23,92 13,25",
+        "% 7,000 % Medios auxiliares 16,91 1,18",
+        "34,02",
+        "DQC040c m² Desmontaje de cobertura de teja cerámica curva, colocada con mortero, en cubierta inclinada; con medios",
+        "manuales y recuperación del 60% del material para su posterior ubicación en otro emplazamiento, y carga",
+        "manual sobre camión o contenedor.",
+        "mo020 0,215 h Oficial 1ª construcción. 29,73 6,39",
+        "mo113 1,062 h Peón ordinario construcción. 23,92 25,40",
+        "% 7,000 % Medios auxiliares 31,79 2,23",
+        "37,75",
+        "DQA020 m² Demolición completa de cubierta plana transitable, ventilada, con pavimento cerámico; con martillo",
+        "neumático, sin afectar a la estabilidad de los elementos constructivos contiguos, y carga manual sobre",
+        "camión o contenedor.",
+        "mo112 0,112 h Peón especializado construcción. 24,75 2,77",
+        "mo113 1,359 h Peón ordinario construcción. 23,92 32,51",
+        "% % Medios auxiliares",
+        "7,000 35,28 2,47",
+        "35,93",
+        "DQA010 m² Demolición completa de cubierta plana transitable con pavimento cerámico; con martillo neumático, sin",
+        "afectar a la estabilidad de los elementos constructivos contiguos, y carga manual sobre camión o contenedor.",
+        "mq05mai030 0,100 h Martillo neumático. 4,70 0,47",
+        "mq05pdm110 0,100 h Compresor portátil diesel media presión 10 m³/min. 7,97 0,80",
+        "mo112 0,112 h Peón especializado construcción. 24,75 2,77",
+        "mo113 1,235 h Peón ordinario construcción. 23,92 29,54",
+        "% 7,000 % Medios auxiliares 33,58 2,35",
+        "9,36"
+      ]
+    },
+    {
+      "page": 18,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 534,
+        "header_words": 26,
+        "body_words": 506,
+        "footer_words": 2,
+        "avg_font_size": 7.5,
+        "horizontal_lines_count": 2,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "DRS011",
+            "x0": 60.24,
+            "y0": 68.34,
+            "region": "header"
+          },
+          {
+            "text": "DRS020",
+            "x0": 60.24,
+            "y0": 125.22,
+            "region": "body"
+          },
+          {
+            "text": "DRS021",
+            "x0": 60.24,
+            "y0": 193.26,
+            "region": "body"
+          },
+          {
+            "text": "DRS030",
+            "x0": 60.24,
+            "y0": 250.14,
+            "region": "body"
+          },
+          {
+            "text": "DRS040",
+            "x0": 60.24,
+            "y0": 318.18,
+            "region": "body"
+          },
+          {
+            "text": "DRS041",
+            "x0": 60.24,
+            "y0": 398.22,
+            "region": "body"
+          },
+          {
+            "text": "DRS050",
+            "x0": 60.24,
+            "y0": 455.1,
+            "region": "body"
+          },
+          {
+            "text": "DRS090",
+            "x0": 60.24,
+            "y0": 511.98,
+            "region": "body"
+          },
+          {
+            "text": "DMX030",
+            "x0": 60.24,
+            "y0": 580.03,
+            "region": "body"
+          },
+          {
+            "text": "DMX030b",
+            "x0": 60.24,
+            "y0": 681.54,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 93.44,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 104.59,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 104.59,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 104.55,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 150.32,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 161.48,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 172.63,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 172.63,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 172.59,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 218.36,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 229.51,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 229.51,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 229.47,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 275.24,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 286.4,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 297.55,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 297.55,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 297.51,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 355.28,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 366.44,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 377.59,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 377.59,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 377.55,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 423.32,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 434.47,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 434.47,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 434.43,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 480.2,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 491.35,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 491.35,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 491.31,
+            "region": "body"
+          },
+          {
+            "text": "mo011",
+            "x0": 94.08,
+            "y0": 537.08,
+            "region": "body"
+          },
+          {
+            "text": "mo080",
+            "x0": 94.08,
+            "y0": 548.24,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 559.39,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 559.39,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 559.35,
+            "region": "body"
+          },
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 605.11,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 616.28,
+            "region": "body"
+          },
+          {
+            "text": "mq11eqc010",
+            "x0": 94.08,
+            "y0": 627.45,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 638.6,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 649.76,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 660.91,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 660.91,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 660.87,
+            "region": "body"
+          },
+          {
+            "text": "mq01exn050c",
+            "x0": 94.08,
+            "y0": 706.64,
+            "region": "body"
+          },
+          {
+            "text": "mq01ret010",
+            "x0": 94.08,
+            "y0": 717.81,
+            "region": "body"
+          },
+          {
+            "text": "mq11eqc010",
+            "x0": 94.08,
+            "y0": 728.97,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 740.12,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 751.27,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 751.27,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 751.23,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 93.48
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 104.59
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 104.59
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 126.04
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 150.36
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 161.52
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 172.63
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 172.63
+          },
+          {
+            "text": "m",
+            "x0": 95.52,
+            "y0": 194.08
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 218.4
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 229.51
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 229.51
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 250.96
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 275.28
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 286.44
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 297.55
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 297.55
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 319.0
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 355.32
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 366.48
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 377.59
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 377.59
+          },
+          {
+            "text": "m",
+            "x0": 95.52,
+            "y0": 399.04
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 423.36
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 434.47
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 434.47
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 455.92
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 480.24
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 491.35
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 491.35
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 512.8
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 537.12
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 548.28
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 559.39
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 559.39
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 580.84
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 605.16
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 616.32
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 627.48
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 638.64
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 649.8
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 660.91
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 660.91
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 682.36
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 706.68
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 717.84
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 729.0
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 740.16
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 751.27
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 751.27
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "1,71",
+            "x0": 528.84,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "14,61",
+            "x0": 524.28,
+            "y0": 123.75,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "1,71",
+            "x0": 528.84,
+            "y0": 191.79,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "17,53",
+            "x0": 524.28,
+            "y0": 248.67,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "10,53",
+            "x0": 524.28,
+            "y0": 316.71,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "1,16",
+            "x0": 528.84,
+            "y0": 396.75,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "5,17",
+            "x0": 528.84,
+            "y0": 453.63,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "10,63",
+            "x0": 524.28,
+            "y0": 510.51,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "10,43",
+            "x0": 524.28,
+            "y0": 578.55,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "4,47",
+            "x0": 528.84,
+            "y0": 680.07,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "DEMOLICIONES Pavimentos"
+      ],
+      "body_lines_sample": [
+        "mo113 0,067 h Peón ordinario construcción. 23,92 1,60",
+        "% 7,000 % Medios auxiliares 1,60 0,11",
+        "14,61",
+        "DRS020 m² Demolición de pavimento existente de baldosas cerámicas, con medios manuales, sin deteriorar los",
+        "elementos constructivos contiguos, y carga manual sobre camión o contenedor.",
+        "mo112 0,253 h Peón especializado construcción. 24,75 6,26",
+        "mo113 0,309 h Peón ordinario construcción. 23,92 7,39",
+        "% 7,000 % Medios auxiliares 13,65 0,96",
+        "1,71",
+        "DRS021 m Demolición de rodapié cerámico, con medios manuales, sin deteriorar los elementos constructivos contiguos,",
+        "y carga manual sobre camión o contenedor.",
+        "mo113 0,067 h Peón ordinario construcción. 23,92 1,60",
+        "% 7,000 % Medios auxiliares 1,60 0,11",
+        "17,53",
+        "DRS030 m² Demolición de pavimento existente de baldosas de piedra natural, con medios manuales, sin deteriorar los",
+        "elementos constructivos contiguos, y carga manual sobre camión o contenedor.",
+        "mo112 0,309 h Peón especializado construcción. 24,75 7,65",
+        "mo113 0,365 h Peón ordinario construcción. 23,92 8,73",
+        "% 7,000 % Medios auxiliares 16,38 1,15",
+        "10,53",
+        "DRS040 Levantado de pavimento existente de entarimado tradicional de tablas de madera maciza, colocadas sobre",
+        "m²",
+        "rastreles de madera, con medios manuales, sin deteriorar los elementos constructivos contiguos, y carga",
+        "manual sobre camión o contenedor.",
+        "mo112 0,180 h Peón especializado construcción. 24,75 4,46",
+        "mo113 0,225 h Peón ordinario construcción. 23,92 5,38",
+        "% 7,000 % Medios auxiliares 9,84 0,69",
+        "1,16",
+        "DRS041 Levantado de rodapié de madera, con medios manuales, sin deteriorar los elementos constructivos",
+        "m"
+      ]
+    },
+    {
+      "page": 19,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 484,
+        "header_words": 25,
+        "body_words": 457,
+        "footer_words": 2,
+        "avg_font_size": 7.71,
+        "horizontal_lines_count": 4,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "DMX050",
+            "x0": 60.24,
+            "y0": 68.35,
+            "region": "header"
+          },
+          {
+            "text": "DRA010",
+            "x0": 60.24,
+            "y0": 198.42,
+            "region": "body"
+          },
+          {
+            "text": "DRF010",
+            "x0": 60.24,
+            "y0": 243.29,
+            "region": "body"
+          },
+          {
+            "text": "DRF010b",
+            "x0": 60.24,
+            "y0": 312.17,
+            "region": "body"
+          },
+          {
+            "text": "DRF011b",
+            "x0": 60.24,
+            "y0": 381.05,
+            "region": "body"
+          },
+          {
+            "text": "DRF020",
+            "x0": 60.24,
+            "y0": 449.93,
+            "region": "body"
+          },
+          {
+            "text": "DRF020b",
+            "x0": 60.24,
+            "y0": 518.81,
+            "region": "body"
+          },
+          {
+            "text": "DRT010",
+            "x0": 60.24,
+            "y0": 587.69,
+            "region": "body"
+          },
+          {
+            "text": "DRT020",
+            "x0": 60.24,
+            "y0": 644.57,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 93.43,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 104.6,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 115.76,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 126.92,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 138.07,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 138.07,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 138.03,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 211.52,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 222.67,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 222.67,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 222.63,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 280.4,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 291.55,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 291.55,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 291.51,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 349.28,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 360.43,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 360.43,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 360.39,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 418.16,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 429.31,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 429.31,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 429.27,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 487.04,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 498.19,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 498.19,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 498.15,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 555.92,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 567.07,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 567.07,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 567.03,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 612.8,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 623.95,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 623.95,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 623.91,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 669.68,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 680.83,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 680.83,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 680.79,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 93.48
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 104.64
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 115.8
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 126.96
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 138.07
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 138.07
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 199.24
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 211.56
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 222.67
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 222.67
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 244.12
+          },
+          {
+            "text": "m",
+            "x0": 443.15,
+            "y0": 243.37
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 280.44
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 291.55
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 291.55
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 313.0
+          },
+          {
+            "text": "m",
+            "x0": 418.53,
+            "y0": 312.24
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 349.32
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 360.43
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 360.43
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 381.88
+          },
+          {
+            "text": "m",
+            "x0": 443.06,
+            "y0": 381.12
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 418.2
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 429.31
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 429.31
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 450.76
+          },
+          {
+            "text": "m",
+            "x0": 441.98,
+            "y0": 450.01
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 487.08
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 498.19
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 498.19
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 519.64
+          },
+          {
+            "text": "m",
+            "x0": 417.18,
+            "y0": 518.88
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 555.96
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 567.07
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 567.07
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 588.52
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 612.84
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 623.95
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 623.95
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 645.4
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 669.72
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 680.83
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 680.83
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "7,21",
+            "x0": 528.84,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "Revestimientos",
+            "x0": 64.8,
+            "y0": 168.13,
+            "size": 12.0,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          },
+          {
+            "text": "12,08",
+            "x0": 524.28,
+            "y0": 196.95,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "12,65",
+            "x0": 524.28,
+            "y0": 241.83,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "15,81",
+            "x0": 524.28,
+            "y0": 310.71,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "18,13",
+            "x0": 524.28,
+            "y0": 379.59,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "15,81",
+            "x0": 524.28,
+            "y0": 448.47,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "10,06",
+            "x0": 524.28,
+            "y0": 517.35,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "11,51",
+            "x0": 524.28,
+            "y0": 586.23,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "6,40",
+            "x0": 528.84,
+            "y0": 643.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "Fábricas",
+            "x0": 64.8,
+            "y0": 710.85,
+            "size": 12.06,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.08,
+          "x1": 546.24,
+          "y0": 179.76,
+          "y1": 179.76,
+          "width": 485.16
+        },
+        {
+          "x0": 61.08,
+          "x1": 546.24,
+          "y0": 722.52,
+          "y1": 722.52,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "DEMOLICIONES Fábricas"
+      ],
+      "body_lines_sample": [
+        "mq05mai030 0,050 h Martillo neumático. 4,70 0,24",
+        "mq05pdm110 0,050 h Compresor portátil diesel media presión 10 m³/min. 7,97 0,40",
+        "mo112 0,084 h Peón especializado construcción. 24,75 2,08",
+        "mo113 0,168 h Peón ordinario construcción. 23,92 4,02",
+        "% 7,000 % Medios auxiliares 6,74 0,47",
+        "Revestimientos",
+        "12,08",
+        "DRA010 Demolición de alicatado de azulejo, con medios manuales y carga manual sobre camión o contenedor.",
+        "m²",
+        "mo113 0,472 h Peón ordinario construcción. 23,92 11,29",
+        "% 7,000 % Medios auxiliares 11,29 0,79",
+        "12,65",
+        "DRF010 m² Eliminación de enfoscado de cal, aplicado sobre paramento vertical exterior de hasta 3 m de altura, con",
+        "medios manuales, sin deteriorar la superficie soporte que quedará al descubierto y preparada para su",
+        "posterior revestimiento, y carga manual sobre camión o contenedor.",
+        "mo113 0,494 h Peón ordinario construcción. 23,92 11,82",
+        "% 7,000 % Medios auxiliares 11,82 0,83",
+        "15,81",
+        "DRF010b m² Eliminación de enfoscado de cemento, aplicado sobre paramento vertical de hasta 3 m de altura, con medios",
+        "manuales, sin deteriorar la superficie soporte que quedará al descubierto y preparada para su posterior",
+        "revestimiento, y carga manual sobre camión o contenedor.",
+        "mo113 0,618 h Peón ordinario construcción. 23,92 14,78",
+        "% 7,000 % Medios auxiliares 14,78 1,03",
+        "18,13",
+        "DRF011b m² Eliminación de enfoscado de cemento, aplicado sobre paramento horizontal de hasta 3 m de altura, con",
+        "medios manuales, sin deteriorar la superficie soporte que quedará al descubierto y preparada para su",
+        "posterior revestimiento, y carga manual sobre camión o contenedor.",
+        "mo113 0,708 h Peón ordinario construcción. 23,92 16,94",
+        "% 7,000 % Medios auxiliares 16,94 1,19",
+        "15,81"
+      ]
+    },
+    {
+      "page": 20,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 525,
+        "header_words": 30,
+        "body_words": 493,
+        "footer_words": 2,
+        "avg_font_size": 7.49,
+        "horizontal_lines_count": 2,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "DEC040c",
+            "x0": 60.24,
+            "y0": 68.34,
+            "region": "header"
+          },
+          {
+            "text": "DEC050b",
+            "x0": 60.24,
+            "y0": 158.7,
+            "region": "body"
+          },
+          {
+            "text": "DEC055",
+            "x0": 60.24,
+            "y0": 260.22,
+            "region": "body"
+          },
+          {
+            "text": "DFF010b",
+            "x0": 60.24,
+            "y0": 350.57,
+            "region": "body"
+          },
+          {
+            "text": "DFF015",
+            "x0": 60.24,
+            "y0": 452.93,
+            "region": "body"
+          },
+          {
+            "text": "DFF021",
+            "x0": 60.24,
+            "y0": 509.81,
+            "region": "body"
+          },
+          {
+            "text": "DFF020",
+            "x0": 60.24,
+            "y0": 566.69,
+            "region": "body"
+          },
+          {
+            "text": "DFF020c",
+            "x0": 60.24,
+            "y0": 635.57,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 93.43,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 104.6,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 115.76,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 126.92,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 138.07,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 138.07,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 138.03,
+            "region": "body"
+          },
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 183.79,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 194.96,
+            "region": "body"
+          },
+          {
+            "text": "mq01ret010",
+            "x0": 94.08,
+            "y0": 206.13,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 217.28,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 228.44,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 239.59,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 239.59,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 239.55,
+            "region": "body"
+          },
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 285.31,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 296.48,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 307.64,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 318.8,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 329.95,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 329.95,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 329.91,
+            "region": "body"
+          },
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 387.67,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 398.84,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 410.0,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 421.16,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 432.31,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 432.31,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 432.27,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 478.04,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 489.19,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 489.19,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 489.15,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 534.92,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 546.07,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 546.07,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 546.03,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 603.8,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 614.95,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 614.95,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 614.91,
+            "region": "body"
+          },
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 672.67,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 683.84,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 695.0,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 706.16,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 717.31,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 717.31,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 717.27,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 93.48
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 104.64
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 115.8
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 126.96
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 138.07
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 138.07
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 183.84
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 195.0
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 206.16
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 217.32
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 228.48
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 239.59
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 239.59
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 261.04
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 285.36
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 296.52
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 307.68
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 318.84
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 329.95
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 329.95
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 351.4
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 387.72
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 398.88
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 410.04
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 421.2
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 432.31
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 432.31
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 453.76
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 478.08
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 489.19
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 489.19
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 510.64
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 534.96
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 546.07
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 546.07
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 567.52
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 603.84
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 614.95
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 614.95
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 636.4
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 672.72
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 683.88
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 695.04
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 706.2
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 717.31
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 717.31
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "131,44",
+            "x0": 519.72,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "86,88",
+            "x0": 524.28,
+            "y0": 157.23,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "43,41",
+            "x0": 524.28,
+            "y0": 258.75,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "9,29",
+            "x0": 528.84,
+            "y0": 349.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "28,74",
+            "x0": 524.28,
+            "y0": 451.47,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "25,59",
+            "x0": 524.28,
+            "y0": 508.35,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "28,74",
+            "x0": 524.28,
+            "y0": 565.23,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "10,65",
+            "x0": 524.28,
+            "y0": 634.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "DEMOLICIONES Fábricas"
+      ],
+      "body_lines_sample": [
+        "mq05mai030 1,606 h Martillo neumático. 4,70 7,55",
+        "mq05pdm110 0,803 h Compresor portátil diesel media presión 10 m³/min. 7,97 6,40",
+        "mo113 3,000 h Peón ordinario construcción. 23,92 71,76",
+        "mo112 1,500 h Peón especializado construcción. 24,75 37,13",
+        "% 7,000 % Medios auxiliares 122,84 8,60",
+        "DEC050b Demolición de muro de fábrica de marés, con martillo neumático, y carga mecánica sobre camión o 86,88",
+        "m³",
+        "contenedor.",
+        "mq05mai030 1,606 h Martillo neumático. 4,70 7,55",
+        "mq05pdm110 Compresor portátil diesel media presión 10 m³/min.",
+        "0,803 h 7,97 6,40",
+        "mq01ret010 0,141 h Miniretrocargadora sobre neumáticos de 15 kW. 47,14 6,65",
+        "mo112 1,797 h Peón especializado construcción. 24,75 44,48",
+        "mo113 0,674 h Peón ordinario construcción. 23,92 16,12",
+        "% 7,000 % Medios auxiliares 81,20 5,68",
+        "43,41",
+        "DEC055 Demolición de bóveda de fábrica de marés, de 17 cm de espesor, con martillo neumático y carga manual",
+        "m²",
+        "sobre camión o contenedor.",
+        "mq05mai030 0,823 h Martillo neumático. 4,70 3,87",
+        "mq05pdm110 0,412 h Compresor portátil diesel media presión 10 m³/min. 7,97 3,28",
+        "mo112 0,460 h Peón especializado construcción. 24,75 11,39",
+        "mo113 0,921 h Peón ordinario construcción. 23,92 22,03",
+        "% 7,000 % Medios auxiliares 40,57 2,84",
+        "DFF010b Demolición de hoja de fábrica vista, formada por ladrillo macizo de 11/12 cm de espesor, con martillo 9,29",
+        "m²",
+        "neumático, sin afectar a la estabilidad de los elementos constructivos contiguos, y carga manual sobre",
+        "camión o contenedor.",
+        "mq05mai030 0,100 h Martillo neumático. 4,70 0,47",
+        "mq05pdm110 0,100 h Compresor portátil diesel media presión 10 m³/min. 7,97 0,80"
+      ]
+    },
+    {
+      "page": 21,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 531,
+        "header_words": 35,
+        "body_words": 494,
+        "footer_words": 2,
+        "avg_font_size": 7.71,
+        "horizontal_lines_count": 3,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "DPS010",
+            "x0": 60.24,
+            "y0": 68.34,
+            "region": "header"
+          },
+          {
+            "text": "DPT015",
+            "x0": 60.24,
+            "y0": 137.21,
+            "region": "body"
+          },
+          {
+            "text": "DPT020",
+            "x0": 60.24,
+            "y0": 194.09,
+            "region": "body"
+          },
+          {
+            "text": "DPT020b",
+            "x0": 60.24,
+            "y0": 262.97,
+            "region": "body"
+          },
+          {
+            "text": "DPT020c",
+            "x0": 60.24,
+            "y0": 331.85,
+            "region": "body"
+          },
+          {
+            "text": "DIS010",
+            "x0": 60.24,
+            "y0": 440.47,
+            "region": "body"
+          },
+          {
+            "text": "DIS020",
+            "x0": 60.24,
+            "y0": 497.35,
+            "region": "body"
+          },
+          {
+            "text": "DIS014",
+            "x0": 60.24,
+            "y0": 554.23,
+            "region": "body"
+          },
+          {
+            "text": "DIS020b",
+            "x0": 60.24,
+            "y0": 644.59,
+            "region": "body"
+          },
+          {
+            "text": "DIS030",
+            "x0": 60.24,
+            "y0": 701.47,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "autoportante",
+            "x0": 210.71,
+            "y0": 68.41,
+            "region": "header"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 105.44,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 116.59,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 116.59,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 116.55,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 162.32,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 173.47,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 173.47,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 173.43,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 231.2,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 242.35,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 242.35,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 242.31,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 300.08,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 311.23,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 311.23,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 311.19,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 368.96,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 380.11,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 380.11,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 380.07,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 465.56,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 476.71,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 476.71,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 476.67,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 522.44,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 533.59,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 533.59,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 533.55,
+            "region": "body"
+          },
+          {
+            "text": "mq05mai030",
+            "x0": 94.08,
+            "y0": 579.31,
+            "region": "body"
+          },
+          {
+            "text": "mq05pdm110",
+            "x0": 94.08,
+            "y0": 590.48,
+            "region": "body"
+          },
+          {
+            "text": "mo112",
+            "x0": 94.08,
+            "y0": 601.64,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 612.8,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 623.95,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 623.95,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 623.91,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 669.68,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 680.83,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 680.83,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 680.79,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 726.56,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 737.71,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 737.71,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 737.67,
+            "region": "body"
+          }
+        ],
+        "units": [
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 105.48
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 116.59
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 116.59
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 138.04
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 162.36
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 173.47
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 173.47
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 194.92
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 231.24
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 242.35
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 242.35
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 263.8
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 300.12
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 311.23
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 311.23
+          },
+          {
+            "text": "m²",
+            "x0": 95.52,
+            "y0": 332.68
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 369.0
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 380.11
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 380.11
+          },
+          {
+            "text": "m",
+            "x0": 95.52,
+            "y0": 441.28
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 465.6
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 476.71
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 476.71
+          },
+          {
+            "text": "u",
+            "x0": 95.52,
+            "y0": 498.16
+          },
+          {
+            "text": "l",
+            "x0": 317.02,
+            "y0": 497.41
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 522.48
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 533.59
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 533.59
+          },
+          {
+            "text": "m",
+            "x0": 95.52,
+            "y0": 555.04
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 579.36
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 590.52
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 601.68
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 612.84
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 623.95
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 623.95
+          },
+          {
+            "text": "u",
+            "x0": 95.52,
+            "y0": 645.4
+          },
+          {
+            "text": "l",
+            "x0": 317.31,
+            "y0": 644.65
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 669.72
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 680.83
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 680.83
+          },
+          {
+            "text": "m",
+            "x0": 95.52,
+            "y0": 702.28
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 726.6
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 737.71
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 737.71
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "8,62",
+            "x0": 528.84,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "10,24",
+            "x0": 524.28,
+            "y0": 135.75,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "10,59",
+            "x0": 524.28,
+            "y0": 192.63,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "10,98",
+            "x0": 524.28,
+            "y0": 261.51,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "13,42",
+            "x0": 524.28,
+            "y0": 330.39,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "Saneamiento",
+            "x0": 64.8,
+            "y0": 410.14,
+            "size": 12.04,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          },
+          {
+            "text": "14,38",
+            "x0": 524.28,
+            "y0": 438.99,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "34,50",
+            "x0": 524.28,
+            "y0": 495.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "55,97",
+            "x0": 524.28,
+            "y0": 552.75,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "48,86",
+            "x0": 524.28,
+            "y0": 643.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "4,02",
+            "x0": 528.84,
+            "y0": 699.99,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.08,
+          "x1": 546.24,
+          "y0": 421.8,
+          "y1": 421.8,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "DEMOLICIONES Saneamiento"
+      ],
+      "body_lines_sample": [
+        "contiguos, y carga manual sobre camión o contenedor.",
+        "mo113 0,337 h Peón ordinario construcción. 23,92 8,06",
+        "% 7,000 % Medios auxiliares 8,06 0,56",
+        "10,24",
+        "DPT015 m² Demolición de tabique de fábrica de marés, de 5 cm de espesor, con medios manuales, sin afectar a la",
+        "estabilidad de los elementos constructivos contiguos, y carga manual sobre camión o contenedor.",
+        "mo113 0,400 h Peón ordinario construcción. 23,92 9,57",
+        "% 7,000 % Medios auxiliares 9,57 0,67",
+        "10,59",
+        "DPT020 m² Demolición de tabique de fábrica revestida, formada por bloque de hormigón de 10 cm de espesor, con",
+        "medios manuales, sin afectar a la estabilidad de los elementos constructivos contiguos, y carga manual",
+        "sobre camión o contenedor.",
+        "mo113 0,414 h Peón ordinario construcción. 23,92 9,90",
+        "% 7,000 % Medios auxiliares 9,90 0,69",
+        "DPT020b 10,98",
+        "m² Demolición de tabique de fábrica revestida, formada por ladrillo hueco doble de 7/9 cm de espesor, con",
+        "medios manuales, sin afectar a la estabilidad de los elementos constructivos contiguos, y carga manual",
+        "sobre camión o contenedor.",
+        "mo113 0,450 h Peón ordinario construcción. 23,92 10,76",
+        "% 2,000 % Medios auxiliares 10,76 0,22",
+        "13,42",
+        "DPT020c m² Demolición de tabique de fábrica revestida, formada por ladrillo hueco triple de 12/15 cm de espesor, con",
+        "medios manuales, sin afectar a la estabilidad de los elementos constructivos contiguos, y carga manual",
+        "sobre camión o contenedor.",
+        "mo113 0,550 h Peón ordinario construcción. 23,92 13,16",
+        "% 2,000 % Medios auxiliares 13,16 0,26",
+        "Saneamiento",
+        "14,38",
+        "DIS010 Demolición de colector enterrado de 400 mm de diámetro máximo, con medios manuales, y carga manual",
+        "m"
+      ]
+    },
+    {
+      "page": 32,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 0,
+        "header_words": 0,
+        "body_words": 0,
+        "footer_words": 0,
+        "avg_font_size": 0.0,
+        "horizontal_lines_count": 0,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [],
+        "units": [],
+        "page_numbers": [],
+        "potential_chapter_headers": [],
+        "potential_subchapters": []
+      },
+      "horizontal_lines": [],
+      "tables": [],
+      "footer_lines": [],
+      "body_lines_sample": []
+    },
+    {
+      "page": 33,
+      "dim": {
+        "width": 595.32,
+        "height": 841.92
+      },
+      "stats": {
+        "word_count": 629,
+        "header_words": 40,
+        "body_words": 585,
+        "footer_words": 4,
+        "avg_font_size": 7.74,
+        "horizontal_lines_count": 3,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [
+          {
+            "text": "ADE010b",
+            "x0": 60.24,
+            "y0": 68.34,
+            "region": "header"
+          },
+          {
+            "text": "ADE010e",
+            "x0": 60.24,
+            "y0": 160.38,
+            "region": "body"
+          },
+          {
+            "text": "ADE010f",
+            "x0": 60.24,
+            "y0": 263.59,
+            "region": "body"
+          },
+          {
+            "text": "ADE010k",
+            "x0": 60.24,
+            "y0": 355.62,
+            "region": "body"
+          },
+          {
+            "text": "ADE010l",
+            "x0": 60.24,
+            "y0": 447.67,
+            "region": "body"
+          },
+          {
+            "text": "ADE010m",
+            "x0": 60.24,
+            "y0": 528.55,
+            "region": "body"
+          },
+          {
+            "text": "ADE010",
+            "x0": 60.24,
+            "y0": 649.14,
+            "region": "body"
+          }
+        ],
+        "breakdown_codes": [
+          {
+            "text": "mq01exn050c",
+            "x0": 94.08,
+            "y0": 117.44,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 128.6,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 139.75,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 139.75,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 139.71,
+            "region": "body"
+          },
+          {
+            "text": "mq01ret020b",
+            "x0": 94.08,
+            "y0": 209.49,
+            "region": "body"
+          },
+          {
+            "text": "mq01exn050c",
+            "x0": 94.08,
+            "y0": 220.64,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 231.8,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 242.95,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 242.95,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 242.91,
+            "region": "body"
+          },
+          {
+            "text": "mq01exn020b",
+            "x0": 94.08,
+            "y0": 312.69,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 323.84,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 334.99,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 334.99,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 334.95,
+            "region": "body"
+          },
+          {
+            "text": "mq01ret020b",
+            "x0": 94.08,
+            "y0": 404.73,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 415.88,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 427.03,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 427.03,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 426.99,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 496.76,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 507.91,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 507.91,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 507.87,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 577.64,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 588.79,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 588.79,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 588.75,
+            "region": "body"
+          },
+          {
+            "text": "mq01exn050c",
+            "x0": 94.08,
+            "y0": 698.24,
+            "region": "body"
+          },
+          {
+            "text": "mo113",
+            "x0": 94.08,
+            "y0": 709.4,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 720.55,
+            "region": "body"
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 720.55,
+            "region": "body"
+          },
+          {
+            "text": "auxiliares",
+            "x0": 190.49,
+            "y0": 720.51,
+            "region": "body"
+          },
+          {
+            "text": "MOVIMIENTO",
+            "x0": 64.8,
+            "y0": 788.41,
+            "region": "footer"
+          }
+        ],
+        "units": [
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 117.48
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 128.64
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 139.75
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 139.75
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 209.52
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 220.68
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 231.84
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 242.95
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 242.95
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 312.72
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 323.88
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 334.99
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 334.99
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 404.76
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 415.92
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 427.03
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 427.03
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 496.8
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 507.91
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 507.91
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 577.68
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 588.79
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 588.79
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 698.28
+          },
+          {
+            "text": "h",
+            "x0": 158.52,
+            "y0": 709.44
+          },
+          {
+            "text": "%",
+            "x0": 94.08,
+            "y0": 720.55
+          },
+          {
+            "text": "%",
+            "x0": 158.52,
+            "y0": 720.55
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [
+          {
+            "text": "74,53",
+            "x0": 524.28,
+            "y0": 66.87,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ],
+        "potential_subchapters": [
+          {
+            "text": "54,98",
+            "x0": 524.28,
+            "y0": 158.91,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "32,49",
+            "x0": 524.28,
+            "y0": 262.11,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "16,35",
+            "x0": 524.28,
+            "y0": 354.15,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "49,04",
+            "x0": 524.28,
+            "y0": 446.19,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "31,38",
+            "x0": 524.28,
+            "y0": 527.07,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          },
+          {
+            "text": "Pozos",
+            "x0": 64.8,
+            "y0": 618.83,
+            "size": 12.03,
+            "font": "AYJYQS+Arial-BoldMT,Bold"
+          },
+          {
+            "text": "76,76",
+            "x0": 524.28,
+            "y0": 647.67,
+            "size": 10.0,
+            "font": "ARFQVY+ArialNarrow-Bold,Bold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 61.08,
+          "x1": 546.24,
+          "y0": 630.48,
+          "y1": 630.48,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 546.96,
+          "y0": 56.16,
+          "y1": 56.16,
+          "width": 485.16
+        },
+        {
+          "x0": 61.8,
+          "x1": 547.68,
+          "y0": 784.32,
+          "y1": 784.32,
+          "width": 485.88
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "MOVIMIENTO DE TIERRAS Pozos"
+      ],
+      "body_lines_sample": [
+        "maquinaria, refinado de paramentos y fondo de excavación, extracción de tierras fuera de la excavación,",
+        "retirada de los materiales excavados y carga a camión.",
+        "mq01exn050c 0,604 h Retroexcavadora sobre neumáticos, de 85 kW, con martillo rompedor. 74,84 45,20",
+        "mo113 1,022 h Peón ordinario construcción. 23,92 24,45",
+        "% 7,000 % Medios auxiliares 69,65 4,88",
+        "54,98",
+        "ADE010e Excavación de tierras para formación de zanjas hasta una profundidad de 2 m, en suelo de roca blanda, con",
+        "m³",
+        "medios mecánicos, hasta alcanzar la cota de profundidad indicada en el proyecto. Incluso transporte de la",
+        "maquinaria, refinado de paramentos y fondo de excavación, extracción de tierras fuera de la excavación,",
+        "retirada de los materiales excavados y carga a camión.",
+        "mq01ret020b 0,151 h Retrocargadora sobre neumáticos, de 70 kW. 55,77 8,42",
+        "mq01exn050c 0,302 h Retroexcavadora sobre neumáticos, de 85 kW, con martillo rompedor. 74,84 22,60",
+        "mo113 0,851 h Peón ordinario construcción. 23,92 20,36",
+        "% % Medios auxiliares",
+        "7,000 51,38 3,60",
+        "32,49",
+        "ADE010f m³ Excavación de tierras para formación de zanjas hasta una profundidad de 2 m, en suelo de arcilla semidura,",
+        "con medios mecánicos, hasta alcanzar la cota de profundidad indicada en el proyecto. Incluso transporte de",
+        "la maquinaria, refinado de paramentos y fondo de excavación, extracción de tierras fuera de la excavación,",
+        "retirada de los materiales excavados y carga a camión.",
+        "mq01exn020b 0,383 h Retroexcavadora hidráulica sobre neumáticos, de 115 kW. 61,55 23,57",
+        "mo113 0,284 h Peón ordinario construcción. 23,92 6,79",
+        "% % Medios auxiliares",
+        "7,000 30,36 2,13",
+        "16,35",
+        "ADE010k m³ Excavación de tierras para formación de zanjas hasta una profundidad de 2 m, en suelo de arena densa, con",
+        "medios mecánicos, hasta alcanzar la cota de profundidad indicada en el proyecto. Incluso transporte de la",
+        "maquinaria, refinado de paramentos y fondo de excavación, extracción de tierras fuera de la excavación,",
+        "retirada de los materiales excavados y carga a camión."
+      ]
+    },
+    {
+      "page": 478,
+      "dim": {
+        "width": 629.52,
+        "height": 876.27
+      },
+      "stats": {
+        "word_count": 0,
+        "header_words": 0,
+        "body_words": 0,
+        "footer_words": 0,
+        "avg_font_size": 0.0,
+        "horizontal_lines_count": 0,
+        "tables_detected": 1
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [],
+        "units": [],
+        "page_numbers": [],
+        "potential_chapter_headers": [],
+        "potential_subchapters": []
+      },
+      "horizontal_lines": [],
+      "tables": [
+        {
+          "index": 0,
+          "rows": 2,
+          "cols": 1,
+          "first_row_preview": [
+            ""
+          ]
+        }
+      ],
+      "footer_lines": [],
+      "body_lines_sample": []
+    },
+    {
+      "page": 479,
+      "dim": {
+        "width": 722.84,
+        "height": 952.44
+      },
+      "stats": {
+        "word_count": 430,
+        "header_words": 0,
+        "body_words": 416,
+        "footer_words": 14,
+        "avg_font_size": 13.64,
+        "horizontal_lines_count": 1,
+        "tables_detected": 0
+      },
+      "candidates": {
+        "item_codes": [],
+        "breakdown_codes": [],
+        "units": [
+          {
+            "text": "L",
+            "x0": 439.37,
+            "y0": 216.81
+          },
+          {
+            "text": "M",
+            "x0": 446.47,
+            "y0": 215.76
+          },
+          {
+            "text": "L",
+            "x0": 546.77,
+            "y0": 207.41
+          },
+          {
+            "text": "U",
+            "x0": 553.86,
+            "y0": 206.61
+          },
+          {
+            "text": "l",
+            "x0": 389.09,
+            "y0": 236.5
+          },
+          {
+            "text": "m",
+            "x0": 457.92,
+            "y0": 229.77
+          },
+          {
+            "text": "l",
+            "x0": 541.28,
+            "y0": 223.18
+          },
+          {
+            "text": "M",
+            "x0": 459.42,
+            "y0": 342.51
+          },
+          {
+            "text": "t",
+            "x0": 525.86,
+            "y0": 337.31
+          },
+          {
+            "text": "l",
+            "x0": 563.51,
+            "y0": 334.14
+          },
+          {
+            "text": "l",
+            "x0": 422.71,
+            "y0": 361.43
+          },
+          {
+            "text": "t",
+            "x0": 449.47,
+            "y0": 358.97
+          },
+          {
+            "text": "l",
+            "x0": 488.53,
+            "y0": 355.68
+          },
+          {
+            "text": "t",
+            "x0": 532.32,
+            "y0": 351.72
+          },
+          {
+            "text": "u",
+            "x0": 542.3,
+            "y0": 350.59
+          },
+          {
+            "text": "l",
+            "x0": 595.65,
+            "y0": 346.3
+          },
+          {
+            "text": "m",
+            "x0": 399.71,
+            "y0": 377.72
+          },
+          {
+            "text": "m",
+            "x0": 470.51,
+            "y0": 371.52
+          },
+          {
+            "text": "m",
+            "x0": 492.19,
+            "y0": 369.63
+          },
+          {
+            "text": "t",
+            "x0": 514.58,
+            "y0": 368.25
+          },
+          {
+            "text": "h",
+            "x0": 532.96,
+            "y0": 366.38
+          },
+          {
+            "text": "L",
+            "x0": 386.34,
+            "y0": 425.77
+          },
+          {
+            "text": "L",
+            "x0": 510.6,
+            "y0": 414.9
+          },
+          {
+            "text": "l",
+            "x0": 545.68,
+            "y0": 412.15
+          },
+          {
+            "text": "M",
+            "x0": 566.44,
+            "y0": 409.59
+          },
+          {
+            "text": "m",
+            "x0": 475.94,
+            "y0": 432.52
+          },
+          {
+            "text": "t",
+            "x0": 506.3,
+            "y0": 430.44
+          },
+          {
+            "text": "l",
+            "x0": 588.69,
+            "y0": 423.36
+          },
+          {
+            "text": "T",
+            "x0": 357.09,
+            "y0": 283.46
+          },
+          {
+            "text": "L",
+            "x0": 403.81,
+            "y0": 279.43
+          },
+          {
+            "text": "T",
+            "x0": 422.41,
+            "y0": 277.74
+          },
+          {
+            "text": "L",
+            "x0": 488.31,
+            "y0": 272.04
+          },
+          {
+            "text": "L",
+            "x0": 507.89,
+            "y0": 270.32
+          },
+          {
+            "text": "M",
+            "x0": 514.98,
+            "y0": 269.28
+          },
+          {
+            "text": "m",
+            "x0": 358.39,
+            "y0": 297.99
+          },
+          {
+            "text": "u",
+            "x0": 483.64,
+            "y0": 287.35
+          },
+          {
+            "text": "t",
+            "x0": 497.63,
+            "y0": 286.39
+          },
+          {
+            "text": "m",
+            "x0": 537.38,
+            "y0": 282.33
+          },
+          {
+            "text": "l",
+            "x0": 412.08,
+            "y0": 308.98
+          },
+          {
+            "text": "t",
+            "x0": 525.67,
+            "y0": 298.91
+          },
+          {
+            "text": "T",
+            "x0": 392.42,
+            "y0": 485.63
+          },
+          {
+            "text": "U",
+            "x0": 465.54,
+            "y0": 479.11
+          },
+          {
+            "text": "t",
+            "x0": 534.92,
+            "y0": 473.41
+          },
+          {
+            "text": "t",
+            "x0": 554.5,
+            "y0": 471.69
+          },
+          {
+            "text": "t",
+            "x0": 396.49,
+            "y0": 500.5
+          },
+          {
+            "text": "l",
+            "x0": 422.7,
+            "y0": 498.33
+          },
+          {
+            "text": "u",
+            "x0": 451.37,
+            "y0": 495.44
+          },
+          {
+            "text": "t",
+            "x0": 505.37,
+            "y0": 490.97
+          },
+          {
+            "text": "l",
+            "x0": 539.19,
+            "y0": 488.14
+          },
+          {
+            "text": "u",
+            "x0": 575.11,
+            "y0": 484.61
+          },
+          {
+            "text": "l",
+            "x0": 377.51,
+            "y0": 517.26
+          },
+          {
+            "text": "l",
+            "x0": 405.77,
+            "y0": 514.79
+          },
+          {
+            "text": "u",
+            "x0": 409.27,
+            "y0": 514.1
+          }
+        ],
+        "page_numbers": [],
+        "potential_chapter_headers": [],
+        "potential_subchapters": [
+          {
+            "text": "MUCHO",
+            "x0": 623.19,
+            "y0": 828.35,
+            "size": 14.13,
+            "font": "BFFOCJ+Saira-SemiBold"
+          },
+          {
+            "text": "Proyectos",
+            "x0": 429.16,
+            "y0": 634.8,
+            "size": 27.75,
+            "font": "BFFOCJ+Saira-SemiBold"
+          }
+        ]
+      },
+      "horizontal_lines": [
+        {
+          "x0": 14.17,
+          "x1": 151.56,
+          "y0": 932.69,
+          "y1": 932.69,
+          "width": 137.39
+        }
+      ],
+      "tables": [],
+      "footer_lines": [
+        "BALEARES",
+        "Camí V ell de Sineu, 20E",
+        "obramat.es",
+        "07007 • Palma de Mallor ca"
+      ],
+      "body_lines_sample": [
+        "O )",
+        "U I D",
+        "N C L",
+        "V A I",
+        "N ( I",
+        "A C É",
+        "L M",
+        "E A",
+        "S D o n a .",
+        "E C I O a z",
+        "P R d e l",
+        "a j o s",
+        "s b",
+        "m á",
+        "c i o s",
+        "P r e",
+        "l o s",
+        "c o n",
+        "y",
+        "o n",
+        "N c",
+        "A C É",
+        "A L M",
+        "E L",
+        "E N",
+        "O C K",
+        "S T",
+        "E L e",
+        "O D O m p r",
+        "T s i e"
+      ]
+    }
+  ]
+}
