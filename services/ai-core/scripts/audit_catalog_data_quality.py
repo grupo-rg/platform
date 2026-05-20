@@ -502,6 +502,60 @@ def audit_price_mismatch(
 # ---------------------------------------------------------------------------
 
 
+def fetch_price_book_from_json(json_path: Path) -> Tuple[List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+    """Lee el catalog JSON local sin tocar Firestore.
+
+    Soporta 3 estructuras:
+      (a) nested por capítulo: `[{"chapter": ..., "items": [...]}, ...]` (COAATMCA 2025).
+      (b) dict con 'items': `{"items": [...], "source": "..."}` (hybrid 2024).
+      (c) lista plana: `[{item}, ...]`.
+
+    Devuelve el mismo shape `(items, breakdowns_by_parent)` que `fetch_price_book(db)`
+    para que el resto de los audits funcione sin cambios.
+    """
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    items: List[Dict[str, Any]] = []
+    breakdowns_by_parent: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+
+    def _ingest_item(raw_item: Dict[str, Any], default_chapter: str = "") -> None:
+        it = dict(raw_item)
+        if "chapter" not in it and default_chapter:
+            it["chapter"] = default_chapter
+        bks = it.pop("breakdown", None) or it.pop("breakdowns", None) or []
+        code = it.get("code", "")
+        for bk in bks:
+            bk_copy = dict(bk)
+            bk_copy["parent_code"] = code
+            bk_copy["kind"] = "breakdown"
+            breakdowns_by_parent[code].append(bk_copy)
+        it["kind"] = "item"
+        items.append(it)
+
+    if isinstance(data, list) and data and isinstance(data[0], dict) and isinstance(data[0].get("items"), list):
+        # (a) nested por capítulo.
+        for ch_block in data:
+            chapter = ch_block.get("chapter", "")
+            for raw_item in ch_block.get("items", []):
+                _ingest_item(raw_item, default_chapter=chapter)
+    elif isinstance(data, dict) and isinstance(data.get("items"), list):
+        # (b) dict con items.
+        for raw_item in data["items"]:
+            _ingest_item(raw_item)
+    elif isinstance(data, list):
+        # (c) lista plana.
+        for raw_item in data:
+            if isinstance(raw_item, dict):
+                _ingest_item(raw_item)
+    else:
+        raise ValueError(f"JSON con estructura no soportada en {json_path}")
+
+    logger.info(
+        f"JSON local: {len(items)} items, "
+        f"{sum(len(v) for v in breakdowns_by_parent.values())} breakdowns."
+    )
+    return items, breakdowns_by_parent
+
+
 def fetch_price_book(db: Any) -> Tuple[List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
     """Lee toda la colección `price_book_2025` en una sola pasada.
 
@@ -567,14 +621,20 @@ def write_csv(rows: List[Dict[str, str]], output_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run(output_path: Path) -> int:
-    _init_firebase_admin()
-    db = firestore.client()
-
+def run(output_path: Path, json_path: Optional[Path] = None) -> int:
     dag_keys = _load_dag_chapters()
 
-    logger.info("Cargando price_book_2025 desde Firestore...")
-    items, breakdowns_by_parent = fetch_price_book(db)
+    if json_path is not None:
+        if not json_path.exists():
+            logger.error(f"JSON local no encontrado: {json_path}")
+            return 1
+        logger.info(f"Cargando catálogo desde JSON local: {json_path}")
+        items, breakdowns_by_parent = fetch_price_book_from_json(json_path)
+    else:
+        _init_firebase_admin()
+        db = firestore.client()
+        logger.info("Cargando price_book_2025 desde Firestore...")
+        items, breakdowns_by_parent = fetch_price_book(db)
 
     if not items:
         logger.error("No se encontraron items en price_book_2025. ¿Está la colección poblada?")
@@ -617,9 +677,19 @@ def main() -> int:
         default="audit_catalog_report.csv",
         help="Ruta de salida del CSV (default: audit_catalog_report.csv).",
     )
+    parser.add_argument(
+        "--json",
+        default=None,
+        help=(
+            "Path al JSON local del catálogo (skip Firestore). Útil para auditar "
+            "el archivo de origen (prices/coaatmca_2025_price_book.json) y "
+            "comparar contra el estado real de Firestore en una segunda corrida."
+        ),
+    )
     args = parser.parse_args()
     output_path = Path(args.output)
-    return run(output_path)
+    json_path = Path(args.json) if args.json else None
+    return run(output_path, json_path=json_path)
 
 
 if __name__ == "__main__":
