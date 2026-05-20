@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 import logging
 import asyncio
 import json
+import os
 import re
 from pydantic import BaseModel, Field
 
@@ -9,6 +10,18 @@ from src.budget.application.ports.ports import ILLMProvider, IGenerationEmitter
 from src.budget.catalog.domain.unit import Unit
 
 logger = logging.getLogger(__name__)
+
+
+# Sprint 4 Fase A — parser TABULAR coord-based feature flag.
+# `USE_TABULAR_PARSER=false` por defecto. Solo se activa en prod tras validar.
+def _is_tabular_parser_enabled() -> bool:
+    """Kill-switch para el parser TABULAR (Sprint 4 Fase A).
+
+    Lee `USE_TABULAR_PARSER` (default false). Reconoce `true|1|yes|on`
+    case-insensitive como "encendido".
+    """
+    raw = os.environ.get("USE_TABULAR_PARSER", "false").strip().lower()
+    return raw in ("true", "1", "yes", "on")
 
 # --- Chapter Stabilization Logic (Anti-Hallucination) ---
 def extract_chapter_prefix(chapter_str: str) -> str:
@@ -243,6 +256,59 @@ class InlinePdfExtractorService(IPdfExtractorService):
     ) -> List[RestructuredItem]:
         logger.info(f"Starting INLINE Restructure Phase for {len(raw_items)} raw items...")
         self._emit(budget_id, 'extraction_started', {"query": f"Lanzando Analista de Estructuras sobre la página..."})
+
+        # Sprint 4 Fase A — parser TABULAR coord-based. Controlado por feature flag
+        # `USE_TABULAR_PARSER=false` por defecto. Si activo y el PDF es PRESTO
+        # tabular (cabecera CÓDIGO RESUMEN CANTIDAD IMPORTE detectada), procesa
+        # con extract_words coord-based — mucho más fiable que LLM Vision para
+        # cantidades. Si parser no es viable (<80% qty o <80% chapter), cae a
+        # los siguientes fast-paths.
+        if pdf_bytes and _is_tabular_parser_enabled():
+            try:
+                from src.budget.pdf_tabular_parser.application.tabular_parser import TabularParser
+                _tabular_parser = TabularParser()
+                _tabular_result = _tabular_parser.parse(pdf_bytes)
+                self._emit(budget_id, 'tabular_parser_started', {
+                    "totalPages": _tabular_result.pages_total,
+                })
+                if _tabular_result.is_viable():
+                    _items = _tabular_result.to_restructured_items()
+                    logger.info(
+                        f"TABULAR parser: {len(_items)} partidas "
+                        f"(qty_rate={_tabular_result.qty_rate:.0%}, "
+                        f"chapter_rate={_tabular_result.chapter_rate:.0%}, "
+                        f"duration={_tabular_result.duration_seconds:.2f}s)."
+                    )
+                    self._emit(budget_id, 'inline_fast_path_used', {
+                        "partidas_count": len(_items),
+                        "method": "tabular_parser_coord_based",
+                        "qty_rate": _tabular_result.qty_rate,
+                        "chapter_rate": _tabular_result.chapter_rate,
+                    })
+                    self._emit(budget_id, 'tabular_parser_completed', {
+                        "partidasCount": len(_items),
+                        "qtyRate": _tabular_result.qty_rate,
+                        "chapterRate": _tabular_result.chapter_rate,
+                        "durationSeconds": _tabular_result.duration_seconds,
+                    })
+                    self._emit(budget_id, 'subtasks_extracted', {
+                        "count": len(_items),
+                        "totalTasks": len(_items),
+                    })
+                    return _items
+                logger.info(
+                    f"TABULAR parser viable=False (reason={_tabular_result.reason}); "
+                    f"fallback a heurística legacy."
+                )
+                self._emit(budget_id, 'tabular_parser_aborted', {
+                    "reason": _tabular_result.reason,
+                    "partidasExtracted": _tabular_result.partidas_count,
+                })
+            except Exception as e:
+                logger.warning(
+                    f"TABULAR parser falló silenciosamente "
+                    f"({type(e).__name__}: {e}); fallback a heurística legacy."
+                )
 
         # Fase 9.2 — Fast path heurístico. Si recibimos los bytes del PDF,
         # extraemos texto por página y delegamos al LayoutAnalyzer. Si los
