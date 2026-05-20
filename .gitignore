@@ -151,6 +151,18 @@ test-output/
 /backups/
 /services/ai-core/backups/
 
+# Sprint 4 — PDF layout analysis. Los PDFs golden y los outputs de análisis
+# contienen datos sensibles del cliente (proyectos, direcciones, nombres).
+# Solo el LAYOUT_SPEC.md y los scripts batch se commitean. Para reproducir
+# el análisis localmente, copiar PDFs cliente a data/pdf_layouts/golden/ y
+# correr analyze_batch_pdf_layouts.py.
+/data/pdf_layouts/golden/
+/data/pdf_layouts/comparative/
+/data/pdf_layouts/analysis/
+
+# Firestore backups grandes pre-reingest — restáurar manualmente si se necesita.
+/data/catalog_source/firestore_backup_*.json
+
 # Claude Code local config y worktrees efímeros — son locales del usuario.
 .claude/
 
