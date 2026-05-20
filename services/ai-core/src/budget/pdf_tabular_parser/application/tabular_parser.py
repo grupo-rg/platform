@@ -21,8 +21,12 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import List, Optional
+from typing import Callable, Dict, List, Optional
 
+from src.budget.pdf_tabular_parser.application.annexed_detector import (
+    detect_annexed_transition_page,
+    extract_totals_from_annexed_pages,
+)
 from src.budget.pdf_tabular_parser.application.column_mapper import ColumnMapper
 from src.budget.pdf_tabular_parser.application.header_detector import detect_header_in_page
 from src.budget.pdf_tabular_parser.application.hierarchy_tracker import (
@@ -33,6 +37,9 @@ from src.budget.pdf_tabular_parser.application.partida_extractor import (
     detect_partida_header_from_text,
     detect_summary_row,
     extract_quantity_from_row,
+)
+from src.budget.pdf_tabular_parser.application.partida_header_annexed import (
+    detect_partida_header_annexed,
 )
 from src.budget.pdf_tabular_parser.application.row_grouper import group_words_into_rows
 from src.budget.pdf_tabular_parser.domain.column import ColumnConcept
@@ -57,10 +64,34 @@ class TabularParser:
 
     Idempotente — instanciar una vez y reusar es seguro. No mantiene estado
     entre llamadas a `parse()`.
+
+    El parser soporta DOS modos:
+
+    1. **INLINE / TABULAR** (Fase A): cabecera CIFRE/PRESTO con columnas
+       (CÓDIGO, RESUMEN, ..., CANTIDAD), descripciones y mediciones inline
+       en cada partida. Activado cuando se detecta la cabecera en una página.
+
+    2. **PRESTO ANNEXED** (Fase D): cabeceras de partida en primer tercio del
+       PDF + totales `Total <code> <qty>` en último tercio. Activado cuando
+       no hay cabecera CIFRE pero `detect_annexed_transition_page` retorna un
+       page number válido (>= 50% del PDF).
+
+    Si ninguno aplica, retorna `result.reason="no_layout_recognized"`.
     """
 
-    def parse(self, pdf_bytes: bytes) -> TabularExtractionResult:
-        """Parsea un PDF completo. Retorna el resultado con métricas."""
+    def parse(
+        self,
+        pdf_bytes: bytes,
+        event_callback: Optional[Callable[[str, dict], None]] = None,
+    ) -> TabularExtractionResult:
+        """Parsea un PDF completo. Retorna el resultado con métricas.
+
+        Args:
+            pdf_bytes: bytes del PDF.
+            event_callback: opcional, función ``(event_name, payload)`` que
+                emite eventos de telemetría (e.g. SSE). Si es None, no se
+                emiten eventos.
+        """
         start = time.time()
 
         result = TabularExtractionResult()
@@ -75,8 +106,52 @@ class TabularParser:
         pages_without_header_streak = 0
         pages_with_header = 0
 
+        # Pre-extract todo el texto + words por página para poder hacer
+        # detección ANNEXED ANTES de descartar via "no header detected".
+        text_per_page: List[str] = []
+        pages_buffer: List = []
         try:
             for page_data in iter_pages(pdf_bytes):
+                pages_buffer.append(page_data)
+                text_per_page.append(page_data.raw_text or "")
+        except Exception as e:  # noqa: BLE001
+            logger.exception("TabularParser: error iterando PDF: %s", e)
+            result.duration_seconds = time.time() - start
+            result.pages_total = len(pages_buffer)
+            result.reason = f"exception:{type(e).__name__}"
+            return result
+
+        if not pages_buffer:
+            result.duration_seconds = time.time() - start
+            result.reason = "empty_pdf"
+            return result
+
+        # --- DETECCIÓN DE MODO ANNEXED ---
+        transition_page = detect_annexed_transition_page(text_per_page)
+        if transition_page is not None:
+            logger.info(
+                "TabularParser: modo ANNEXED detectado, transition_page=%d/%d",
+                transition_page,
+                len(text_per_page),
+            )
+            _emit(event_callback, "annexed_transition_detected", {
+                "transitionPage": transition_page,
+                "totalPages": len(text_per_page),
+            })
+            self._parse_annexed(
+                text_per_page=text_per_page,
+                transition_page=transition_page,
+                result=result,
+                event_callback=event_callback,
+            )
+            result.duration_seconds = time.time() - start
+            result.pages_total = len(text_per_page)
+            result.is_viable()
+            return result
+
+        # --- MODO INLINE/TABULAR (Fase A — sin cambios) ---
+        try:
+            for page_data in pages_buffer:
                 pages_seen += 1
                 page_number = page_data.page_number
                 words = page_data.words
@@ -280,6 +355,152 @@ class TabularParser:
             "pending_qty": pending_qty,
             "created_partida": False,
         }
+
+
+    # --- ANNEXED MODE METHODS (Fase D) ---
+
+    def _parse_annexed(
+        self,
+        text_per_page: List[str],
+        transition_page: int,
+        result: TabularExtractionResult,
+        event_callback: Optional[Callable[[str, dict], None]] = None,
+    ) -> None:
+        """Parsea un PDF en modo PRESTO ANNEXED.
+
+        Estrategia:
+        1. Recorrer las páginas 1..transition_page-1 línea-por-línea.
+        2. Detectar declaraciones de capítulo (`XX Capítulo NOMBRE` y
+           variantes) con hierarchy_tracker.
+        3. Detectar cabeceras de partida con `detect_partida_header_annexed`
+           (regex relajado).
+        4. Construir totals dict desde transition_page hasta el final.
+        5. Para cada cabecera detectada: lookup en totals dict y asignar
+           quantity (o None si miss).
+        6. Emit eventos `annexed_transition_detected` y `annexed_mapping_complete`.
+
+        Args:
+            text_per_page: texto por página (1-indexed implícito).
+            transition_page: 1-indexed page donde inician los totales.
+            result: TabularExtractionResult a poblar.
+            event_callback: callback opcional para eventos SSE.
+        """
+        partidas: List[TabularPartida] = []
+        hierarchy = ChapterHierarchy()
+        seen_codes: set[str] = set()  # dedupe por code dentro del PDF
+
+        # 1. Extraer totals dict primero (para luego matchear).
+        totals = extract_totals_from_annexed_pages(
+            text_per_page, start_page=transition_page,
+        )
+        result.annexed = True
+        result.annexed_transition_page = transition_page
+        result.annexed_totals_found = len(totals)
+
+        # 2. Recorrer la fase de descripciones (páginas 1..transition_page-1).
+        descriptions_end = max(1, transition_page - 1)
+        for page_idx in range(0, descriptions_end):
+            page_text = text_per_page[page_idx]
+            if not page_text:
+                continue
+            page_number_1idx = page_idx + 1
+
+            partidas_in_page = 0
+            for line in page_text.splitlines():
+                line_clean = line.strip()
+                if not line_clean:
+                    continue
+
+                # Paso A: declaración jerárquica (capítulo/subcap/apartado).
+                h_detection = detect_hierarchy_in_line(line_clean)
+                if h_detection.level is not None:
+                    apply_detection_to_hierarchy(hierarchy, h_detection)
+                    continue
+
+                # Paso B: cabecera de partida (regex relajado ANNEXED).
+                header = detect_partida_header_annexed(line_clean)
+                if header.is_partida:
+                    if header.code in seen_codes:
+                        continue  # dedupe
+                    seen_codes.add(header.code)
+
+                    new_partida = TabularPartida(
+                        code=header.code,
+                        description=header.title,
+                        unit=header.unit,
+                        quantity=None,
+                        chapter=hierarchy.get_chapter_label(),
+                        sub_chapter=hierarchy.get_sub_chapter_label(),
+                        apartado=(
+                            f"{hierarchy.apartado_code} {hierarchy.apartado_name}".strip()
+                            if hierarchy.apartado_code
+                            else None
+                        ),
+                        page_number=page_number_1idx,
+                        hierarchy_snapshot=hierarchy.snapshot(),
+                    )
+                    partidas.append(new_partida)
+                    partidas_in_page += 1
+
+            result.page_metrics.append(
+                PageMetrics(
+                    page_number=page_number_1idx,
+                    has_header=False,  # ANNEXED no usa cabecera tabular
+                    rows_found=len(page_text.splitlines()),
+                    partidas_extracted=partidas_in_page,
+                    qty_found=0,  # qty se asigna en el mapping post-loop
+                )
+            )
+
+        # 3. Mapeo de cada cabecera con su total.
+        matched = 0
+        orphans = 0
+        for p in partidas:
+            qty = totals.get(p.code)
+            if qty is not None:
+                p.quantity = qty
+                matched += 1
+            else:
+                orphans += 1
+                logger.debug(
+                    "ANNEXED: cabecera %s sin total (página %s) — huérfana",
+                    p.code, p.page_number,
+                )
+
+        result.annexed_matched = matched
+        result.annexed_orphans = orphans
+        result.partidas = partidas
+
+        match_rate = (matched / len(partidas)) if partidas else 0.0
+        _emit(event_callback, "annexed_mapping_complete", {
+            "headersTotal": len(partidas),
+            "matched": matched,
+            "orphans": orphans,
+            "matchRate": round(match_rate, 4),
+            "totalsFound": len(totals),
+        })
+
+        logger.info(
+            "ANNEXED: %d cabeceras, %d totales, %d matched, %d huérfanas (match_rate=%.2f%%)",
+            len(partidas), len(totals), matched, orphans, 100.0 * match_rate,
+        )
+
+
+def _emit(
+    callback: Optional[Callable[[str, dict], None]],
+    event_name: str,
+    payload: dict,
+) -> None:
+    """Helper safe-emit de eventos (no falla si callback es None o lanza).
+
+    No afecta al flujo principal si el callback falla.
+    """
+    if callback is None:
+        return
+    try:
+        callback(event_name, payload)
+    except Exception:  # noqa: BLE001
+        logger.exception("TabularParser: callback de evento %s falló", event_name)
 
 
 def _estimate_body_start_y(words) -> Optional[float]:

@@ -109,6 +109,28 @@ def test_total_line_not_chapter():
     assert det.level is None
 
 
+def test_detect_capitulo_rdll_style_number_first():
+    """RdLL ANNEXED: 'XX Capítulo NOMBRE' (número primero, palabra después)."""
+    det = detect_hierarchy_in_line("01 Capítulo DESBROCE")
+    assert det.level == HierarchyLevel.CAPITULO
+    assert det.code == "01"
+    assert det.name == "DESBROCE"
+
+
+def test_detect_capitulo_rdll_style_multiword_name():
+    det = detect_hierarchy_in_line("02 Capítulo MOVIMIENTO DE TIERRAS")
+    assert det.level == HierarchyLevel.CAPITULO
+    assert det.code == "02"
+    assert det.name == "MOVIMIENTO DE TIERRAS"
+
+
+def test_detect_capitulo_rdll_style_lowercase_capitulo():
+    det = detect_hierarchy_in_line("03 capítulo CIMENTACIONES")
+    assert det.level == HierarchyLevel.CAPITULO
+    assert det.code == "03"
+    assert det.name == "CIMENTACIONES"
+
+
 def test_apply_capitulo_detection_to_hierarchy():
     h = ChapterHierarchy()
     det = detect_hierarchy_in_line("CAPÍTULO 01 ACTUACIONES PREVIAS")

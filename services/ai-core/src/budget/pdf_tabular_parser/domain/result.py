@@ -59,6 +59,11 @@ class TabularExtractionResult:
     pages_total: int = 0
     pages_with_header: int = 0
     reason: Optional[str] = None  # filled if not viable
+    annexed: bool = False  # True si se usó el modo PRESTO ANNEXED (Fase D)
+    annexed_transition_page: Optional[int] = None  # página donde inician los totales
+    annexed_totals_found: int = 0  # nº de totales detectados en fase ANNEXED
+    annexed_matched: int = 0  # nº de cabeceras que matchean con totals
+    annexed_orphans: int = 0  # nº de cabeceras sin match en totals
 
     @property
     def partidas_count(self) -> int:
@@ -89,17 +94,35 @@ class TabularExtractionResult:
     def is_viable(self) -> bool:
         """¿El resultado es lo suficientemente bueno para reemplazar LLM Vision?
 
-        Criterios (spec A6):
+        Criterios estándar (modo INLINE/TABULAR):
         - Al menos una página tiene cabecera detectada.
         - qty_rate >= 0.80.
         - chapter_rate >= 0.80.
         - partidas_count >= 1 (no es trivialmente vacío).
+
+        Criterios ANNEXED (Fase D — más relajados al inicio porque el match
+        rate puede ser bajo si hay desalineamiento entre cabeceras y totales):
+        - partidas_count >= 1.
+        - qty_rate >= 0.50 (al menos 50% de cabeceras tienen quantity asignada
+          via mapping con totals dict).
+        - chapter_rate NO se exige (en ANNEXED puede ser legítimamente bajo si
+          el aparejador no usa capítulos explícitos).
         """
-        if self.pages_with_header == 0:
-            self.reason = "no_header_detected"
-            return False
         if self.partidas_count == 0:
             self.reason = "no_partidas_extracted"
+            return False
+
+        if self.annexed:
+            # ANNEXED: relax qty threshold to 0.50, no chapter requirement.
+            if self.qty_rate < 0.50:
+                self.reason = f"low_qty_rate_annexed ({self.qty_rate:.2%} < 50%)"
+                return False
+            self.reason = None
+            return True
+
+        # Modo estándar (INLINE/TABULAR).
+        if self.pages_with_header == 0:
+            self.reason = "no_header_detected"
             return False
         if self.qty_rate < 0.80:
             self.reason = f"low_qty_rate ({self.qty_rate:.2%} < 80%)"
