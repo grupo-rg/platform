@@ -130,6 +130,76 @@ def _is_tabular_parser_enabled() -> bool:
     raw = os.environ.get("USE_TABULAR_PARSER", "false").strip().lower()
     return raw in ("true", "1", "yes", "on")
 
+
+# Sprint 4 Fase A9 — Anomaly detection contra silencio mortal del 14-may.
+# Si el extractor llega al fallback LLM Vision para un PDF de más de
+# MAX_LLM_VISION_PAGES páginas, abortamos con error explícito hacia la UI
+# en vez de procesar silenciosamente durante 60+ minutos.
+DEFAULT_MAX_LLM_VISION_PAGES = 50
+
+
+class LayoutUnsupportedError(Exception):
+    """Excepción explícita para layouts que el extractor no puede manejar
+    sin caer a un LLM Vision masivo (>50 pp por defecto).
+
+    Llevarla up al use case que la propaga al endpoint, que emite SSE
+    `pipeline_error` con `errorType=EXTRACTOR_LAYOUT_UNSUPPORTED`. La UI
+    muestra un error claro al usuario en vez del silencio mortal.
+    """
+    error_code = "EXTRACTOR_LAYOUT_UNSUPPORTED"
+
+
+def _get_max_llm_vision_pages() -> int:
+    """Threshold para abortar antes de invocar LLM Vision masivamente."""
+    raw = os.environ.get("MAX_LLM_VISION_PAGES", str(DEFAULT_MAX_LLM_VISION_PAGES)).strip()
+    try:
+        return max(1, int(raw))
+    except (ValueError, TypeError):
+        return DEFAULT_MAX_LLM_VISION_PAGES
+
+
+def _enforce_llm_vision_budget(
+    num_pages: int,
+    *,
+    budget_id: str,
+    emit_fn,
+    extractor_name: str,
+) -> None:
+    """Aborta si num_pages supera el threshold (default 50).
+
+    Emite evento SSE `pipeline_error` con código `EXTRACTOR_LAYOUT_UNSUPPORTED`
+    + log ERROR antes de levantar la excepción. La UI consumidor del SSE
+    muestra un mensaje claro al usuario en vez del silencio mortal del 14-may.
+    """
+    max_pages = _get_max_llm_vision_pages()
+    if num_pages <= max_pages:
+        return
+    msg = (
+        f"Layout no soportado: {extractor_name} caería a LLM Vision para "
+        f"{num_pages} páginas (max permitido: {max_pages}). Abortando "
+        f"para evitar timeout silencioso."
+    )
+    logger.error(
+        "EXTRACTOR_LAYOUT_UNSUPPORTED budget=%s extractor=%s pages=%d max=%d",
+        budget_id, extractor_name, num_pages, max_pages,
+    )
+    try:
+        emit_fn(budget_id, 'pipeline_error', {
+            "errorType": LayoutUnsupportedError.error_code,
+            "extractor": extractor_name,
+            "pagesAttempted": num_pages,
+            "maxPagesAllowed": max_pages,
+            "message": msg,
+            "suggestion": (
+                "El PDF parece tener un layout que requiere LLM Vision page-by-page. "
+                "Activá USE_TABULAR_PARSER si no lo está, o contactá soporte para "
+                "habilitar el flujo PRESTO ANNEXED."
+            ),
+        })
+    except Exception as emit_err:
+        logger.warning("emit_fn falló durante enforcement: %s", emit_err)
+    raise LayoutUnsupportedError(msg)
+
 # --- Chapter Stabilization Logic (Anti-Hallucination) ---
 def extract_chapter_prefix(chapter_str: str) -> str:
     s = str(chapter_str).strip().upper()
@@ -906,6 +976,17 @@ class InlinePdfExtractorService(IPdfExtractorService):
 
         CHUNK_SIZE = 1
         chunks = [raw_items[i:i + CHUNK_SIZE] for i in range(0, len(raw_items), CHUNK_SIZE)]
+
+        # Sprint 4 Fase A9 — bloqueo antes de LLM Vision masivo (silencio
+        # mortal 14-may). Si el PDF tiene >50 pp y caímos hasta aquí (los
+        # fast paths heurísticos no aplicaron), abortar con error claro.
+        _enforce_llm_vision_budget(
+            len(chunks),
+            budget_id=budget_id,
+            emit_fn=self._emit,
+            extractor_name="InlinePdfExtractorService",
+        )
+
         self._emit(budget_id, 'batch_restructure_submitted', {"query": f"Lote visual dividido en {len(chunks)} páginas atómicas concurrenciales."})
 
         # 8 páginas paralelas (antes 15): reduce saturación del quota Gemini cuando
@@ -1150,11 +1231,21 @@ class AnnexedPdfExtractorService(IPdfExtractorService):
     async def extract(self, pages_chunks: List[Dict[str, Any]], budget_id: str, metrics: Dict) -> List[RestructuredItem]:
         logger.info(f"Starting ANNEXED (MapReduce) Batch Restructure Phase for {len(pages_chunks)} pages...")
         self._emit(budget_id, 'extraction_started', {"query": f"Desplegando Analista Documental sobre documento multipágina ({len(pages_chunks)} páginas)..."})
-        
+
+        # Sprint 4 Fase A9 — bloqueo antes de LLM Vision masivo (silencio
+        # mortal 14-may). El extractor ANNEXED es el camino caliente del PDF
+        # RdLL 258pp; sin este enforcement repite el incidente.
+        _enforce_llm_vision_budget(
+            len(pages_chunks),
+            budget_id=budget_id,
+            emit_fn=self._emit,
+            extractor_name="AnnexedPdfExtractorService",
+        )
+
         # En producción "real", el Endpoint separa los `raw_items` en descriptivos y contables.
         # Asumimos que los primeros N-1 son literatura y la página `raw_items[-1]` es mediciones.
         # Aquí puedes iterar o usar una heurística. Como POC robusto:
-        
+
         if len(pages_chunks) < 2:
             # Fallback a inline si no hay modo de hacer mapreduce
             inline_svc = InlinePdfExtractorService(self.llm, self.emitter)
