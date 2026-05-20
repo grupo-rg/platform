@@ -33,6 +33,13 @@ _RE_CAPITULO_EXPLICIT = re.compile(
     re.IGNORECASE,
 )
 
+# Estilo RdLL ANNEXED: XX Capítulo NOMBRE (número primero, palabra después).
+# Ejemplo real: "01 Capítulo DESBROCE", "02 Capítulo MOVIMIENTO DE TIERRAS".
+_RE_CAPITULO_RDLL_STYLE = re.compile(
+    r"^\s*(?P<code>\d{1,3})\s+(?:Cap[ií]tulo)\s+(?P<name>[A-ZÁÉÍÓÚÑ][^\n]{1,200})$",
+    re.IGNORECASE,
+)
+
 # XX NOMBRE_TODO_MAYUSCULA (al menos 4 chars, sin números intermedios)
 _RE_CAPITULO_IMPLICIT = re.compile(
     r"^\s*(?P<code>\d{1,3})\s+(?P<name>[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s,\-\(\)/&Y]{3,200})$",
@@ -122,6 +129,15 @@ def detect_hierarchy_in_line(text: str) -> HierarchyDetection:
 
     # Capítulo explícito.
     m = _RE_CAPITULO_EXPLICIT.match(clean)
+    if m:
+        return HierarchyDetection(
+            level=HierarchyLevel.CAPITULO,
+            code=m.group("code"),
+            name=m.group("name").strip(),
+        )
+
+    # Estilo RdLL ANNEXED (XX Capítulo NOMBRE).
+    m = _RE_CAPITULO_RDLL_STYLE.match(clean)
     if m:
         return HierarchyDetection(
             level=HierarchyLevel.CAPITULO,
