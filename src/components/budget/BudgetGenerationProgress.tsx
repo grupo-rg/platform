@@ -12,6 +12,7 @@ import {
     FileText,
     ChevronDown,
     AlertCircle,
+    AlertTriangle,
     Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -79,11 +80,18 @@ type PhaseState = {
     resolvedCount?: number;
 };
 
+// Sprint 4 Fase B — banner contextual sobre el timeline. Re-export para
+// callers que importen el type desde aquí. Implementación + type viven en
+// `./ExtractorBannerView.tsx` (mantenidos aparte por testabilidad).
+import { ExtractorBannerView, type ExtractorBanner } from './ExtractorBannerView';
+export { ExtractorBannerView, type ExtractorBanner } from './ExtractorBannerView';
+
 type TimelineState = {
     phases: Record<PhaseId, PhaseState>;
     activePhase: PhaseId | null;
     startedAt: number;
     errorMessage?: string;
+    extractorBanner?: ExtractorBanner;
 };
 
 const initialState = (): TimelineState => ({
@@ -102,7 +110,8 @@ type Action =
     | { type: 'ADD_SUB'; phase: PhaseId; sub: SubEvent }
     | { type: 'SET_TOTAL_TASKS'; phase: PhaseId; total: number }
     | { type: 'FINISH'; ts: number }
-    | { type: 'FAIL'; message: string; ts: number };
+    | { type: 'FAIL'; message: string; ts: number }
+    | { type: 'SET_EXTRACTOR_BANNER'; banner: ExtractorBanner };
 
 function reducer(state: TimelineState, action: Action): TimelineState {
     switch (action.type) {
@@ -164,6 +173,8 @@ function reducer(state: TimelineState, action: Action): TimelineState {
                 errorMessage: action.message,
             };
         }
+        case 'SET_EXTRACTOR_BANNER':
+            return { ...state, extractorBanner: action.banner };
         default:
             return state;
     }
@@ -249,6 +260,48 @@ export function BudgetGenerationProgress({ progress, className, onComplete, budg
                     dispatch({ type: 'FINISH', ts });
                     onCompleteRef.current?.(parsed.data?.budgetId);
                     return;
+                }
+
+                // Sprint 4 Fase B — bandera contextual del parser TABULAR.
+                if (parsed.type === 'tabular_parser_completed') {
+                    const d = parsed.data ?? {};
+                    dispatch({
+                        type: 'SET_EXTRACTOR_BANNER',
+                        banner: {
+                            kind: 'tabular_completed',
+                            partidasCount: Number(d.partidasCount) || 0,
+                            qtyRate: Number(d.qtyRate) || 0,
+                            chapterRate: Number(d.chapterRate) || 0,
+                            durationSeconds: Number(d.durationSeconds) || 0,
+                        },
+                    });
+                } else if (parsed.type === 'tabular_parser_aborted') {
+                    const d = parsed.data ?? {};
+                    dispatch({
+                        type: 'SET_EXTRACTOR_BANNER',
+                        banner: {
+                            kind: 'tabular_aborted',
+                            reason: String(d.reason ?? 'unknown'),
+                            partidasExtracted: Number(d.partidasExtracted) || 0,
+                        },
+                    });
+                } else if (
+                    parsed.type === 'pipeline_error' &&
+                    (parsed.data?.errorType === 'EXTRACTOR_LAYOUT_UNSUPPORTED' ||
+                        parsed.data?.error_type === 'EXTRACTOR_LAYOUT_UNSUPPORTED')
+                ) {
+                    const d = parsed.data ?? {};
+                    dispatch({
+                        type: 'SET_EXTRACTOR_BANNER',
+                        banner: {
+                            kind: 'layout_unsupported',
+                            extractor: d.extractor,
+                            pagesAttempted: d.pagesAttempted ?? d.pages_attempted,
+                            maxPagesAllowed: d.maxPagesAllowed ?? d.max_pages_allowed,
+                            message: String(d.message ?? 'Layout no soportado'),
+                            suggestion: d.suggestion,
+                        },
+                    });
                 }
 
                 if (phase) {
@@ -339,6 +392,14 @@ export function BudgetGenerationProgress({ progress, className, onComplete, budg
                     />
                 </div>
             </div>
+
+            {/* Sprint 4 Fase B — banner contextual del parser TABULAR
+                 (tabular_completed | tabular_aborted | layout_unsupported). */}
+            {state.extractorBanner && (
+                <div className="px-3 pb-2">
+                    <ExtractorBannerView banner={state.extractorBanner} />
+                </div>
+            )}
 
             {/* Fases — separador sutil, sin borders duros. */}
             <div className="px-1 pb-1">
@@ -482,6 +543,7 @@ function SubEventIcon({ kind }: { kind: SubEvent['kind'] }) {
     if (kind === 'resolved') return <CheckCircle2 className={cn(cls, 'text-emerald-500')} />;
     if (kind === 'search')   return <Search        className={cn(cls, 'text-amber-500')} />;
     if (kind === 'error')    return <AlertCircle   className={cn(cls, 'text-red-500')} />;
+    if (kind === 'warning')  return <AlertTriangle className={cn(cls, 'text-amber-500')} />;
     return <Package className={cn(cls, 'text-slate-400')} />;
 }
 

@@ -13,7 +13,16 @@ export type PhaseId = 'extracting' | 'searching' | 'calculating' | 'complete';
 
 export type SubEvent = {
     id: string;
-    kind: 'info' | 'search' | 'resolved' | 'error';
+    /**
+     * `info` — neutro (texto gris)
+     * `search` — actividad de búsqueda (icono ámbar)
+     * `resolved` — éxito (icono verde)
+     * `error` — error visible (icono rojo)
+     * `warning` — aviso no bloqueante (icono ámbar/amarillo); Sprint 4 Fase B —
+     *   nuevo kind para banner del parser TABULAR cuando aborta (fallback no es
+     *   un error pero el usuario debería verlo).
+     */
+    kind: 'info' | 'search' | 'resolved' | 'error' | 'warning';
     title: string;
     detail?: string;
     ts: number;
@@ -31,7 +40,15 @@ export function eventToPhase(type: string): PhaseId | null {
         // Fase 10.1 — eventos nuevos (Fase 7-9)
         type === 'inline_fast_path_used' ||
         type === 'cross_page_merge_annexed' ||
-        type === 'partida_description_short'
+        type === 'partida_description_short' ||
+        // Sprint 4 Fase B — eventos del parser TABULAR
+        type === 'tabular_parser_started' ||
+        type === 'tabular_parser_completed' ||
+        type === 'tabular_parser_aborted' ||
+        // pipeline_error con errorType EXTRACTOR_LAYOUT_UNSUPPORTED — A9 anomaly
+        // detection. Lo pintamos en la fase de extracción porque siempre ocurre
+        // durante el extractor, antes del Swarm.
+        type === 'pipeline_error'
     ) return 'extracting';
     if (
         type === 'vector_search' ||
@@ -153,14 +170,92 @@ export function buildSubEvent(parsed: any, uniqueKey: any, ts: number): SubEvent
                 ts,
             };
         // Fase 10.1 — eventos de Fase 7-9
-        case 'inline_fast_path_used':
+        case 'inline_fast_path_used': {
+            // Sprint 4 Fase B — si el método es el parser TABULAR usamos un
+            // texto más explícito que diferencie del fallback heurístico legacy.
+            const isTabular = data.method === 'tabular_parser_coord_based';
+            const detailParts: string[] = [];
+            if (typeof data.qty_rate === 'number') {
+                detailParts.push(`qty ${(data.qty_rate * 100).toFixed(0)}%`);
+            }
+            if (typeof data.chapter_rate === 'number') {
+                detailParts.push(`cap ${(data.chapter_rate * 100).toFixed(0)}%`);
+            }
+            detailParts.push(data.method || 'Layout Analyzer fast path');
             return {
                 id,
                 kind: 'resolved',
-                title: `${data.partidas_count ?? '?'} partidas extraídas sin LLM (heurística)`,
-                detail: data.method || 'Layout Analyzer fast path',
+                title: isTabular
+                    ? `${data.partidas_count ?? '?'} partidas extraídas con parser TABULAR`
+                    : `${data.partidas_count ?? '?'} partidas extraídas sin LLM (heurística)`,
+                detail: detailParts.join(' · '),
                 ts,
             };
+        }
+        // Sprint 4 Fase B — eventos del parser TABULAR coord-based.
+        case 'tabular_parser_started':
+            return {
+                id,
+                kind: 'info',
+                title: 'Parser TABULAR iniciado',
+                detail:
+                    typeof data.totalPages === 'number'
+                        ? `${data.totalPages} páginas a procesar`
+                        : undefined,
+                ts,
+            };
+        case 'tabular_parser_completed': {
+            const qty = typeof data.qtyRate === 'number'
+                ? `${(data.qtyRate * 100).toFixed(0)}% qty`
+                : null;
+            const dur = typeof data.durationSeconds === 'number'
+                ? `${data.durationSeconds.toFixed(1)}s`
+                : null;
+            const detailParts = [qty, dur].filter((v): v is string => Boolean(v));
+            return {
+                id,
+                kind: 'resolved',
+                title: `Parser TABULAR · ${data.partidasCount ?? '?'} partidas`,
+                detail: detailParts.length > 0 ? detailParts.join(' · ') : undefined,
+                ts,
+            };
+        }
+        case 'tabular_parser_aborted':
+            return {
+                id,
+                kind: 'warning',
+                title: `Parser TABULAR aborted · ${data.reason ?? 'unknown'}`,
+                detail: `Fallback a heurística (${data.partidasExtracted ?? 0} parciales)`,
+                ts,
+            };
+        case 'pipeline_error': {
+            // Sprint 4 Fase A9 — abort por LayoutUnsupportedError (PDF >50pp
+            // que habría caído a LLM Vision page-by-page). Mostramos el
+            // mensaje + suggestion del payload tal cual.
+            if (
+                data.errorType === 'EXTRACTOR_LAYOUT_UNSUPPORTED' ||
+                data.error_type === 'EXTRACTOR_LAYOUT_UNSUPPORTED'
+            ) {
+                const pages = data.pagesAttempted ?? data.pages_attempted;
+                const max = data.maxPagesAllowed ?? data.max_pages_allowed;
+                return {
+                    id,
+                    kind: 'error',
+                    title: `Layout no soportado · ${data.extractor ?? 'extractor'}`,
+                    detail:
+                        (data.message as string) ||
+                        `PDF ${pages ?? '?'} págs > ${max ?? '?'} permitidas`,
+                    ts,
+                };
+            }
+            return {
+                id,
+                kind: 'error',
+                title: 'Error de pipeline',
+                detail: (data.message as string) || (data.errorType as string) || 'unknown',
+                ts,
+            };
+        }
         case 'tier_assigned':
             return {
                 id,

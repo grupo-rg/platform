@@ -83,7 +83,12 @@ class InternalTokenMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path.startswith("/api/v1/jobs/"):
+        path = request.url.path
+        # Sprint 4 Fase B — el endpoint /api/v1/admin/* también queda gated
+        # por `x-internal-token` (el proxy Next.js inyecta el token vía
+        # `INTERNAL_WORKER_TOKEN`). Si la env var está vacía se permite el
+        # acceso para no bloquear el desarrollo local.
+        if path.startswith("/api/v1/jobs/") or path.startswith("/api/v1/admin/"):
             expected = os.environ.get("INTERNAL_WORKER_TOKEN", "").strip()
             if expected:
                 provided = request.headers.get("x-internal-token", "").strip()
@@ -646,3 +651,155 @@ async def extract_pdf_metadata(
         return ExtractedBudgetMetadata()
 
     return await extractor.extract(image_b64)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 4 Fase B — Admin TEST endpoint para el parser TABULAR coord-based.
+#
+# POST /api/v1/admin/test-tabular-parser
+#
+# Recibe un PDF (`multipart/form-data` con `file`), lo procesa con
+# `TabularParser().parse(...)` y retorna las métricas + items extraídos sin
+# crear ningún Budget, sin tocar Firestore y sin lanzar el Swarm. Sirve a la
+# UI admin (`/dashboard/admin/pdf-layout-test`) para diagnosticar layouts
+# nuevos de PDFs cliente.
+#
+# Gated por `x-internal-token` igual que `/api/v1/jobs/*`.
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/v1/admin/test-tabular-parser")
+async def test_tabular_parser(file: UploadFile = File(...)) -> JSONResponse:
+    """Evaluación pura del parser TABULAR sobre un PDF subido.
+
+    No genera Budget. No persiste nada en Firestore. No invoca el Swarm.
+    Pensado para QA admin y diagnóstico de layouts nuevos.
+
+    Respuesta (200):
+      {
+        "viable": bool,
+        "reason": str | null,             # razón del aborto si !viable
+        "partidasCount": int,
+        "qtyRate": float,                 # 0-1
+        "chapterRate": float,             # 0-1
+        "pagesTotal": int,
+        "pagesWithHeader": int,
+        "durationSeconds": float,
+        "items": [                        # max 200 entradas (capadas)
+          {
+            "code": str,
+            "description": str,
+            "unit": str,
+            "quantity": float | null,
+            "chapter": str,
+            "sub_chapter": str | null,
+            "apartado": str | null,
+            "page": int | null
+          },
+          ...
+        ],
+        "truncated": bool,                # True si len(partidas) > 200 (UI lo avisa)
+        "pageMetrics": [                  # 1 entry per page; útil para inspección granular
+          {
+            "page": int,
+            "hasHeader": bool,
+            "rowsFound": int,
+            "partidasExtracted": int,
+            "qtyFound": int
+          },
+          ...
+        ]
+      }
+    """
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    try:
+        pdf_bytes = await file.read()
+    except Exception as e:
+        logger.error("admin_test_tabular_read_failed", extra={"error": str(e)})
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
+
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Empty PDF body")
+
+    # Cap defensive: PDFs >50MB se rechazan — son layouts patológicos o
+    # escaneos grandes que no tienen sentido procesar en modo test síncrono.
+    if len(pdf_bytes) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF too large (max 50MB)")
+
+    # Lazy import — evita coste de pdfplumber en el cold start del Service si
+    # nadie usa esta ruta.
+    from src.budget.pdf_tabular_parser.application.tabular_parser import TabularParser
+
+    parser = TabularParser()
+    try:
+        result = parser.parse(pdf_bytes)
+    except Exception as e:
+        logger.exception("admin_test_tabular_parser_exception", extra={"error": str(e)})
+        # Devolvemos 200 con viable=False + razón explícita en vez de 500.
+        # La UI admin necesita ver el detalle para diagnosticar el layout.
+        return JSONResponse(
+            status_code=200,
+            content={
+                "viable": False,
+                "reason": f"exception:{type(e).__name__}: {str(e)[:200]}",
+                "partidasCount": 0,
+                "qtyRate": 0.0,
+                "chapterRate": 0.0,
+                "pagesTotal": 0,
+                "pagesWithHeader": 0,
+                "durationSeconds": 0.0,
+                "items": [],
+                "truncated": False,
+                "pageMetrics": [],
+            },
+        )
+
+    viable = result.is_viable()
+
+    # Caping: max 200 items en respuesta para no inflar payload. La UI sabe
+    # mostrar `truncated=true` y sugerir descargar el JSON completo si hace falta.
+    ITEMS_CAP = 200
+    truncated = len(result.partidas) > ITEMS_CAP
+    items_payload = [
+        {
+            "code": p.code or "",
+            "description": p.description or "",
+            "unit": p.unit or "",
+            "quantity": p.quantity,
+            "chapter": p.chapter or "",
+            "sub_chapter": p.sub_chapter,
+            "apartado": p.apartado,
+            "page": p.page_number,
+        }
+        for p in result.partidas[:ITEMS_CAP]
+    ]
+
+    page_metrics_payload = [
+        {
+            "page": pm.page_number,
+            "hasHeader": pm.has_header,
+            "rowsFound": pm.rows_found,
+            "partidasExtracted": pm.partidas_extracted,
+            "qtyFound": pm.qty_found,
+        }
+        for pm in result.page_metrics
+    ]
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "viable": bool(viable),
+            "reason": result.reason,
+            "partidasCount": result.partidas_count,
+            "qtyRate": float(result.qty_rate),
+            "chapterRate": float(result.chapter_rate),
+            "pagesTotal": int(result.pages_total),
+            "pagesWithHeader": int(result.pages_with_header),
+            "durationSeconds": float(result.duration_seconds),
+            "items": items_payload,
+            "truncated": truncated,
+            "pageMetrics": page_metrics_payload,
+        },
+    )

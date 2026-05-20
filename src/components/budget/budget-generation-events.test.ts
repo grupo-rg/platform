@@ -32,6 +32,14 @@ const EVENT_CONTRACT: Array<{ type: string; phase: 'extracting' | 'searching' | 
     // Fase 11.A — guard defensivo del breakdown
     { type: 'breakdown_scaled_defensive',  phase: 'calculating' },
     { type: 'breakdown_sum_divergence',    phase: 'calculating' },
+    // Sprint 4 Fase B — eventos del parser TABULAR coord-based
+    { type: 'tabular_parser_started',      phase: 'extracting' },
+    { type: 'tabular_parser_completed',    phase: 'extracting' },
+    { type: 'tabular_parser_aborted',      phase: 'extracting' },
+    // pipeline_error (incluye EXTRACTOR_LAYOUT_UNSUPPORTED del A9 anomaly
+    // detection). Se renderiza en la fase de extracción porque la única
+    // causa actual del evento ocurre durante el extractor.
+    { type: 'pipeline_error',              phase: 'extracting' },
 ];
 
 describe('eventToPhase — contrato de telemetría', () => {
@@ -235,5 +243,92 @@ describe('buildSubEvent — render amigable por tipo', () => {
         expect(ev!.kind).toBe('error');
         expect(ev!.title).toMatch(/01\.03/);
         expect(ev!.detail).toMatch(/165\.46|41\.37/);
+    });
+
+    // -----------------------------------------------------------------
+    // Sprint 4 Fase B — render de eventos del parser TABULAR.
+    // -----------------------------------------------------------------
+
+    it('tabular_parser_started es info y reporta páginas totales', () => {
+        const ev = buildSubEvent(
+            { type: 'tabular_parser_started', data: { totalPages: 14 } },
+            'k-tabs', 0,
+        );
+        expect(ev!.kind).toBe('info');
+        expect(ev!.title.toLowerCase()).toMatch(/parser tabular/);
+        expect(ev!.detail).toMatch(/14/);
+    });
+
+    it('tabular_parser_completed es resolved con qty% + duración + count', () => {
+        const ev = buildSubEvent(
+            {
+                type: 'tabular_parser_completed',
+                data: { partidasCount: 74, qtyRate: 0.95, chapterRate: 0.92, durationSeconds: 12.34 },
+            },
+            'k-tabc', 0,
+        );
+        expect(ev!.kind).toBe('resolved');
+        expect(ev!.title).toMatch(/74/);
+        expect(ev!.detail).toMatch(/95% qty/);
+        expect(ev!.detail).toMatch(/12\.3/);
+    });
+
+    it('tabular_parser_aborted es warning con razón y count parcial', () => {
+        const ev = buildSubEvent(
+            { type: 'tabular_parser_aborted', data: { reason: 'low_qty_rate (40.0% < 80%)', partidasExtracted: 25 } },
+            'k-taba', 0,
+        );
+        expect(ev!.kind).toBe('warning');
+        expect(ev!.title.toLowerCase()).toMatch(/parser tabular/);
+        expect(ev!.title).toMatch(/low_qty_rate/);
+        expect(ev!.detail).toMatch(/25/);
+        expect(ev!.detail!.toLowerCase()).toMatch(/fallback/);
+    });
+
+    it('pipeline_error con EXTRACTOR_LAYOUT_UNSUPPORTED es error con mensaje del backend', () => {
+        const ev = buildSubEvent(
+            {
+                type: 'pipeline_error',
+                data: {
+                    errorType: 'EXTRACTOR_LAYOUT_UNSUPPORTED',
+                    extractor: 'AnnexedPdfExtractorService',
+                    pagesAttempted: 258,
+                    maxPagesAllowed: 50,
+                    message: 'Layout no soportado: AnnexedPdfExtractorService caería a LLM Vision para 258 páginas (max permitido: 50).',
+                    suggestion: 'Activá USE_TABULAR_PARSER si no lo está, o contactá soporte.',
+                },
+            },
+            'k-perr', 0,
+        );
+        expect(ev!.kind).toBe('error');
+        expect(ev!.title.toLowerCase()).toMatch(/layout no soportado/);
+        expect(ev!.detail).toMatch(/258/);
+    });
+
+    it('inline_fast_path_used diferencia el método TABULAR del heurístico legacy', () => {
+        const tabular = buildSubEvent(
+            {
+                type: 'inline_fast_path_used',
+                data: {
+                    partidas_count: 74,
+                    method: 'tabular_parser_coord_based',
+                    qty_rate: 0.97,
+                    chapter_rate: 0.93,
+                },
+            },
+            'k-fp-tab', 0,
+        );
+        expect(tabular!.kind).toBe('resolved');
+        expect(tabular!.title.toLowerCase()).toMatch(/parser tabular/);
+        // El detail concatena "qty 97% · cap 93% · tabular_parser_coord_based".
+        expect(tabular!.detail).toMatch(/qty 97%/);
+        expect(tabular!.detail).toMatch(/cap 93%/);
+        expect(tabular!.detail).toMatch(/tabular_parser_coord_based/);
+
+        const legacy = buildSubEvent(
+            { type: 'inline_fast_path_used', data: { partidas_count: 65, method: 'layout_analyzer_heuristic' } },
+            'k-fp-leg', 0,
+        );
+        expect(legacy!.title.toLowerCase()).toMatch(/sin llm|heur/);
     });
 });

@@ -8,7 +8,7 @@
  *   - Modelos activos (env vars con defaults documentados en S3-10).
  *   - Histórico de despliegues (best-effort desde `model_deployments`).
  */
-import { Activity, AlertTriangle, Brain, Clock, Database, GitBranch, History, Layers, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, Brain, Clock, Database, FileText, GitBranch, History, Layers, ShieldCheck, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -23,6 +23,11 @@ import {
     getModelHealthAction,
     type ChapterCorrectionRow,
 } from '@/actions/admin/get-model-health.action';
+import {
+    getPdfExtractorMetricsAction,
+    type MethodBreakdownEntry,
+    type ExtractorMethod,
+} from '@/actions/admin/get-pdf-extractor-metrics.action';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -61,8 +66,25 @@ function HeatmapBar({ row, maxCount }: { row: ChapterCorrectionRow; maxCount: nu
     );
 }
 
+const METHOD_LABEL: Record<ExtractorMethod, string> = {
+    tabular_parser_coord_based: 'Parser TABULAR (Sprint 4)',
+    pdfplumber_first_tabular: 'pdfplumber-first (S3-06)',
+    layout_analyzer_heuristic: 'Heurística 9.2',
+    llm_vision_fallback: 'LLM Vision (fallback)',
+};
+
+const METHOD_TONE: Record<ExtractorMethod, string> = {
+    tabular_parser_coord_based: 'bg-emerald-500',
+    pdfplumber_first_tabular: 'bg-sky-500',
+    layout_analyzer_heuristic: 'bg-violet-500',
+    llm_vision_fallback: 'bg-amber-500',
+};
+
 export default async function ModelHealthDashboardPage() {
-    const result = await getModelHealthAction();
+    const [result, extractorResult] = await Promise.all([
+        getModelHealthAction(),
+        getPdfExtractorMetricsAction(),
+    ]);
 
     if (!result.success) {
         return (
@@ -153,6 +175,24 @@ export default async function ModelHealthDashboardPage() {
                         tone="rose"
                     />
                 </div>
+            </section>
+
+            {/* Sprint 4 Fase B — PDF Extractor V2 (TABULAR) — métricas de
+                 últimas 24h. Aparece debajo de los KPIs principales. */}
+            <section>
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                    PDF Extractor V2 (TABULAR) · últimas 24h
+                </h2>
+                {extractorResult.success ? (
+                    <PdfExtractorPanel data={extractorResult.data} />
+                ) : (
+                    <Card>
+                        <CardContent className="pt-6 text-sm text-muted-foreground">
+                            No se pudieron cargar las métricas del extractor (
+                            {extractorResult.error}).
+                        </CardContent>
+                    </Card>
+                )}
             </section>
 
             {/* Heatmap correcciones por capítulo */}
@@ -284,6 +324,116 @@ export default async function ModelHealthDashboardPage() {
                     </CardContent>
                 </Card>
             </section>
+        </div>
+    );
+}
+
+function PdfExtractorPanel({
+    data,
+}: {
+    data: import('@/actions/admin/get-pdf-extractor-metrics.action').PdfExtractorMetricsPayload;
+}) {
+    const total = data.totalBudgets;
+    const tabularCount =
+        data.methodBreakdown.find((m) => m.method === 'tabular_parser_coord_based')?.count ?? 0;
+    const tabularPct = total > 0 ? tabularCount / total : 0;
+    return (
+        <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <KpiCard
+                    icon={<FileText className="h-4 w-4" />}
+                    label="PDFs procesados"
+                    primary={total.toLocaleString('es-ES')}
+                    sub="últimas 24h"
+                    tone="indigo"
+                />
+                <KpiCard
+                    icon={<Layers className="h-4 w-4" />}
+                    label="% con TABULAR"
+                    primary={total === 0 ? 'N/A' : `${(tabularPct * 100).toFixed(0)}%`}
+                    sub={`${tabularCount} / ${total} PDFs`}
+                    tone="emerald"
+                />
+                <KpiCard
+                    icon={<ShieldCheck className="h-4 w-4" />}
+                    label="qty_rate medio"
+                    primary={
+                        data.avgTabularQtyRate == null
+                            ? 'N/A'
+                            : `${(data.avgTabularQtyRate * 100).toFixed(1)}%`
+                    }
+                    sub={`${data.tabularSamples} muestras TABULAR`}
+                    tone="violet"
+                />
+                <KpiCard
+                    icon={<Activity className="h-4 w-4" />}
+                    label="chapter_rate medio"
+                    primary={
+                        data.avgTabularChapterRate == null
+                            ? 'N/A'
+                            : `${(data.avgTabularChapterRate * 100).toFixed(1)}%`
+                    }
+                    sub={`${data.tabularSamples} muestras TABULAR`}
+                    tone="amber"
+                />
+                <KpiCard
+                    icon={<FileWarning className="h-4 w-4" />}
+                    label="LayoutUnsupportedError"
+                    primary={data.layoutUnsupportedCount.toLocaleString('es-ES')}
+                    sub="aborts A9 (PDF >50pp)"
+                    tone="rose"
+                />
+            </div>
+
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <GitBranch className="h-4 w-4 text-muted-foreground" />
+                        Desglose por método de extracción
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {total === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">
+                            Sin PDFs procesados en la ventana de 24h.
+                        </p>
+                    ) : (
+                        <ExtractorMethodBars rows={data.methodBreakdown} total={total} />
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+function ExtractorMethodBars({
+    rows,
+    total,
+}: {
+    rows: MethodBreakdownEntry[];
+    total: number;
+}) {
+    return (
+        <div className="space-y-2">
+            {rows.map((row) => {
+                const pct = total > 0 ? (row.count / total) * 100 : 0;
+                return (
+                    <div key={row.method} className="flex items-center gap-3">
+                        <div className="w-56 shrink-0 text-xs text-foreground truncate">
+                            {METHOD_LABEL[row.method]}
+                        </div>
+                        <div className="flex-1 h-5 bg-muted rounded relative overflow-hidden">
+                            <div
+                                className={`h-full rounded transition-all ${METHOD_TONE[row.method]}`}
+                                style={{ width: `${pct}%` }}
+                            />
+                        </div>
+                        <div className="w-16 shrink-0 text-right font-mono text-xs tabular-nums">
+                            {row.count} · {(pct).toFixed(0)}%
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 }
