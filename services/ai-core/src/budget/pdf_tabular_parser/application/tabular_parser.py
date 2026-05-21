@@ -139,6 +139,21 @@ class TabularParser:
             result.reason = "empty_pdf"
             return result
 
+        # --- EXTRACCIÓN DE METADATA DEL DOCUMENTO (Fase F) ---
+        # Antes de decidir el modo: extraer title + address de la primera
+        # página. Los datos viven ANTES de la estructura tabular y son
+        # críticos para el Budget downstream (título, contexto del proyecto).
+        try:
+            from src.budget.pdf_tabular_parser.application.document_metadata import (
+                extract_document_metadata,
+            )
+            doc_meta = extract_document_metadata(text_per_page)
+            result.document_title = doc_meta.title
+            result.document_address = doc_meta.address
+        except Exception as meta_exc:  # noqa: BLE001
+            # No bloquear el parseo si la extracción de metadata falla.
+            logger.warning("Document metadata extraction falló: %s", meta_exc)
+
         # --- DETECCIÓN DE MODO MU02 (Fase E) ---
         # MU02 va PRIMERO porque su cabecera tabular
         # `Nº Ud Descripción Cantidad Precio Total` es muy específica y no se
@@ -383,12 +398,28 @@ class TabularParser:
 
         # Paso D: línea de medición zonal — añadimos cantidad si el row tiene
         # celda CANTIDAD positiva y la partida actual aún no tiene qty.
+        used_for_quantity = False
         if last_partida is not None and pending_qty:
             qty_in_measure = _extract_quantity_from_measurement_row(row)
             if qty_in_measure is not None and qty_in_measure > 0.0:
                 # Acumulamos (varias filas de medición suman).
                 current = last_partida.quantity or 0.0
                 last_partida.quantity = current + qty_in_measure
+                used_for_quantity = True
+
+        # Paso E: si la fila NO fue clasificada como cabecera/jerarquía/qty,
+        # y hay una partida activa, acumular el texto como continuación de
+        # la descripción técnica. Esto soluciona el bug donde INLINE guardaba
+        # SOLO el title de la cabecera (avg 27 chars en private_residence_palma)
+        # perdiendo las 5-15 líneas de descripción técnica que vienen DESPUÉS.
+        if (
+            last_partida is not None
+            and not used_for_quantity
+            and _row_is_descriptive_continuation(row, text)
+        ):
+            last_partida.description = _append_to_description(
+                last_partida.description or "", text,
+            )
 
         return {
             "last_partida": last_partida,
@@ -714,3 +745,87 @@ def _extract_quantity_from_measurement_row(row: TabularRow) -> Optional[float]:
             return qty
 
     return None
+
+
+# --- Helpers para acumulación de descripción multilínea en INLINE -----------
+# Sprint 4 Fase F — soluciona el bug de descripciones cortas en modo INLINE
+# (private_residence_palma avg 27 chars vs 200-500 reales).
+
+# Patrones de filas que NO deben acumularse como descripción técnica:
+# - Filas tabulares de medición (`<zona> <UDS> <LONG> <ANCH> <ALT> <CANT>`).
+# - Filas de subtotal aislado (`<NUM> <NUM>` repetido o `Subtotal <NUM>`).
+# - Filas de identificador interno corto (`SPC0010 zona`).
+# - Líneas de paginación (`Página N`).
+# - Líneas que son solo unidades/cantidades.
+_DESC_SKIP_RE_LIST = [
+    re.compile(r"^\s*Subtotal\s+\d", re.IGNORECASE),
+    re.compile(r"^\s*P[áa]g(?:ina)?\s+\d", re.IGNORECASE),
+    re.compile(r"^\s*[A-Z]{2,4}\d{3,6}(\s+\S{1,30})?\s*$"),  # SPC0010, SPC0010 Solar
+    re.compile(r"^\s*Total\s+", re.IGNORECASE),  # subtotales de partida
+    # Filas tabulares puras: 3-6 números decimales separados por espacios.
+    re.compile(r"^\s*\d+[,.]\d+(\s+\d+[,.]\d+){2,5}\s*$"),
+]
+
+# Cabeceras tabulares que se repiten en cada página (skip).
+_HEADER_BAND_RE_LIST = [
+    re.compile(r"Area\s+(?:Largo|Prof|Ancho)\s+(?:Ancho|Prof|Alto)\s+", re.IGNORECASE),
+    re.compile(r"C[óo]digo\s+(?:Nat\s+)?Ud\s+", re.IGNORECASE),
+    re.compile(r"N[°ºo]\s+Ud\s+Descripci[óo]n", re.IGNORECASE),
+    re.compile(r"UDS\s+LONGITUD\s+ANCHURA", re.IGNORECASE),
+]
+
+
+def _row_is_descriptive_continuation(row: "TabularRow", text: str) -> bool:
+    """Decide si una fila INLINE no clasificada es texto descriptivo de
+    continuación de la partida actual.
+
+    Filtra:
+    - Filas vacías o muy cortas (<5 chars).
+    - Cabeceras tabulares repetidas en cada página.
+    - Filas de subtotal/total/Página/SPC0010.
+    - Filas de medición tabular pura (solo decimales).
+    - Filas con muchos decimales y poco texto (probablemente medición zonal).
+    """
+    if not text or len(text.strip()) < 5:
+        return False
+
+    text_clean = text.strip()
+
+    # Skip cabeceras tabulares.
+    for pattern in _HEADER_BAND_RE_LIST:
+        if pattern.search(text_clean):
+            return False
+
+    # Skip patrones de no-descripción.
+    for pattern in _DESC_SKIP_RE_LIST:
+        if pattern.match(text_clean):
+            return False
+
+    # Filtro adicional: si la fila tiene >=3 números decimales, probablemente
+    # es una fila de medición zonal aunque tenga texto al principio (caso
+    # "VIVIENDA [A] 117,9 117,90"). Solo aceptar 0-2 decimales — descripciones
+    # típicas pueden mencionar dimensiones ("10cm", "50m2") pero no más.
+    decimal_count = len(re.findall(r"\d+[,.]\d+", text_clean))
+    if decimal_count >= 3:
+        return False
+
+    return True
+
+
+def _append_to_description(current: str, new_text: str) -> str:
+    """Concatena `new_text` a la descripción actual con normalización.
+
+    - Whitespace normalizado (sin dobles espacios).
+    - Skip si `new_text` ya es subcadena del current (evita duplicaciones
+      cuando el title se repite como primera línea).
+    """
+    new_clean = re.sub(r"\s+", " ", new_text.strip())
+    if not new_clean:
+        return current
+    if not current:
+        return new_clean
+    # Dedupe: si `new_clean` ya está en current, no añadir.
+    if new_clean.lower() in current.lower():
+        return current
+    combined = f"{current} {new_clean}"
+    return re.sub(r"\s+", " ", combined).strip()

@@ -329,6 +329,39 @@ function PdfLayoutTestResult({
                         </div>
                     )}
 
+                    {/* Sprint 4 Fase F — metadata del documento (título + address). */}
+                    {(result.documentTitle || result.documentAddress || result.mode) && (
+                        <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
+                            {result.documentTitle && (
+                                <div>
+                                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                                        Proyecto
+                                    </div>
+                                    <div className="text-sm font-semibold text-foreground">
+                                        {result.documentTitle}
+                                    </div>
+                                </div>
+                            )}
+                            {result.documentAddress && (
+                                <div>
+                                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                                        Ubicación
+                                    </div>
+                                    <div className="text-sm text-foreground">
+                                        {result.documentAddress}
+                                    </div>
+                                </div>
+                            )}
+                            {result.mode && (
+                                <div className="pt-1">
+                                    <Badge variant="outline" className="font-mono text-xs">
+                                        mode: {result.mode}
+                                    </Badge>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                         <Metric label={labels.metricPartidas} value={String(result.partidasCount)} />
                         <Metric

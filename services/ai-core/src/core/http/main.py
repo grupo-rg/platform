@@ -792,12 +792,16 @@ async def test_tabular_parser(file: UploadFile = File(...)) -> JSONResponse:
         content={
             "viable": bool(viable),
             "reason": result.reason,
+            "mode": getattr(result, "mode", None),
             "partidasCount": result.partidas_count,
             "qtyRate": float(result.qty_rate),
             "chapterRate": float(result.chapter_rate),
             "pagesTotal": int(result.pages_total),
             "pagesWithHeader": int(result.pages_with_header),
             "durationSeconds": float(result.duration_seconds),
+            # Sprint 4 Fase F — metadata del documento (título proyecto + address).
+            "documentTitle": getattr(result, "document_title", None),
+            "documentAddress": getattr(result, "document_address", None),
             "items": items_payload,
             "truncated": truncated,
             "pageMetrics": page_metrics_payload,

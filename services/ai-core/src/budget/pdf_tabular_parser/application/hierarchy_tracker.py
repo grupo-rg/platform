@@ -34,9 +34,13 @@ _RE_CAPITULO_EXPLICIT = re.compile(
 )
 
 # Estilo RdLL ANNEXED: XX Capítulo NOMBRE (número primero, palabra después).
-# Ejemplo real: "01 Capítulo DESBROCE", "02 Capítulo MOVIMIENTO DE TIERRAS".
+# También cubre estilo SANITAS: CXX Capítulo NOMBRE (prefijo C opcional).
+# Ejemplos reales:
+# - "01 Capítulo DESBROCE" (RdLL)
+# - "02 Capítulo MOVIMIENTO DE TIERRAS" (RdLL)
+# - "C01 Capítulo TRABAJOS PREVIOS, DERRIBOS Y EXTRACCIONES" (SANITAS)
 _RE_CAPITULO_RDLL_STYLE = re.compile(
-    r"^\s*(?P<code>\d{1,3})\s+(?:Cap[ií]tulo)\s+(?P<name>[A-ZÁÉÍÓÚÑ][^\n]{1,200})$",
+    r"^\s*(?P<code>C?\d{1,3})\s+(?:Cap[ií]tulo)\s+(?P<name>[A-ZÁÉÍÓÚÑ][^\n]{1,200})$",
     re.IGNORECASE,
 )
 

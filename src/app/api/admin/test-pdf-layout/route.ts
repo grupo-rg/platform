@@ -56,12 +56,17 @@ export interface TestPdfLayoutPageMetric {
 export interface TestPdfLayoutResponse {
     viable: boolean;
     reason: string | null;
+    /** Modo del parser: "INLINE" | "ANNEXED" | "MU02_INLINE" | null */
+    mode: string | null;
     partidasCount: number;
     qtyRate: number;
     chapterRate: number;
     pagesTotal: number;
     pagesWithHeader: number;
     durationSeconds: number;
+    /** Sprint 4 Fase F — metadata del documento extraída de la primera página. */
+    documentTitle: string | null;
+    documentAddress: string | null;
     items: TestPdfLayoutItem[];
     truncated: boolean;
     pageMetrics: TestPdfLayoutPageMetric[];

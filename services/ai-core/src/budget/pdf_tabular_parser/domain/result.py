@@ -69,6 +69,17 @@ class TabularExtractionResult:
     mode: Optional[str] = None
     # Métricas específicas MU02 (Fase E).
     mu02_pages_with_header: int = 0
+    # Sprint 4 Fase F — metadata del documento extraída de las primeras líneas
+    # de la página 1. Útil para el título del Budget downstream y para el operador
+    # que valida en la UI. Si no se pudo extraer, queda None.
+    # Ejemplos reales:
+    #   document_title="Roger de lluria_OBRA CIVIL" (RdLL)
+    #   document_title="REFORMA DE LOCAL DESTINADO A CLINICA DENTAL"
+    #     document_address="SITO EN C. BARÓ DE PINOPAR, 9 - 07012 PALMA DE MALLORCA"
+    #   document_title="MU02-"
+    #     document_address="Pol.11-Parc.213"
+    document_title: Optional[str] = None
+    document_address: Optional[str] = None
 
     @property
     def partidas_count(self) -> int:
