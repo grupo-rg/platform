@@ -133,8 +133,11 @@ function reducer(state: TimelineState, action: Action): TimelineState {
             const resolvedCount = action.sub.kind === 'resolved'
                 ? (phase.resolvedCount ?? 0) + 1
                 : phase.resolvedCount;
-            // mantener últimos 50 sub-eventos por fase
-            const subEvents = [...phase.subEvents, action.sub].slice(-50);
+            // El state mantiene la lista completa para que computeBudgetStats
+            // y el contador de la cabecera vean los 95+ eventos. El render del
+            // timeline ya hace su propio slice(-5) localmente con "… y N
+            // anteriores" para no pintar listas enormes.
+            const subEvents = [...phase.subEvents, action.sub];
             return {
                 ...state,
                 phases: {
