@@ -25,6 +25,8 @@ import {
     PanelLeftOpen,
     Users,
     CalendarDays,
+    Activity,
+    FileSearch,
 } from 'lucide-react';
 import Image from 'next/image';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -100,6 +102,8 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
             items: [
                 { href: '/dashboard/analytics', label: 'Analíticas', icon: BarChart3 },
                 { href: '/dashboard/admin/messages', label: 'Mensajes', icon: MessageSquare },
+                { href: '/dashboard/admin/jobs', label: 'Jobs IA', icon: Activity },
+                { href: '/dashboard/admin/pdf-layout-test', label: 'Lecturas PDF', icon: FileSearch },
             ]
         },
         {
@@ -184,21 +188,25 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                             className={cn(
                                 "relative flex items-center rounded-xl font-semibold transition-all duration-200 group/item overflow-hidden border",
                                 collapsed ? "justify-center px-0 py-2.5 mx-auto w-11 h-11" : "gap-3 px-3 py-3",
+                                // En light mode forzamos texto oscuro porque text-primary
+                                // (amarillo dorado del theme) tiene muy poco contraste con
+                                // el fondo claro del sidebar. En dark mode mantenemos
+                                // text-primary que sí contrasta bien sobre fondo oscuro.
                                 isActive
-                                    ? "text-primary bg-primary/15 border-primary/30 shadow-sm shadow-primary/10"
-                                    : "text-primary bg-primary/5 border-primary/10 hover:bg-primary/10 hover:border-primary/20"
+                                    ? "text-foreground dark:text-primary bg-primary/15 border-primary/30 shadow-sm shadow-primary/10"
+                                    : "text-foreground dark:text-primary bg-primary/5 border-primary/10 hover:bg-primary/10 hover:border-primary/20"
                             )}
                         >
                             <Icon className={cn(
                                 "shrink-0",
                                 collapsed ? "h-5 w-5" : "h-4 w-4",
-                                "text-primary"
+                                "text-amber-600 dark:text-primary"
                             )} />
                             {!collapsed && (
                                 <span className="truncate text-sm">{highlightItem.label}</span>
                             )}
                             {!collapsed && !isActive && (
-                                <span className="ml-auto text-[9px] font-bold tracking-wider uppercase bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                                <span className="ml-auto text-[9px] font-bold tracking-wider uppercase bg-amber-500/20 text-amber-700 dark:bg-primary/20 dark:text-primary px-1.5 py-0.5 rounded">
                                     IA
                                 </span>
                             )}
