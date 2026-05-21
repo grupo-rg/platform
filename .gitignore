@@ -102,6 +102,10 @@ analysis_debug.json
 debug_output.txt
 debug-*.js
 models_list.txt
+# Sprint 4 — outputs de scripts/analyze_budget.py (regenerables, contienen
+# descripciones técnicas + totales € reales de proyectos del cliente).
+/data/catalog_source/budget_*.json
+/data/catalog_source/budget_*.md
 
 # Directorios de Logs Operativos (Frontend y Backend)
 /logs/

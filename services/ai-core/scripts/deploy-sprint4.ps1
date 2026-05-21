@@ -18,7 +18,9 @@ param(
     [string]$JobName = "ai-core-worker"
 )
 
-$ErrorActionPreference = "Stop"
+# gcloud writes informational messages to stderr (e.g. "Your active configuration is: [...]").
+# Don't treat those as PowerShell errors — only check $LASTEXITCODE explicitly.
+$ErrorActionPreference = "Continue"
 
 # Sprint 4 env vars defaults
 $UseTabularParser = if ($NoTabular) { "false" } else { "true" }
@@ -43,19 +45,15 @@ Write-Host "==============================================================="
 Write-Host ""
 
 # Pre-flight: gcloud auth
-$currentProject = & gcloud config get-value project 2>$null
+# gcloud writes "Your active configuration is: [...]" to stderr — redirect to $null.
+$currentProject = (& gcloud config get-value project 2>$null | Out-String).Trim()
 if ([string]::IsNullOrWhiteSpace($currentProject)) {
-    Write-Host "[ERROR] gcloud no autenticado. Run 'gcloud auth login' first." -ForegroundColor Red
+    Write-Host "[ERROR] gcloud no autenticado o no devolvió project. Run 'gcloud auth login' first." -ForegroundColor Red
     exit 1
 }
 
 if ($currentProject -ne $ProjectId) {
-    Write-Host "[WARN] gcloud project actual es '$currentProject', no '$ProjectId'." -ForegroundColor Yellow
-    $confirm = Read-Host "Continuar igual? (yes/NO)"
-    if ($confirm -ne "yes") {
-        Write-Host "Aborted."
-        exit 1
-    }
+    Write-Host "[WARN] gcloud project actual es '$currentProject', no '$ProjectId'. Continuando con --project=$ProjectId explícito." -ForegroundColor Yellow
 }
 
 # Step 1: cloudbuild
