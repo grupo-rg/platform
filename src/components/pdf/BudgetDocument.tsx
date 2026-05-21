@@ -263,6 +263,13 @@ interface BudgetDocumentProps {
     selectedRenderIds?: string[];
     /** Datos de la empresa emisora. Fuente única para header, footer y branding del PDF. */
     company: CompanyConfig;
+    /**
+     * Sprint 4 — solicitud owner. Controla si el PDF muestra el desglose de
+     * componentes (materiales, mano de obra, %) bajo cada partida.
+     *   - true (default): vista técnica con descompuesto completo.
+     *   - false: vista comercial — solo la fila principal de la partida.
+     */
+    includeBreakdown?: boolean;
 }
 
 const Footer = ({ pageNumber, company }: { pageNumber: number; company: CompanyConfig }) => {
@@ -329,6 +336,7 @@ export const BudgetDocument = ({
     renders = [],
     selectedRenderIds,
     company,
+    includeBreakdown = true,
 }: BudgetDocumentProps) => {
     const selectedRenders = selectedRenderIds && selectedRenderIds.length > 0
         ? renders.filter((r: any) => selectedRenderIds.includes(r.id))
@@ -441,8 +449,10 @@ export const BudgetDocument = ({
                                         <Text style={styles.itemTotal}>{formatNumberES(bTotalAllIn, 2)}</Text>
                                     </View>
 
-                                    {/* Detailed Breakdown nested correctly */}
-                                    {activeBreakdown.length > 0 && (
+                                    {/* Detailed Breakdown nested correctly. Sprint 4: el
+                                        owner puede ocultarlo via prop `includeBreakdown` para
+                                        generar vista comercial sin componentes desglosados. */}
+                                    {includeBreakdown && activeBreakdown.length > 0 && (
                                         <View style={{ marginTop: 2 }}>
                                             {activeBreakdown.map((b: any, bIdx: number) => {
                                                 if (executionMode === 'execution' && (b.is_variable === true || b.is_variable === 'true' || b.isVariable === true)) return null;

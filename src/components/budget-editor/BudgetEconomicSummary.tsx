@@ -7,7 +7,7 @@ import { formatMoneyEUR } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { Settings2, Check, ArrowRight, FileDown, Loader2, Download, Save, Images, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings2, Check, ArrowRight, FileDown, Loader2, Download, Save, Images, Info, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { BudgetDocument } from '@/components/pdf/BudgetDocument';
@@ -135,6 +135,13 @@ export const BudgetEconomicSummary = ({
     const [selectedRenderIds, setSelectedRenderIds] = useState<string[]>(
         Array.isArray(initialPdfMeta?.selectedRenderIds) ? initialPdfMeta.selectedRenderIds : []
     );
+    // Sprint 4 — solicitud owner: toggle para incluir/ocultar el desglose de
+    // componentes (materiales, mano de obra, %) bajo cada partida en el PDF.
+    // Útil para alternar entre vista técnica (con descompuesto) y comercial
+    // (solo partidas). Default ON para mantener el comportamiento histórico.
+    const [includeBreakdown, setIncludeBreakdown] = useState<boolean>(
+        initialPdfMeta?.includeBreakdownInPdf ?? true
+    );
 
     const toggleRenderSelected = (id: string) => {
         setSelectedRenderIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -150,6 +157,7 @@ export const BudgetEconomicSummary = ({
                 ...pdfMeta,
                 includeRendersInPdf: includeRenders,
                 selectedRenderIds,
+                includeBreakdownInPdf: includeBreakdown,
             });
         } finally {
             setIsSavingMeta(false);
@@ -310,6 +318,7 @@ export const BudgetEconomicSummary = ({
                             budgetConfig={budgetConfig}
                             calibrationVersion={calibrationVersion}
                             bakedConfig={bakedConfig}
+                            includeBreakdown={includeBreakdown}
                         />
                     </div>
                 )}
@@ -357,6 +366,26 @@ export const BudgetEconomicSummary = ({
                                         placeholder="Se incluyen 12 meses de garantía..."
                                         className="w-full h-24 p-3 text-sm bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 resize-none"
                                     />
+                                </div>
+
+                                {/* Toggle "Incluir descompuestos" — alterna entre vista técnica
+                                    (con descompuesto de componentes) y comercial (solo partidas). */}
+                                <div className="rounded-md border border-slate-200 dark:border-zinc-800 p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-start gap-2">
+                                            <FileText className="w-4 h-4 text-slate-500 mt-0.5" />
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Incluir descompuestos</p>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                                    Muestra los componentes (materiales, mano de obra, etc.) bajo cada partida.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Switch
+                                            checked={includeBreakdown}
+                                            onCheckedChange={setIncludeBreakdown}
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* Anexo visual — antes/después opcional */}
@@ -458,6 +487,7 @@ export const BudgetEconomicSummary = ({
                                                 renders={renders}
                                                 selectedRenderIds={includeRenders ? selectedRenderIds : []}
                                                 company={companyForPdf}
+                                                includeBreakdown={includeBreakdown}
                                             />
                                         }
                                         fileName={`Presupuesto-${budgetNumber}.pdf`}

@@ -39,6 +39,8 @@ interface SendToClientButtonProps {
     calibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked';
     /** Phase 17.3 — snapshot config baked para soporte live-edit GG/BI en PDF. */
     bakedConfig?: { marginGG: number; marginBI: number; tax: number };
+    /** Sprint 4 — controla si el PDF muestra los componentes (descompuesto) bajo cada partida. */
+    includeBreakdown?: boolean;
     /** Callback opcional cuando el envío se confirma con éxito. */
     onSent?: () => void;
 }
@@ -59,6 +61,7 @@ export function SendToClientButton({
     budgetConfig,
     calibrationVersion,
     bakedConfig,
+    includeBreakdown = true,
     onSent,
 }: SendToClientButtonProps) {
     const [open, setOpen] = useState(false);
@@ -88,6 +91,7 @@ export function SendToClientButton({
                     budgetConfig={budgetConfig}
                     calibrationVersion={calibrationVersion}
                     bakedConfig={bakedConfig}
+                    includeBreakdown={includeBreakdown}
                 />
             ).toBlob();
 
