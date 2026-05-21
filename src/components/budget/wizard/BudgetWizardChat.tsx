@@ -414,6 +414,20 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                     leadId: effectiveId,
                     budgetId,
                     strategy,
+                    // Sprint 4 Fase J — feedback visual durante el upload (~5-30s
+                    // para PDFs grandes). Sin esto el chat queda "Analizando..."
+                    // sin movimiento y el usuario asume cuelgue y recarga.
+                    onUploadProgress: (fraction) => {
+                        const pct = Math.round(fraction * 100);
+                        setGenerationProgress(prev => ({
+                            ...prev,
+                            step: 'extracting',
+                            currentItem: pct < 100
+                                ? `Subiendo PDF al servidor… ${pct}%`
+                                : 'Analizando estructura del documento…',
+                            budgetId,
+                        } as any));
+                    },
                     onMetadataConfirm: isAdmin
                         ? (extracted) =>
                               new Promise((resolve) => {

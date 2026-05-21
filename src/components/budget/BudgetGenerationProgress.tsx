@@ -199,7 +199,7 @@ function useElapsedSince(startedAt: number, running: boolean): string {
 
 export function BudgetGenerationProgress({ progress, className, onComplete, budgetId, pipelineJobId, onSubEventsChange }: BudgetGenerationProgressProps) {
     const telemetryId = budgetId;
-    const { step, extractedItems, error } = progress;
+    const { step, extractedItems, error, currentItem } = progress;
 
     const [state, dispatch] = useReducer(reducer, undefined, initialState);
     const eventSourceRef = useRef<EventSource | null>(null);
@@ -394,6 +394,16 @@ export function BudgetGenerationProgress({ progress, className, onComplete, budg
                         transition={{ duration: 0.4, ease: 'easeOut' }}
                     />
                 </div>
+                {/* Sprint 4 Fase J — mensaje contextual (upload %, extract-metadata,
+                    etc.) visible mientras el SSE aún no ha empezado a emitir
+                    eventos. Sin esto el chat parece colgado durante los primeros
+                    5-30s y el usuario recarga perdiendo el proceso. Se oculta en
+                    cuanto el timeline tiene sub-eventos reales. */}
+                {running && currentItem && state.phases.extracting.subEvents.length === 0 && (
+                    <p className="text-[12px] text-slate-500 dark:text-white/50 mt-1.5 truncate">
+                        {currentItem}
+                    </p>
+                )}
             </div>
 
             {/* Sprint 4 Fase B — banner contextual del parser TABULAR
