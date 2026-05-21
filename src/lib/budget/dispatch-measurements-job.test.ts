@@ -1,15 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Mocks of the two collaborators. The "Big Bang" choice — both must hit
+// Mocks of the collaborators. The "Big Bang" choice — all must hit
 // for the orchestrator to succeed.
 const mockUpload = vi.fn();
 const mockDispatch = vi.fn();
+const mockExtractMetadata = vi.fn();
 
 vi.mock('@/lib/firebase/storage-uploader', () => ({
   uploadPdfForPipelineJob: (...args: any[]) => mockUpload(...args),
 }));
 vi.mock('@/actions/pipeline/dispatch-pipeline-job.action', () => ({
   dispatchPipelineJobAction: (...args: any[]) => mockDispatch(...args),
+}));
+vi.mock('@/actions/pipeline/extract-pdf-metadata.action', () => ({
+  extractPdfMetadataAction: (...args: any[]) => mockExtractMetadata(...args),
 }));
 
 import { dispatchMeasurementsJob } from './dispatch-measurements-job';
@@ -24,6 +28,7 @@ describe('dispatchMeasurementsJob', () => {
   beforeEach(() => {
     mockUpload.mockReset();
     mockDispatch.mockReset();
+    mockExtractMetadata.mockReset();
   });
 
   afterEach(() => {
@@ -155,5 +160,64 @@ describe('dispatchMeasurementsJob', () => {
       onUploadProgress: (p) => progress.push(p),
     });
     expect(progress).toEqual([0.5, 1]);
+  });
+
+  it('emits onPhaseChange transitions: uploading → extracting → awaiting_confirm → dispatching', async () => {
+    mockUpload.mockResolvedValue({ gcsUri: 'gs://b/u/x.pdf', bucket: 'b', fullPath: 'p' });
+    mockExtractMetadata.mockResolvedValue({
+      success: true,
+      metadata: { clientName: 'Cliente X', budgetTitle: 'Reforma Y', projectAddress: null, confidence: 0.9 },
+    });
+    mockDispatch.mockResolvedValue({
+      success: true,
+      jobId: 'j',
+      budgetId: 'b',
+      status: 'queued',
+    });
+
+    const phases: Array<{ phase: string; extra?: any }> = [];
+    await dispatchMeasurementsJob({
+      file: fakeFile(),
+      uid: 'u',
+      leadId: 'l',
+      strategy: 'INLINE',
+      onPhaseChange: (phase, extra) => phases.push({ phase, extra }),
+      onMetadataConfirm: async (extracted) => ({
+        clientName: extracted.clientName ?? undefined,
+        budgetTitle: extracted.budgetTitle ?? undefined,
+      }),
+    });
+
+    expect(phases.map(p => p.phase)).toEqual([
+      'uploading',
+      'extracting_metadata',
+      'awaiting_confirm',
+      'dispatching',
+    ]);
+    // awaiting_confirm carries the cached metadata so a reload could restore it.
+    expect(phases[2].extra?.extractedMetadata?.clientName).toBe('Cliente X');
+    expect(phases[2].extra?.extractedMetadata?.budgetTitle).toBe('Reforma Y');
+  });
+
+  it('skips extracting_metadata / awaiting_confirm when onMetadataConfirm is not provided', async () => {
+    mockUpload.mockResolvedValue({ gcsUri: 'gs://b/u/x.pdf', bucket: 'b', fullPath: 'p' });
+    mockDispatch.mockResolvedValue({
+      success: true,
+      jobId: 'j',
+      budgetId: 'b',
+      status: 'queued',
+    });
+
+    const phases: string[] = [];
+    await dispatchMeasurementsJob({
+      file: fakeFile(),
+      uid: 'u',
+      leadId: 'l',
+      strategy: 'INLINE',
+      onPhaseChange: (phase) => phases.push(phase),
+    });
+
+    expect(phases).toEqual(['uploading', 'dispatching']);
+    expect(mockExtractMetadata).not.toHaveBeenCalled();
   });
 });

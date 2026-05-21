@@ -26,6 +26,12 @@ import { uploadPdfForPipelineJob } from '@/lib/firebase/storage-uploader';
  * call site.
  */
 
+export type DispatchPhase =
+  | 'uploading'
+  | 'extracting_metadata'
+  | 'awaiting_confirm'
+  | 'dispatching';
+
 export interface DispatchMeasurementsJobInput {
   file: File;
   uid: string;
@@ -35,6 +41,22 @@ export interface DispatchMeasurementsJobInput {
   budgetId?: string;
   strategy: 'INLINE' | 'ANNEXED';
   onUploadProgress?: (fraction: number) => void;
+  /**
+   * Sprint 4 Fase J — emitted at every client-side transition so the caller
+   * can mirror progress to durable storage (localStorage / Firestore) and
+   * survive a reload mid-flow. Phases reflect what the helper is doing
+   * RIGHT NOW; once the function returns, the job is either `running`
+   * (success → worker dispatched) or terminated (failure / user cancel).
+   *
+   * `extra.extractedMetadata` is only present on `awaiting_confirm` so the
+   * caller can cache the LLM output and re-open the dialog on reload if it
+   * wants to (current wizard chooses to discard and ask the user to re-upload
+   * the PDF, which is simpler and avoids stale-state restore bugs).
+   */
+  onPhaseChange?: (
+    phase: DispatchPhase,
+    extra?: { extractedMetadata?: ExtractedBudgetMetadata },
+  ) => void;
   /**
    * Hook the wizard uses to insert a confirmation step between the upload and
    * the dispatch: after uploading the PDF the helper calls
@@ -76,6 +98,8 @@ export async function dispatchMeasurementsJob(
   // it generates its own, but the Storage upload path won't change.
   const jobId = uuidv4();
 
+  input.onPhaseChange?.('uploading');
+
   let gcsUri: string;
   try {
     const uploaded = await uploadPdfForPipelineJob({
@@ -95,10 +119,12 @@ export async function dispatchMeasurementsJob(
   let clientName: string | undefined;
   let budgetTitle: string | undefined;
   if (input.onMetadataConfirm) {
+    input.onPhaseChange?.('extracting_metadata');
     const extractRes = await extractPdfMetadataAction({ gcsUri });
     const extracted: ExtractedBudgetMetadata = extractRes.success
       ? extractRes.metadata
       : { clientName: null, budgetTitle: null, projectAddress: null, confidence: 0 };
+    input.onPhaseChange?.('awaiting_confirm', { extractedMetadata: extracted });
     const confirmed = await input.onMetadataConfirm(extracted);
     if (confirmed === null) {
       return { success: false, error: 'Cancelado por el usuario' };
@@ -107,6 +133,7 @@ export async function dispatchMeasurementsJob(
     budgetTitle = confirmed.budgetTitle?.trim() || undefined;
   }
 
+  input.onPhaseChange?.('dispatching');
   const dispatch = await dispatchPipelineJobAction({
     jobType: 'measurements',
     uid: input.uid,

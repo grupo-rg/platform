@@ -156,20 +156,59 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
     const ACTIVE_JOB_KEY = 'rg_active_pipeline_job';
     const ACTIVE_JOB_TTL_MS = 60 * 60 * 1000;
 
+    // Sprint 4 Fase J — phase tracking. `running` solo aplica cuando el dispatch
+    // HTTP confirmó OK y el worker está en Cloud Run procesando. El resto son
+    // fases del flujo cliente PRE-dispatch — si un reload cae en cualquiera de
+    // ellas, el job NUNCA arrancó en el backend y hay que avisar al usuario en
+    // lugar de reconectar a una colección de telemetry vacía.
+    type JobPhase = 'uploading' | 'extracting_metadata' | 'awaiting_confirm' | 'dispatching' | 'running';
+
     type ActiveJobInfo = {
         budgetId: string;
         jobId?: string;
         startedAt: number;
         leadId?: string;
+        phase: JobPhase;
+        fileName?: string;
+        extractedMetadata?: {
+            clientName?: string | null;
+            budgetTitle?: string | null;
+            projectAddress?: string | null;
+            confidence?: number;
+        };
     };
 
-    const persistActiveJob = React.useCallback((info: ActiveJobInfo) => {
+    const readActiveJob = React.useCallback((): ActiveJobInfo | null => {
         try {
-            localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(info));
+            const raw = localStorage.getItem(ACTIVE_JOB_KEY);
+            if (!raw) return null;
+            return JSON.parse(raw) as ActiveJobInfo;
+        } catch {
+            return null;
+        }
+    }, []);
+
+    // `persistActiveJob` ahora hace merge: pasas un parche y se combina con lo
+    // existente. Esto deja que cada paso del flujo solo refleje su propia
+    // transición sin tener que re-derivar el estado completo.
+    const persistActiveJob = React.useCallback((patch: Partial<ActiveJobInfo>) => {
+        try {
+            const prev = readActiveJob();
+            const next: ActiveJobInfo = {
+                budgetId: patch.budgetId ?? prev?.budgetId ?? '',
+                jobId: patch.jobId ?? prev?.jobId,
+                startedAt: patch.startedAt ?? prev?.startedAt ?? Date.now(),
+                leadId: patch.leadId ?? prev?.leadId,
+                phase: patch.phase ?? prev?.phase ?? 'uploading',
+                fileName: patch.fileName ?? prev?.fileName,
+                extractedMetadata: patch.extractedMetadata ?? prev?.extractedMetadata,
+            };
+            if (!next.budgetId) return; // sin budgetId no persistimos basura
+            localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(next));
         } catch {
             /* SSR / private browsing — ignore */
         }
-    }, []);
+    }, [readActiveJob]);
 
     const clearActiveJob = React.useCallback(() => {
         try {
@@ -179,23 +218,29 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         }
     }, []);
 
-    // Restore active job on mount. If a job is in localStorage and is fresh
-    // (TTL not expired), set generationProgress to a non-idle state so the
-    // SSE listener auto-reconnects and Firestore.onSnapshot replays all
-    // historical events from the start of the job.
+    // Restore active job on mount. La decisión depende de `phase`:
+    //   - `running` (dispatch OK, worker corriendo)        → reconectar SSE
+    //   - `awaiting_confirm` (dialog metadata sin confirmar) → avisar al usuario
+    //     con el filename, mostrar metadata cacheada y limpiar (el job nunca
+    //     llegó a arrancar; reabrir el dialog "auto" implicaría re-subir el PDF
+    //     y eso lo decide el usuario, no nosotros).
+    //   - resto de fases cliente (`uploading`, `extracting_metadata`,
+    //     `dispatching`) → mismo aviso + clear, porque el dispatch nunca salió.
     React.useEffect(() => {
-        try {
-            const raw = localStorage.getItem(ACTIVE_JOB_KEY);
-            if (!raw) return;
-            const info = JSON.parse(raw) as ActiveJobInfo;
-            if (
-                !info?.budgetId
-                || typeof info.startedAt !== 'number'
-                || Date.now() - info.startedAt > ACTIVE_JOB_TTL_MS
-            ) {
-                clearActiveJob();
-                return;
-            }
+        const info = readActiveJob();
+        if (!info) return;
+        if (
+            !info.budgetId
+            || typeof info.startedAt !== 'number'
+            || Date.now() - info.startedAt > ACTIVE_JOB_TTL_MS
+        ) {
+            clearActiveJob();
+            return;
+        }
+
+        const phase = info.phase ?? 'running'; // back-compat: docs sin phase eran post-dispatch
+
+        if (phase === 'running' && info.jobId) {
             // Reanudar: step='searching' es el más representativo del estado
             // medio del job (extracción usualmente termina <1 min). SSE
             // refinará con eventos reales como `extraction_started`,
@@ -204,10 +249,33 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                 step: 'searching',
                 budgetId: info.budgetId,
                 pipelineJobId: info.jobId,
-            });
-        } catch {
-            clearActiveJob();
+            } as any);
+            return;
         }
+
+        // Cualquier otra phase = el job NO arrancó. Avisar al usuario qué pasó
+        // con un mensaje del sistema y limpiar localStorage para no quedar en
+        // bucle. El usuario decide si vuelve a subir el PDF.
+        const fileTag = info.fileName ? ` (\`${info.fileName}\`)` : '';
+        const meta = info.extractedMetadata;
+        const metaTag = meta?.clientName || meta?.budgetTitle
+            ? `\n\nDatos detectados antes del corte: **${meta.clientName || ''}** · *${meta.budgetTitle || ''}*`
+            : '';
+        const reasonByPhase: Record<JobPhase, string> = {
+            uploading: 'mientras se subía el PDF',
+            extracting_metadata: 'mientras se analizaba la estructura del documento',
+            awaiting_confirm: 'esperando que confirmaras los datos del cliente',
+            dispatching: 'enviando la petición al motor de cálculo',
+            running: '', // no llega aquí
+        };
+        const reason = reasonByPhase[phase] || 'durante la subida';
+
+        addSystemMessage(
+            `Tu subida anterior se cortó ${reason}${fileTag}. ` +
+            `El presupuesto **no llegó a generarse**, así que tendrás que volver a subir el PDF cuando puedas.${metaTag}`,
+        );
+        clearActiveJob();
+        setGenerationProgress({ step: 'idle' });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -386,6 +454,19 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         // y no se pierdan los primeros eventos del servicio Python.
         const budgetId = uuidv4();
 
+        // Sprint 4 Fase J — persistir el job desde el primer momento, con phase
+        // tracking. Si el usuario recarga durante upload / extract-metadata /
+        // dialog / dispatch, el restore useEffect detecta la phase no-`running`
+        // y le avisa con un mensaje claro en lugar de quedar en un estado
+        // colgado escuchando una colección de telemetry vacía.
+        persistActiveJob({
+            budgetId,
+            leadId: leadId || undefined,
+            startedAt: Date.now(),
+            phase: 'uploading',
+            fileName: effectiveFile.name,
+        });
+
         setState('processing');
         setGenerationProgress({
             step: 'extracting',
@@ -428,6 +509,15 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                             budgetId,
                         } as any));
                     },
+                    // Sprint 4 Fase J — mirror cada transición a localStorage.
+                    onPhaseChange: (phase, extra) => {
+                        persistActiveJob({
+                            phase,
+                            ...(extra?.extractedMetadata && {
+                                extractedMetadata: extra.extractedMetadata,
+                            }),
+                        });
+                    },
                     onMetadataConfirm: isAdmin
                         ? (extracted) =>
                               new Promise((resolve) => {
@@ -455,6 +545,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         jobId: newRes.jobId,
                         leadId: effectiveId,
                         startedAt: Date.now(),
+                        phase: 'running',
                     });
                     return; // SSE telemetry takes over from here.
                 }
@@ -473,6 +564,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         budgetId: result.budgetId,
                         leadId: effectiveId,
                         startedAt: Date.now(),
+                        phase: 'running',
                     });
                     return;
                 }
@@ -794,6 +886,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         budgetId: pendingBudgetId,
                         leadId: leadId || undefined,
                         startedAt: Date.now(),
+                        phase: 'running',
                     });
                 }
                 return;
