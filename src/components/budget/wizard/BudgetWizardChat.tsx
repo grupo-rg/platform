@@ -143,6 +143,74 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         pipelineJobId?: string;
     }>({ step: 'idle' });
 
+    // Sprint 4 Fase I — persistencia del job activo en localStorage para que
+    // sobreviva reloads/navegación. Plan original 14-may pendiente:
+    // cuando el usuario sube un PDF al wizard, el job sigue corriendo en
+    // background. Sin persistencia, al recargar la página el cliente perdía
+    // el estado y el SSE se cerraba — el server seguía emitiendo eventos
+    // que nunca se procesaban (causa raíz del bug "52 partidas vs 148 en
+    // editor" donde el cliente sólo veía un subset del progreso).
+    //
+    // Key TTL conservador: 60 min (más que suficiente para RdLL 258pp que
+    // tardó 13m30s; protege contra jobs zombie que nunca completaron).
+    const ACTIVE_JOB_KEY = 'rg_active_pipeline_job';
+    const ACTIVE_JOB_TTL_MS = 60 * 60 * 1000;
+
+    type ActiveJobInfo = {
+        budgetId: string;
+        jobId?: string;
+        startedAt: number;
+        leadId?: string;
+    };
+
+    const persistActiveJob = React.useCallback((info: ActiveJobInfo) => {
+        try {
+            localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(info));
+        } catch {
+            /* SSR / private browsing — ignore */
+        }
+    }, []);
+
+    const clearActiveJob = React.useCallback(() => {
+        try {
+            localStorage.removeItem(ACTIVE_JOB_KEY);
+        } catch {
+            /* ignore */
+        }
+    }, []);
+
+    // Restore active job on mount. If a job is in localStorage and is fresh
+    // (TTL not expired), set generationProgress to a non-idle state so the
+    // SSE listener auto-reconnects and Firestore.onSnapshot replays all
+    // historical events from the start of the job.
+    React.useEffect(() => {
+        try {
+            const raw = localStorage.getItem(ACTIVE_JOB_KEY);
+            if (!raw) return;
+            const info = JSON.parse(raw) as ActiveJobInfo;
+            if (
+                !info?.budgetId
+                || typeof info.startedAt !== 'number'
+                || Date.now() - info.startedAt > ACTIVE_JOB_TTL_MS
+            ) {
+                clearActiveJob();
+                return;
+            }
+            // Reanudar: step='searching' es el más representativo del estado
+            // medio del job (extracción usualmente termina <1 min). SSE
+            // refinará con eventos reales como `extraction_started`,
+            // `subtasks_extracted`, `partida_resolved_v2`, `budget_completed`.
+            setGenerationProgress({
+                step: 'searching',
+                budgetId: info.budgetId,
+                pipelineJobId: info.jobId,
+            });
+        } catch {
+            clearActiveJob();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
 
 
     // Auto-resume generation after answering the Architect
@@ -367,6 +435,13 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         budgetId: newRes.budgetId,
                         pipelineJobId: newRes.jobId,
                     } as any));
+                    // Sprint 4 Fase I — persistir para sobrevivir reload.
+                    persistActiveJob({
+                        budgetId: newRes.budgetId,
+                        jobId: newRes.jobId,
+                        leadId: effectiveId,
+                        startedAt: Date.now(),
+                    });
                     return; // SSE telemetry takes over from here.
                 }
                 // Surface the failure exactly like the legacy path does.
@@ -379,6 +454,12 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             if (result.success && result.budgetId) {
                 if (result.isPending) {
                     // El panel ya está escuchando — los eventos del Python avanzan las fases solos.
+                    // Sprint 4 Fase I — persistir para sobrevivir reload.
+                    persistActiveJob({
+                        budgetId: result.budgetId,
+                        leadId: effectiveId,
+                        startedAt: Date.now(),
+                    });
                     return;
                 }
 
@@ -398,6 +479,8 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         } catch (error: any) {
             console.error("Fast Track PDF processing failed", error);
             setGenerationProgress({ step: 'error', error: error.message || "Error procesando el PDF." });
+            // Sprint 4 Fase I — limpiar persistencia en error.
+            clearActiveJob();
             setTimeout(() => setState('idle'), 3000);
         }
     };
@@ -690,7 +773,15 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                 // y la telemetría llegará por SSE. El panel `BudgetGenerationProgress`
                 // se encarga de cerrar las fases cuando reciba `budget_completed`, y
                 // su callback `onComplete` publicará el mensaje con el link.
-                // No hacemos nada más aquí.
+                // Sprint 4 Fase I — persistir para sobrevivir reload.
+                const pendingBudgetId = (result as any).budgetId || budgetId;
+                if (pendingBudgetId) {
+                    persistActiveJob({
+                        budgetId: pendingBudgetId,
+                        leadId: leadId || undefined,
+                        startedAt: Date.now(),
+                    });
+                }
                 return;
             } else if (result.success && result.budgetResult) {
                 // Flujo síncrono legado (generate-public-demo / generate-demo-budget).
@@ -740,9 +831,11 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                     step: 'error',
                     error: result.error || w.errors.generateError
                 });
+                clearActiveJob();
             }
         } catch (e) {
             console.error(e);
+            clearActiveJob();
             setGenerationProgress({
                 step: 'error',
                 error: w.errors.generateError
@@ -1034,6 +1127,8 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                         pipelineJobId={generationProgress.pipelineJobId}
                                         onSubEventsChange={setProgressSubEvents}
                                         onComplete={(budgetId) => {
+                                            // Sprint 4 Fase I — limpiar persistencia al completar.
+                                            clearActiveJob();
                                             const viewLink = isAdmin
                                                 ? `/dashboard/admin/budgets/${budgetId}/edit`
                                                 : isPublicMode
