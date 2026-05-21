@@ -20,6 +20,7 @@ Si después de procesar todo, qty_rate < 0.80 o chapter_rate < 0.80:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Callable, Dict, List, Optional
 
@@ -461,6 +462,47 @@ class TabularParser:
 
     # --- ANNEXED MODE METHODS (Fase D) ---
 
+    @staticmethod
+    def _build_full_annexed_description(title: str, desc_lines: List[str]) -> str:
+        """Construye la descripción completa de una partida ANNEXED.
+
+        Concatena el `title` de la cabecera con todas las líneas de continuación
+        acumuladas entre cabeceras consecutivas. Aplica:
+        - Filtro de identificadores cortos del aparejador (`SPC0010 zona`, etc.).
+        - Dedupe del title si aparece repetido como primera línea (caso RdLL).
+        - Normalización de whitespace.
+
+        Si no hay líneas válidas tras el filtro, retorna sólo el title.
+        """
+        if not desc_lines:
+            return title.strip()
+
+        # Filtra identificadores cortos tipo "SPC0010", "SPC0010 zona", "TC-1.3.1"
+        # que son metadata del aparejador, NO descripción técnica.
+        # Patrón: 2-4 letras + 3-6 dígitos + opcionalmente texto corto.
+        _METADATA_RE = re.compile(r"^[A-Z]{2,4}\d{3,6}(\s+\S{1,30})?$")
+        filtered: List[str] = []
+        for line in desc_lines:
+            line = line.strip()
+            if not line:
+                continue
+            if _METADATA_RE.match(line) and len(line) < 60:
+                continue
+            filtered.append(line)
+
+        if not filtered:
+            return title.strip()
+
+        joined = " ".join(filtered)
+        joined = re.sub(r"\s+", " ", joined).strip()
+
+        # Dedupe: si el bloque empieza con el title (caso RdLL repite el título),
+        # no prependearlo de nuevo. Comparación case-insensitive.
+        title_clean = title.strip()
+        if joined.upper().startswith(title_clean.upper()):
+            return joined
+        return f"{title_clean} {joined}".strip()
+
     def _parse_annexed(
         self,
         text_per_page: List[str],
@@ -501,7 +543,28 @@ class TabularParser:
         result.annexed_totals_found = len(totals)
 
         # 2. Recorrer la fase de descripciones (páginas 1..transition_page-1).
+        #
+        # Mantiene un buffer `current_desc_lines` con las líneas no-cabecera,
+        # no-jerarquía que aparecen DESPUÉS de cada cabecera de partida y que
+        # forman su descripción técnica. Cuando aparece otra cabecera, cambio
+        # de jerarquía o fin del PDF, se "cierra" la partida activa asignándole
+        # la descripción acumulada via `_build_full_annexed_description`.
         descriptions_end = max(1, transition_page - 1)
+        current_partida: Optional[TabularPartida] = None
+        current_title: str = ""
+        current_desc_lines: List[str] = []
+
+        def _flush_current_partida() -> None:
+            """Cierra la partida activa con la descripción acumulada."""
+            nonlocal current_partida, current_title, current_desc_lines
+            if current_partida is not None and current_desc_lines:
+                current_partida.description = TabularParser._build_full_annexed_description(
+                    current_title, current_desc_lines,
+                )
+            current_partida = None
+            current_title = ""
+            current_desc_lines = []
+
         for page_idx in range(0, descriptions_end):
             page_text = text_per_page[page_idx]
             if not page_text:
@@ -517,6 +580,7 @@ class TabularParser:
                 # Paso A: declaración jerárquica (capítulo/subcap/apartado).
                 h_detection = detect_hierarchy_in_line(line_clean)
                 if h_detection.level is not None:
+                    _flush_current_partida()
                     apply_detection_to_hierarchy(hierarchy, h_detection)
                     continue
 
@@ -526,10 +590,11 @@ class TabularParser:
                     if header.code in seen_codes:
                         continue  # dedupe
                     seen_codes.add(header.code)
+                    _flush_current_partida()
 
                     new_partida = TabularPartida(
                         code=header.code,
-                        description=header.title,
+                        description=header.title,  # placeholder; flush lo reemplazará
                         unit=header.unit,
                         quantity=None,
                         chapter=hierarchy.get_chapter_label(),
@@ -543,7 +608,16 @@ class TabularParser:
                         hierarchy_snapshot=hierarchy.snapshot(),
                     )
                     partidas.append(new_partida)
+                    current_partida = new_partida
+                    current_title = header.title
+                    current_desc_lines = []
                     partidas_in_page += 1
+                    continue
+
+                # Paso C: línea ordinaria → acumular como descripción de la
+                # partida activa (si la hay).
+                if current_partida is not None:
+                    current_desc_lines.append(line_clean)
 
             result.page_metrics.append(
                 PageMetrics(
@@ -554,6 +628,9 @@ class TabularParser:
                     qty_found=0,  # qty se asigna en el mapping post-loop
                 )
             )
+
+        # Fin del PDF: cerrar última partida activa.
+        _flush_current_partida()
 
         # 3. Mapeo de cada cabecera con su total.
         matched = 0
