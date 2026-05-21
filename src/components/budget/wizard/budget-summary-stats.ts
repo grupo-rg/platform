@@ -53,7 +53,13 @@ export function computeBudgetStats(subEvents: SubEvent[]): BudgetStats {
     const chapters = new Set<string>();
 
     for (const ev of subEvents) {
-        if (ev.kind === 'resolved') {
+        // Sprint 4 Fase J — kind='resolved' lo emiten tres tipos de eventos:
+        // - `item_resolved` (uno por partida) → SÍ contar.
+        // - `inline_fast_path_used` (1 por job, hito de fase) → NO contar.
+        // - `tabular_parser_completed` (1 por job, hito de fase) → NO contar.
+        // Distinguimos por sufijo del id (= `${uniqueKey}-${type}`).
+        const isPartida = ev.kind === 'resolved' && ev.id.endsWith('-item_resolved');
+        if (isPartida) {
             partidasCount++;
             pemTotal += _parsePrice(ev.detail);
             const m = (ev.title || '').trim().match(_CHAPTER_PREFIX_RE);
