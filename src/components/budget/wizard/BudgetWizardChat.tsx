@@ -176,6 +176,10 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         strategy?: 'INLINE' | 'ANNEXED';
         // uid del cliente: necesario para reanudar el dispatch desde restore.
         uid?: string;
+        // Sprint 4 Fase J — vincula el job a una conversación específica del
+        // wizard. Si el usuario navega entre conversaciones, solo mostramos el
+        // progress card en la conv que lanzó el job (no en todas globalmente).
+        conversationId?: string | null;
         extractedMetadata?: {
             clientName?: string | null;
             budgetTitle?: string | null;
@@ -210,6 +214,9 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                 gcsUri: patch.gcsUri ?? prev?.gcsUri,
                 strategy: patch.strategy ?? prev?.strategy,
                 uid: patch.uid ?? prev?.uid,
+                conversationId: patch.conversationId !== undefined
+                    ? patch.conversationId
+                    : prev?.conversationId,
                 extractedMetadata: patch.extractedMetadata ?? prev?.extractedMetadata,
             };
             if (!next.budgetId) return; // sin budgetId no persistimos basura
@@ -226,6 +233,11 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             /* ignore */
         }
     }, []);
+
+    // Trackea para qué budgetId ya mostramos un systemMessage (cortado o
+    // "Continuamos donde quedaste") para que el restore no spamee mensajes
+    // duplicados cuando el usuario navega entre conversaciones.
+    const restoreNotifiedForBudgetRef = React.useRef<string | null>(null);
 
     // Restore active job on mount. Decisión por phase:
     //
@@ -255,6 +267,18 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             return;
         }
 
+        // Sprint 4 Fase J — solo restauramos en la conversación que lanzó el
+        // job. El sync useEffect (más abajo) reaccionará cuando el usuario
+        // entre en la conv correcta. Aquí mostraríamos systemMessages /
+        // reabriríamos el dialog en la conv equivocada si no filtramos.
+        if (
+            info.conversationId !== undefined
+            && info.conversationId !== null
+            && info.conversationId !== conversationId
+        ) {
+            return;
+        }
+
         const phase = info.phase ?? 'running'; // back-compat: docs sin phase eran post-dispatch
 
         if (phase === 'running' || phase === 'dispatching') {
@@ -274,10 +298,14 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             && info.leadId
             && info.extractedMetadata
         ) {
-            const fileTag = info.fileName ? ` (\`${info.fileName}\`)` : '';
-            addSystemMessage(
-                `Continuamos donde quedaste${fileTag}. Confirma los datos del cliente y el título para reanudar el cálculo del presupuesto.`,
-            );
+            const alreadyNotified = restoreNotifiedForBudgetRef.current === info.budgetId;
+            if (!alreadyNotified) {
+                restoreNotifiedForBudgetRef.current = info.budgetId;
+                const fileTag = info.fileName ? ` (\`${info.fileName}\`)` : '';
+                addSystemMessage(
+                    `Continuamos donde quedaste${fileTag}. Confirma los datos del cliente y el título para reanudar el cálculo del presupuesto.`,
+                );
+            }
             setPdfMetadataPromptInitial({
                 clientName: info.extractedMetadata.clientName || '',
                 budgetTitle: info.extractedMetadata.budgetTitle || '',
@@ -374,14 +402,41 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         };
         const reason = reasonByPhase[phase] || 'durante la subida';
 
-        addSystemMessage(
-            `Tu subida anterior se cortó ${reason}${fileTag}. ` +
-            `El presupuesto **no llegó a generarse**, así que tendrás que volver a subir el PDF cuando puedas.${metaTag}`,
-        );
+        if (restoreNotifiedForBudgetRef.current !== info.budgetId) {
+            restoreNotifiedForBudgetRef.current = info.budgetId;
+            addSystemMessage(
+                `Tu subida anterior se cortó ${reason}${fileTag}. ` +
+                `El presupuesto **no llegó a generarse**, así que tendrás que volver a subir el PDF cuando puedas.${metaTag}`,
+            );
+        }
         clearActiveJob();
         setGenerationProgress({ step: 'idle' });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [conversationId]);
+
+    // Sprint 4 Fase J — sync inverso: cuando el usuario navega a una conversación
+    // distinta de la que lanzó el job activo, ocultamos el progress card. Sin
+    // esto el BudgetGenerationProgress quedaba visible en TODAS las conversaciones
+    // por culpa de que generationProgress es state global del componente.
+    React.useEffect(() => {
+        const info = readActiveJob();
+        if (!info) return;
+        if (
+            info.conversationId !== undefined
+            && info.conversationId !== null
+            && info.conversationId !== conversationId
+        ) {
+            // Job pertenece a OTRA conv — ocultar progress aquí sin tocar
+            // localStorage (sigue activo para la conv dueña).
+            setGenerationProgress(prev => {
+                if (!prev || prev.step === 'idle' || prev.step === 'complete' || prev.step === 'error') {
+                    return prev;
+                }
+                return { step: 'idle' };
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversationId]);
 
 
 
@@ -571,6 +626,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             fileName: effectiveFile.name,
             uid: user?.uid,
             strategy,
+            conversationId: conversationId || null,
         });
 
         setState('processing');
@@ -657,6 +713,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         leadId: effectiveId,
                         startedAt: Date.now(),
                         phase: 'running',
+                        conversationId: conversationId || null,
                     });
                     return; // SSE telemetry takes over from here.
                 }
@@ -676,6 +733,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         leadId: effectiveId,
                         startedAt: Date.now(),
                         phase: 'running',
+                        conversationId: conversationId || null,
                     });
                     return;
                 }
@@ -998,6 +1056,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         leadId: leadId || undefined,
                         startedAt: Date.now(),
                         phase: 'running',
+                        conversationId: conversationId || null,
                     });
                 }
                 return;
