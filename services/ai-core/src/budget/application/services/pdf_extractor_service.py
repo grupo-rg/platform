@@ -882,6 +882,15 @@ class InlinePdfExtractorService(IPdfExtractorService):
                         f"chapter_rate={_tabular_result.chapter_rate:.0%}, "
                         f"duration={_tabular_result.duration_seconds:.2f}s)."
                     )
+                    # Sprint 4 Fase F → Fase H — propagar metadata del documento
+                    # (title + address extraídos de las primeras líneas del PDF)
+                    # via `metrics` para que el use case downstream pueda usar
+                    # `document_title` como fallback del Budget.title cuando el
+                    # wizard no provea uno explícito.
+                    if _tabular_result.document_title:
+                        metrics["document_title"] = _tabular_result.document_title
+                    if _tabular_result.document_address:
+                        metrics["document_address"] = _tabular_result.document_address
                     self._emit(budget_id, 'inline_fast_path_used', {
                         "partidas_count": len(_items),
                         "method": "tabular_parser_coord_based",
@@ -893,6 +902,8 @@ class InlinePdfExtractorService(IPdfExtractorService):
                         "qtyRate": _tabular_result.qty_rate,
                         "chapterRate": _tabular_result.chapter_rate,
                         "durationSeconds": _tabular_result.duration_seconds,
+                        "documentTitle": _tabular_result.document_title,
+                        "documentAddress": _tabular_result.document_address,
                     })
                     self._emit(budget_id, 'subtasks_extracted', {
                         "count": len(_items),

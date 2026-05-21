@@ -156,11 +156,23 @@ class RestructureBudgetUseCase:
             )
         )
         
+        # Sprint 4 Fase H — fallback de Budget.title:
+        # Si el wizard no provee `budget_title` explícito, usar el
+        # `document_title` que el parser TABULAR extrajo de las primeras
+        # líneas del PDF (ej. "Roger de lluria_OBRA CIVIL", "MU02-",
+        # "REFORMA DE LOCAL DESTINADO A CLINICA DENTAL"). Esto evita que
+        # Budget.title quede None y la UI muestre solo "Cliente Generico".
+        final_budget_title = budget_title
+        if not final_budget_title:
+            doc_title = (metrics or {}).get("document_title")
+            if doc_title and isinstance(doc_title, str) and doc_title.strip():
+                final_budget_title = doc_title.strip()
+
         budget = Budget(
             id=temp_budget.id,
             leadId=lead_id,
             clientSnapshot=PersonalInfo(name=client_name) if client_name else PersonalInfo(),
-            title=budget_title,
+            title=final_budget_title,
             status="draft",
             createdAt=datetime.utcnow(),
             updatedAt=datetime.utcnow(),
