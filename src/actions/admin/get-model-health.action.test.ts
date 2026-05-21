@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from 'vitest';
 
-import { chapterFromCode } from './get-model-health.action';
+import { chapterFromCode } from './_model-health-helpers';
 
 describe('chapterFromCode', () => {
     it('extracts chapter from COAATMCA-style code with dot', () => {
