@@ -44,18 +44,20 @@ export interface DispatchMeasurementsJobInput {
   /**
    * Sprint 4 Fase J — emitted at every client-side transition so the caller
    * can mirror progress to durable storage (localStorage / Firestore) and
-   * survive a reload mid-flow. Phases reflect what the helper is doing
-   * RIGHT NOW; once the function returns, the job is either `running`
-   * (success → worker dispatched) or terminated (failure / user cancel).
+   * survive a reload mid-flow.
    *
-   * `extra.extractedMetadata` is only present on `awaiting_confirm` so the
-   * caller can cache the LLM output and re-open the dialog on reload if it
-   * wants to (current wizard chooses to discard and ask the user to re-upload
-   * the PDF, which is simpler and avoids stale-state restore bugs).
+   * `extra.gcsUri` aparece a partir de `extracting_metadata` (upload listo).
+   * `extra.extractedMetadata` aparece en `awaiting_confirm`. Con ambos
+   *  cacheados, el caller puede reabrir el dialog tras un reload y reanudar
+   *  el flow sin re-subir el PDF (el GCS object sobrevive 7 días por lifecycle).
    */
   onPhaseChange?: (
     phase: DispatchPhase,
-    extra?: { extractedMetadata?: ExtractedBudgetMetadata },
+    extra?: {
+      extractedMetadata?: ExtractedBudgetMetadata;
+      gcsUri?: string;
+      strategy?: 'INLINE' | 'ANNEXED';
+    },
   ) => void;
   /**
    * Hook the wizard uses to insert a confirmation step between the upload and
@@ -119,12 +121,16 @@ export async function dispatchMeasurementsJob(
   let clientName: string | undefined;
   let budgetTitle: string | undefined;
   if (input.onMetadataConfirm) {
-    input.onPhaseChange?.('extracting_metadata');
+    input.onPhaseChange?.('extracting_metadata', { gcsUri, strategy: input.strategy });
     const extractRes = await extractPdfMetadataAction({ gcsUri });
     const extracted: ExtractedBudgetMetadata = extractRes.success
       ? extractRes.metadata
       : { clientName: null, budgetTitle: null, projectAddress: null, confidence: 0 };
-    input.onPhaseChange?.('awaiting_confirm', { extractedMetadata: extracted });
+    input.onPhaseChange?.('awaiting_confirm', {
+      extractedMetadata: extracted,
+      gcsUri,
+      strategy: input.strategy,
+    });
     const confirmed = await input.onMetadataConfirm(extracted);
     if (confirmed === null) {
       return { success: false, error: 'Cancelado por el usuario' };

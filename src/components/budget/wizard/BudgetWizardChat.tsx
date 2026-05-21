@@ -170,6 +170,12 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         leadId?: string;
         phase: JobPhase;
         fileName?: string;
+        // gcsUri y strategy permiten reanudar el dispatch desde
+        // `awaiting_confirm` sin re-subir el PDF: el GCS object sobrevive 7d.
+        gcsUri?: string;
+        strategy?: 'INLINE' | 'ANNEXED';
+        // uid del cliente: necesario para reanudar el dispatch desde restore.
+        uid?: string;
         extractedMetadata?: {
             clientName?: string | null;
             budgetTitle?: string | null;
@@ -201,6 +207,9 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                 leadId: patch.leadId ?? prev?.leadId,
                 phase: patch.phase ?? prev?.phase ?? 'uploading',
                 fileName: patch.fileName ?? prev?.fileName,
+                gcsUri: patch.gcsUri ?? prev?.gcsUri,
+                strategy: patch.strategy ?? prev?.strategy,
+                uid: patch.uid ?? prev?.uid,
                 extractedMetadata: patch.extractedMetadata ?? prev?.extractedMetadata,
             };
             if (!next.budgetId) return; // sin budgetId no persistimos basura
@@ -218,14 +227,22 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         }
     }, []);
 
-    // Restore active job on mount. La decisión depende de `phase`:
-    //   - `running` (dispatch OK, worker corriendo)        → reconectar SSE
-    //   - `awaiting_confirm` (dialog metadata sin confirmar) → avisar al usuario
-    //     con el filename, mostrar metadata cacheada y limpiar (el job nunca
-    //     llegó a arrancar; reabrir el dialog "auto" implicaría re-subir el PDF
-    //     y eso lo decide el usuario, no nosotros).
-    //   - resto de fases cliente (`uploading`, `extracting_metadata`,
-    //     `dispatching`) → mismo aviso + clear, porque el dispatch nunca salió.
+    // Restore active job on mount. Decisión por phase:
+    //
+    //   running / dispatching →  Reconectar SSE. El worker está corriendo (o el
+    //     dispatch HTTP ya llegó al backend y muy probable que arrancó). SSE
+    //     refinará con eventos reales — si el job no arrancó, los eventos no
+    //     llegan y el TTL 60min limpia eventualmente.
+    //
+    //   awaiting_confirm con gcsUri + uid + leadId →  Reanudar SIN re-subir el
+    //     PDF. El upload + extract YA están hechos; solo falta confirmar el
+    //     dialog y disparar el dispatch HTTP. Re-abrimos el dialog con metadata
+    //     cacheada y configuramos un resolver custom que invoca el dispatch
+    //     directamente (saltando dispatchMeasurementsJob que requeriría File).
+    //
+    //   uploading / extracting_metadata / awaiting_confirm sin gcsUri →
+    //     El upload no llegó a completarse (o info legacy de pre-fix). El PDF
+    //     no está accesible. Avisamos y pedimos re-subir.
     React.useEffect(() => {
         const info = readActiveJob();
         if (!info) return;
@@ -240,11 +257,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
 
         const phase = info.phase ?? 'running'; // back-compat: docs sin phase eran post-dispatch
 
-        if (phase === 'running' && info.jobId) {
-            // Reanudar: step='searching' es el más representativo del estado
-            // medio del job (extracción usualmente termina <1 min). SSE
-            // refinará con eventos reales como `extraction_started`,
-            // `subtasks_extracted`, `partida_resolved_v2`, `budget_completed`.
+        if (phase === 'running' || phase === 'dispatching') {
             setGenerationProgress({
                 step: 'searching',
                 budgetId: info.budgetId,
@@ -253,9 +266,100 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             return;
         }
 
-        // Cualquier otra phase = el job NO arrancó. Avisar al usuario qué pasó
-        // con un mensaje del sistema y limpiar localStorage para no quedar en
-        // bucle. El usuario decide si vuelve a subir el PDF.
+        // awaiting_confirm con todo lo necesario para reanudar el dispatch.
+        if (
+            phase === 'awaiting_confirm'
+            && info.gcsUri
+            && info.uid
+            && info.leadId
+            && info.extractedMetadata
+        ) {
+            const fileTag = info.fileName ? ` (\`${info.fileName}\`)` : '';
+            addSystemMessage(
+                `Continuamos donde quedaste${fileTag}. Confirma los datos del cliente y el título para reanudar el cálculo del presupuesto.`,
+            );
+            setPdfMetadataPromptInitial({
+                clientName: info.extractedMetadata.clientName || '',
+                budgetTitle: info.extractedMetadata.budgetTitle || '',
+                confidence: info.extractedMetadata.confidence || 0,
+            });
+            setState('processing');
+            setGenerationProgress({
+                step: 'extracting',
+                budgetId: info.budgetId,
+                currentItem: 'Esperando confirmación de datos…',
+            } as any);
+            // Resolver custom: cuando el usuario confirme el dialog, hacemos
+            // dispatch HTTP DIRECTO con el gcsUri cacheado en lugar de pasar
+            // por dispatchMeasurementsJob (que esperaría un File).
+            pdfMetadataResolverRef.current = (result) => {
+                if (result === null) {
+                    // Cancelado — el upload se queda huérfano en GCS (lifecycle
+                    // lo elimina en 7d). Limpiamos localStorage y avisamos.
+                    clearActiveJob();
+                    setGenerationProgress({ step: 'idle' });
+                    setState('idle');
+                    addSystemMessage('Has cancelado la reanudación. Vuelve a subir el PDF cuando quieras retomarlo.');
+                    return;
+                }
+                const clientName = result.clientName?.trim() || undefined;
+                const budgetTitle = result.budgetTitle?.trim() || undefined;
+                persistActiveJob({ phase: 'dispatching' });
+                setGenerationProgress({
+                    step: 'extracting',
+                    budgetId: info.budgetId,
+                    currentItem: 'Reanudando envío al motor de cálculo…',
+                } as any);
+                // Fire-and-forget; el dialog ya se cerró y el state queda activo
+                // hasta que SSE empiece a recibir eventos.
+                (async () => {
+                    try {
+                        const { dispatchPipelineJobAction } = await import(
+                            '@/actions/pipeline/dispatch-pipeline-job.action'
+                        );
+                        const res = await dispatchPipelineJobAction({
+                            jobType: 'measurements',
+                            uid: info.uid!,
+                            leadId: info.leadId!,
+                            budgetId: info.budgetId,
+                            payload: {
+                                gcsUri: info.gcsUri!,
+                                strategy: info.strategy || 'INLINE',
+                                clientName,
+                                budgetTitle,
+                            },
+                        });
+                        if (res.success) {
+                            persistActiveJob({
+                                phase: 'running',
+                                jobId: res.jobId,
+                            });
+                            setGenerationProgress({
+                                step: 'searching',
+                                budgetId: info.budgetId,
+                                pipelineJobId: res.jobId,
+                            } as any);
+                        } else {
+                            throw new Error(res.error);
+                        }
+                    } catch (err: any) {
+                        clearActiveJob();
+                        setGenerationProgress({
+                            step: 'error',
+                            error: err?.message || 'Error reanudando el dispatch',
+                        });
+                        addSystemMessage(
+                            `No se pudo reanudar el envío: ${err?.message || 'error desconocido'}. Vuelve a subir el PDF.`,
+                        );
+                    }
+                })();
+            };
+            setPdfMetadataPromptOpen(true);
+            return;
+        }
+
+        // uploading / extracting_metadata / awaiting_confirm sin gcsUri:
+        // no podemos reanudar — el PDF no está accesible.
         const fileTag = info.fileName ? ` (\`${info.fileName}\`)` : '';
         const meta = info.extractedMetadata;
         const metaTag = meta?.clientName || meta?.budgetTitle
@@ -265,8 +369,8 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             uploading: 'mientras se subía el PDF',
             extracting_metadata: 'mientras se analizaba la estructura del documento',
             awaiting_confirm: 'esperando que confirmaras los datos del cliente',
-            dispatching: 'enviando la petición al motor de cálculo',
-            running: '', // no llega aquí
+            dispatching: '', // no llega aquí
+            running: '',     // no llega aquí
         };
         const reason = reasonByPhase[phase] || 'durante la subida';
 
@@ -465,6 +569,8 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             startedAt: Date.now(),
             phase: 'uploading',
             fileName: effectiveFile.name,
+            uid: user?.uid,
+            strategy,
         });
 
         setState('processing');
@@ -510,9 +616,14 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         } as any));
                     },
                     // Sprint 4 Fase J — mirror cada transición a localStorage.
+                    // Persistimos gcsUri + strategy + uid para poder reanudar
+                    // el dispatch desde `awaiting_confirm` sin re-subir el PDF.
                     onPhaseChange: (phase, extra) => {
                         persistActiveJob({
                             phase,
+                            uid: user?.uid,
+                            ...(extra?.gcsUri && { gcsUri: extra.gcsUri }),
+                            ...(extra?.strategy && { strategy: extra.strategy }),
                             ...(extra?.extractedMetadata && {
                                 extractedMetadata: extra.extractedMetadata,
                             }),
