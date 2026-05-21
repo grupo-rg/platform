@@ -22,13 +22,11 @@
  * Si NINGÚN evento `inline_fast_path_used` aparece para un budget, asumimos
  * que cayó al path LLM Vision (no hay fast path → flujo pre-Sprint 4).
  *
- * Auth: admin only. Cachea 5 minutos en memoria (Next).
+ * Auth: admin only.
  */
 
 import { verifyAuth } from '@/backend/auth/auth.middleware';
 import { adminFirestore } from '@/backend/shared/infrastructure/firebase/admin-app';
-
-export const revalidate = 300;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // Cap defensivo: nunca leemos más de N budgets de pipeline_telemetry para
