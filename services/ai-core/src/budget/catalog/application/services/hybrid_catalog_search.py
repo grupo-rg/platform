@@ -258,6 +258,58 @@ class HybridCatalogSearch:
         if not self.catalog_items:
             return []
 
+        # Sprint 4 Fase G — best-effort chapter_filter:
+        #
+        # Las taxonomías de capítulos del PDF cliente (`"1 ACTUACIONES PREVIAS"`,
+        # `"C01 TRABAJOS PREVIOS"`, `"21 PATOLOGÍAS GRAVES"`) y del catálogo
+        # COAATMCA (`"DEMOLICIONES"`, `"HORMIGONES"`, `"FORJADOS"`) son
+        # sistemáticamente distintas — cliente organiza por orden de obra,
+        # catálogo por familia técnica.
+        #
+        # Pre-Sprint 4 no afloró: el LLM Vision NO extraía capítulos (todos
+        # `"Sin Capítulo"` → filter=None → search funcionaba sobre todo el
+        # catálogo). Sprint 4 extrae chapter_rate=100% → activamos filter →
+        # 0 docs match → cae a `from_scratch` masivamente.
+        #
+        # Best-effort: primero con chapter_filter (precisión si las taxonomías
+        # coinciden — futuro-proof). Si vacío, retry SIN filter (cobertura
+        # cuando no coinciden).
+        results = await self._do_search(
+            query=query,
+            query_vector=query_vector,
+            top_k=top_k,
+            chapter_filter=chapter_filter,
+            unit_dimension_filter=unit_dimension_filter,
+        )
+        if not results and chapter_filter:
+            logger.info(
+                "[HybridCatalogSearch] búsqueda vacía con chapter_filter=%r — "
+                "retry sin filter (best-effort por mismatch taxonomía).",
+                chapter_filter,
+            )
+            results = await self._do_search(
+                query=query,
+                query_vector=query_vector,
+                top_k=top_k,
+                chapter_filter=None,
+                unit_dimension_filter=unit_dimension_filter,
+            )
+        return results
+
+    async def _do_search(
+        self,
+        *,
+        query: str,
+        query_vector: List[float],
+        top_k: int,
+        chapter_filter: Optional[str],
+        unit_dimension_filter: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """Una iteración de búsqueda híbrida BM25 + Vector + RRF.
+
+        Separado de `search()` para permitir el retry best-effort sin
+        duplicar lógica.
+        """
         query_tokens = tokenize_es(query)
 
         # 1. BM25 candidates (no I/O, syncrono).
@@ -279,7 +331,7 @@ class HybridCatalogSearch:
 
         logger.debug(
             f"[HybridCatalogSearch] q={query[:60]!r} bm25={len(bm25_codes)} "
-            f"vec={len(vector_codes)}"
+            f"vec={len(vector_codes)} chap_filter={chapter_filter!r}"
         )
 
         # 3. RRF — fusiona ambos rankings en uno.

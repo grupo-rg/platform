@@ -332,3 +332,135 @@ async def test_search_zero_catalog_is_safe():
         top_k=5,
     )
     assert results == []
+
+
+# --- Sprint 4 Fase G — best-effort chapter_filter fallback ------------------
+
+class _ChapterAwareFakeVectorSearch(IVectorSearch):
+    """Vector search que SÍ respeta el chapter_filter — para validar el
+    fallback retry sin filter cuando la taxonomía cliente no matchea el
+    catálogo."""
+
+    def __init__(self, ranked_codes: List[str], all_items: List[PriceBookItemEntry]):
+        self._ranked_codes = ranked_codes
+        self._by_code = {it.code: it for it in all_items}
+        self.call_log: List[Dict[str, Any]] = []  # registro de llamadas
+
+    def search_similar_items(
+        self,
+        query_vector,
+        query_text="",
+        limit=3,
+        score_threshold=0.5,
+        chapter_filters=None,
+        partida_unit_dimension=None,
+    ):
+        self.call_log.append({
+            "chapter_filters": chapter_filters,
+            "limit": limit,
+        })
+        # Filtra por chapter_filters si se pasa.
+        codes_for_chapter: List[str] = []
+        for code in self._ranked_codes:
+            it = self._by_code.get(code)
+            if not it:
+                continue
+            if chapter_filters and it.chapter not in chapter_filters:
+                continue
+            codes_for_chapter.append(code)
+            if len(codes_for_chapter) >= limit:
+                break
+
+        out: List[Dict[str, Any]] = []
+        for rank, code in enumerate(codes_for_chapter):
+            it = self._by_code[code]
+            out.append({
+                "id": it.code,
+                "code": it.code,
+                "description": it.description,
+                "unit": it.unit_raw,
+                "unit_normalized": it.unit_normalized,
+                "unit_dimension": it.unit_dimension,
+                "chapter": it.chapter,
+                "priceTotal": it.priceTotal,
+                "matchScore": 1.0 - rank * 0.1,
+            })
+        return out
+
+
+@pytest.mark.asyncio
+async def test_vector_search_fallback_when_chapter_filter_mismatches(synthetic_catalog):
+    """Sprint 4 Fase G — bug del chapter mismatch.
+
+    Cliente pasa `chapter_filter="1 ACTUACIONES PREVIAS"` (taxonomía cliente).
+    Catálogo COAATMCA tiene chapters `"01 DEMOLICIONES"`, `"02 FABRICAS Y TABIQUES"`,
+    `"03 HORMIGONES"` (taxonomía catálogo). 0 overlap → vector_search devuelve
+    vacío → caería a `from_scratch`.
+
+    Con el fallback best-effort, debe reintentarse SIN chapter_filter y
+    devolver los candidates relevantes del catálogo completo.
+    """
+    fake_vec = _ChapterAwareFakeVectorSearch(
+        ranked_codes=["GOLDEN_KW", "D000", "D001"],
+        all_items=synthetic_catalog,
+    )
+    svc = HybridCatalogSearch(synthetic_catalog, fake_vec, rrf_k=60)
+
+    # Cliente: chapter del PDF NO existe en el catálogo.
+    results = await svc.search(
+        query="solera hormigón fratasada",
+        query_vector=[0.0] * 768,
+        top_k=5,
+        chapter_filter="1 ACTUACIONES PREVIAS",  # taxonomía cliente, no existe en catálogo
+    )
+
+    # ASSERT 1: el adapter fue llamado 2 veces — primero CON filter, después SIN.
+    assert len(fake_vec.call_log) == 2, (
+        f"Esperaba 2 llamadas (retry), got {len(fake_vec.call_log)}: {fake_vec.call_log}"
+    )
+    assert fake_vec.call_log[0]["chapter_filters"] == ["1 ACTUACIONES PREVIAS"]
+    assert fake_vec.call_log[1]["chapter_filters"] is None  # fallback
+
+    # ASSERT 2: el resultado NO es vacío (vienen del retry).
+    assert len(results) > 0, "Esperaba candidates del fallback sin filter"
+
+
+@pytest.mark.asyncio
+async def test_vector_search_no_retry_when_chapter_filter_matches(synthetic_catalog):
+    """Si chapter_filter coincide con catálogo y devuelve resultados, NO debe
+    haber retry."""
+    fake_vec = _ChapterAwareFakeVectorSearch(
+        ranked_codes=["GOLDEN_KW"],  # GOLDEN_KW está en chapter "03 HORMIGONES"
+        all_items=synthetic_catalog,
+    )
+    svc = HybridCatalogSearch(synthetic_catalog, fake_vec, rrf_k=60)
+    results = await svc.search(
+        query="solera hormigón",
+        query_vector=[0.0] * 768,
+        top_k=5,
+        chapter_filter="03 HORMIGONES",  # coincide
+    )
+    # Solo 1 llamada — sin fallback.
+    assert len(fake_vec.call_log) == 1, (
+        f"Esperaba 1 llamada (sin retry), got {len(fake_vec.call_log)}"
+    )
+    assert fake_vec.call_log[0]["chapter_filters"] == ["03 HORMIGONES"]
+    assert len(results) > 0
+
+
+@pytest.mark.asyncio
+async def test_vector_search_no_retry_when_no_chapter_filter(synthetic_catalog):
+    """Si caller NO pasa chapter_filter, NO debe haber retry (no aplica)."""
+    fake_vec = _ChapterAwareFakeVectorSearch(
+        ranked_codes=["GOLDEN_KW"],
+        all_items=synthetic_catalog,
+    )
+    svc = HybridCatalogSearch(synthetic_catalog, fake_vec, rrf_k=60)
+    await svc.search(
+        query="solera",
+        query_vector=[0.0] * 768,
+        top_k=5,
+        chapter_filter=None,
+    )
+    assert len(fake_vec.call_log) == 1
+    assert fake_vec.call_log[0]["chapter_filters"] is None
