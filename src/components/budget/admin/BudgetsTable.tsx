@@ -287,6 +287,14 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
                                                 <span className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
                                                     {budget.clientSnapshot?.name || (budget as any).clientData?.name || 'Cliente sin nombre'}
                                                 </span>
+                                                {/* Sprint 4 Fase H — mostrar título del proyecto extraído del PDF
+                                                    (Budget.title) además del email del cliente. Diferencia
+                                                    visualmente los budgets en el listado. */}
+                                                {budget.title ? (
+                                                    <span className="text-xs text-foreground/70 italic truncate max-w-[280px]" title={budget.title}>
+                                                        {budget.title}
+                                                    </span>
+                                                ) : null}
                                                 <span className="text-xs text-muted-foreground">
                                                     {budget.clientSnapshot?.email || (budget as any).clientData?.email || 'Sin contacto'}
                                                 </span>
