@@ -205,6 +205,16 @@ class RestructureBudgetUseCase:
         if self.repository:
             self.repository.save(budget)
             
-        self._emit(budget.id, 'budget_completed', {"budgetId": budget.id, "metrics": telemetry.metrics.model_dump()})
+        # Sprint 4 Fase I — admin job-detail page lee `data.total` e
+        # `data.itemCount` del evento `budget_completed` para mostrar la card
+        # "Importe estimado" y el contador de partidas. Antes solo emitíamos
+        # metrics (coste LLM operativo, no PVP), por lo que la UI mostraba "—".
+        _items_count = sum(len(c.items) for c in budget.chapters)
+        self._emit(budget.id, 'budget_completed', {
+            "budgetId": budget.id,
+            "metrics": telemetry.metrics.model_dump(),
+            "total": budget.totalEstimated,
+            "itemCount": _items_count,
+        })
             
         return budget
