@@ -1402,6 +1402,10 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                         progress={generationProgress}
                                         budgetId={(generationProgress as any).budgetId || leadId}
                                         pipelineJobId={generationProgress.pipelineJobId}
+                                        // Sprint 4 Fase J — el cronómetro arranca desde el
+                                        // startedAt persistido, no desde el mount. Sin esto
+                                        // el contador volvía a 00:00 al cambiar de conv.
+                                        startedAtMs={readActiveJob()?.startedAt}
                                         onSubEventsChange={setProgressSubEvents}
                                         onComplete={(budgetId) => {
                                             // Sprint 4 Fase I — limpiar persistencia al completar.

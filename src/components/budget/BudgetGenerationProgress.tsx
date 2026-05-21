@@ -55,6 +55,12 @@ interface BudgetGenerationProgressProps {
      * watchdog). Wired through the feature flag at the caller.
      */
     pipelineJobId?: string;
+    /**
+     * Sprint 4 Fase J — timestamp del inicio del job en localStorage. Si se
+     * pasa, el cronómetro arranca desde ahí (no desde el mount). Persiste el
+     * tiempo transcurrido al cambiar de pestaña / conversación.
+     */
+    startedAtMs?: number;
     /** Fase 10.2 — bubble up al padre los subEvents agregados, para que un
      *  componente externo (p.ej. `BudgetSummaryBar`) los use. */
     onSubEventsChange?: (allSubEvents: SubEvent[]) => void;
@@ -94,7 +100,10 @@ type TimelineState = {
     extractorBanner?: ExtractorBanner;
 };
 
-const initialState = (): TimelineState => ({
+// Sprint 4 Fase J — `startedAtMs` viene del localStorage para que el
+// contador de tiempo NO se reinicie al cambiar de pestaña/conversación.
+// Sin esto, cada remount del componente reseteaba el cronómetro a 00:00.
+const initialState = (startedAtMs?: number): TimelineState => ({
     phases: {
         extracting:  { id: 'extracting',  status: 'pending', subEvents: [] },
         searching:   { id: 'searching',   status: 'pending', subEvents: [] },
@@ -102,7 +111,7 @@ const initialState = (): TimelineState => ({
         complete:    { id: 'complete',    status: 'pending', subEvents: [] },
     },
     activePhase: null,
-    startedAt: Date.now(),
+    startedAt: startedAtMs ?? Date.now(),
 });
 
 type Action =
@@ -197,11 +206,11 @@ function useElapsedSince(startedAt: number, running: boolean): string {
     return `${mm}:${ss}`;
 }
 
-export function BudgetGenerationProgress({ progress, className, onComplete, budgetId, pipelineJobId, onSubEventsChange }: BudgetGenerationProgressProps) {
+export function BudgetGenerationProgress({ progress, className, onComplete, budgetId, pipelineJobId, startedAtMs, onSubEventsChange }: BudgetGenerationProgressProps) {
     const telemetryId = budgetId;
     const { step, extractedItems, error, currentItem } = progress;
 
-    const [state, dispatch] = useReducer(reducer, undefined, initialState);
+    const [state, dispatch] = useReducer(reducer, startedAtMs, initialState);
     const eventSourceRef = useRef<EventSource | null>(null);
     const processedEvents = useRef<Set<string | number>>(new Set());
     const onCompleteRef = useRef(onComplete);
