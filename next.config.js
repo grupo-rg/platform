@@ -40,7 +40,7 @@ const nextConfig = {
       },
     ],
   },
-  serverExternalPackages: ['pdf-parse'],
+  serverExternalPackages: ['pdf-parse', '@google-cloud/tasks'],
   outputFileTracingIncludes: {
     '/**': ['./src/backend/ai/prompts/**/*.prompt'],
   },
