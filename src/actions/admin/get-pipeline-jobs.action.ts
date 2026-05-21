@@ -122,10 +122,15 @@ interface EventDigest {
     failed: boolean;
 }
 
-async function digestEvents(jobId: string): Promise<EventDigest | null> {
+async function digestEvents(
+    jobId: string,
+    /** Sprint 4 Fase H — budgetId para leer del path correcto si difiere de jobId. */
+    telemetryKey?: string,
+): Promise<EventDigest | null> {
+    const docId = telemetryKey || jobId;
     const evSnap = await adminFirestore
         .collection('pipeline_telemetry')
-        .doc(jobId)
+        .doc(docId)
         .collection('events')
         .orderBy('timestamp', 'asc')
         .get();
@@ -273,8 +278,12 @@ export async function getPipelineJobsAction(
 
         // Best-effort enrichment with telemetry-derived metrics. We don't fail
         // the listing if the events collection doesn't exist.
+        //
+        // Sprint 4 Fase H — pasamos `budgetId` como `telemetryKey` porque el
+        // sistema productivo escribe los eventos en
+        // `pipeline_telemetry/{budget_id}/events` (no `{job_id}`).
         try {
-            const digest = await digestEvents(jobId);
+            const digest = await digestEvents(jobId, data.budgetId);
             if (digest) {
                 summary.eventCount = digest.eventCount;
                 summary.eventsByType = digest.eventsByType;
@@ -336,10 +345,27 @@ export async function getPipelineJobsAction(
 export async function getPipelineJobDetailAction(
     jobId: string,
     limit: number = 500,
+    /**
+     * Sprint 4 Fase H — bug fix UI tokens / timeline.
+     *
+     * El sistema productivo escribe eventos en
+     * `pipeline_telemetry/{budget_id}/events/{eventId}` (ver
+     * `EmitTelemetryUseCase` en ai-core). El parámetro se llama `job_id` en el
+     * use case pero recibe el `budget_id` — confusión terminológica histórica.
+     *
+     * Pre-fix: esta función leía siempre de `pipeline_telemetry/{jobId}/events`
+     * — incorrecto cuando jobId !== budgetId (Sprint 4 Job worker pattern).
+     *
+     * Pasar `telemetryKey` (= `budgetId` cuando lo tenemos) hace que leamos
+     * del path correcto. Si no se pasa, fallback a `jobId` para compat con
+     * legacy jobs donde jobId == budgetId.
+     */
+    telemetryKey?: string,
 ): Promise<PipelineEventRow[]> {
+    const docId = telemetryKey || jobId;
     const evSnap = await adminFirestore
         .collection('pipeline_telemetry')
-        .doc(jobId)
+        .doc(docId)
         .collection('events')
         .orderBy('timestamp', 'asc')
         .limit(limit)
@@ -450,7 +476,14 @@ export async function getPipelineJobFullDetailAction(
         }
 
         // Events (telemetry).
-        const events = await getPipelineJobDetailAction(jobId, eventLimit);
+        // Sprint 4 Fase H — pasamos `budgetId` como `telemetryKey` para leer
+        // del path correcto `pipeline_telemetry/{budgetId}/events`. El sistema
+        // productivo escribe ahí (no en `{jobId}/events`).
+        const events = await getPipelineJobDetailAction(
+            jobId,
+            eventLimit,
+            canonicalData?.budgetId,
+        );
 
         // Attempts sub-collection.
         const attempts: PipelineJobAttemptRow[] = [];
