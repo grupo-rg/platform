@@ -49,10 +49,15 @@ export async function uploadPdfForPipelineJob({
   jobId,
   onProgress,
 }: UploadPdfArgs): Promise<UploadPdfResult> {
-  // Fast-fail validations — better UX than waiting for Storage to refuse.
-  if (file.type !== 'application/pdf') {
+  // Sprint 4 Fase L — soporte BC3 (FIEBDC-3) además de PDF. Los .bc3 no
+  // tienen MIME type estándar (browser asigna '' o 'application/octet-stream'),
+  // así que validamos por extensión cuando el MIME no coincide.
+  const nameLower = file.name.toLowerCase();
+  const isBc3 = nameLower.endsWith('.bc3');
+  const isPdf = file.type === 'application/pdf' || nameLower.endsWith('.pdf');
+  if (!isPdf && !isBc3) {
     throw new Error(
-      `uploadPdfForPipelineJob: expected application/pdf, got ${file.type}`,
+      `uploadPdfForPipelineJob: expected PDF or BC3, got type=${file.type || '(empty)'} name=${file.name}`,
     );
   }
   if (file.size > MAX_BYTES) {
@@ -69,10 +74,11 @@ export async function uploadPdfForPipelineJob({
   const fileRef = ref(storage, objectPath);
 
   const task = uploadBytesResumable(fileRef, file, {
-    contentType: 'application/pdf',
+    contentType: isBc3 ? 'application/octet-stream' : 'application/pdf',
     customMetadata: {
       uid,
       jobId,
+      fileKind: isBc3 ? 'bc3' : 'pdf',
     },
   });
 

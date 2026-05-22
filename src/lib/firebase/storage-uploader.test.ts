@@ -146,8 +146,25 @@ describe('uploadPdfForPipelineJob', () => {
         uid: 'u',
         jobId: 'j',
       }),
-    ).rejects.toThrow(/application\/pdf/);
+    ).rejects.toThrow(/PDF or BC3/);
     expect(mockUploadBytesResumable).not.toHaveBeenCalled();
+  });
+
+  it('accepts BC3 files (FIEBDC-3) with empty or octet-stream MIME', async () => {
+    setupUploadTaskMock({ resolveWithFullPath: 'pipeline_uploads/u/j/budget.bc3' });
+    // Browser deja MIME vacío para .bc3 (no es un tipo estándar registrado).
+    const fakeBc3 = new File([new Uint8Array([0x7e, 0x56])], 'budget.bc3', {
+      type: '', // browser real lo deja así
+    });
+    await uploadPdfForPipelineJob({
+      file: fakeBc3 as File,
+      uid: 'u',
+      jobId: 'j',
+    });
+    expect(mockUploadBytesResumable).toHaveBeenCalledOnce();
+    const metadata = mockUploadBytesResumable.mock.calls[0][2];
+    expect(metadata.contentType).toBe('application/octet-stream');
+    expect(metadata.customMetadata.fileKind).toBe('bc3');
   });
 
   it('rejects files exceeding the 100MB soft cap', async () => {
