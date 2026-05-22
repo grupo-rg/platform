@@ -398,14 +398,33 @@ class TabularParser:
 
         # Paso D: línea de medición zonal — añadimos cantidad si el row tiene
         # celda CANTIDAD positiva y la partida actual aún no tiene qty.
+        #
+        # Sprint 4 Fase K — fix duplicación 2x en layout "mediciones detalladas":
+        # PDFs como Quatre Cantons / Marina 8 / Vivienda 31 tienen una partida
+        # con N filas parciales (Baño 1, Dormitorio 1, ...) y AL FINAL una
+        # línea de "total agregado" con SOLO un número en columna CANTIDAD,
+        # sin descripción, uds, longitud, anchura ni altura.
+        #
+        # Algoritmo viejo: sumaba parciales + total agregado → qty × 2.
+        # Algoritmo nuevo: si detecta total agregado, SUSTITUYE las parciales
+        # acumuladas con ese valor (el total agregado es la verdad escrita por
+        # el medidor humano y validada visualmente en el documento).
         used_for_quantity = False
         if last_partida is not None and pending_qty:
-            qty_in_measure = _extract_quantity_from_measurement_row(row)
-            if qty_in_measure is not None and qty_in_measure > 0.0:
-                # Acumulamos (varias filas de medición suman).
-                current = last_partida.quantity or 0.0
-                last_partida.quantity = current + qty_in_measure
-                used_for_quantity = True
+            if _is_partida_aggregated_total_row(row, last_partida.quantity):
+                qty_total = _extract_quantity_from_measurement_row(row)
+                if qty_total is not None and qty_total > 0.0:
+                    # SUSTITUIR (no acumular). El total agregado prevalece.
+                    last_partida.quantity = qty_total
+                    pending_qty = False  # partida cerrada
+                    used_for_quantity = True
+            else:
+                qty_in_measure = _extract_quantity_from_measurement_row(row)
+                if qty_in_measure is not None and qty_in_measure > 0.0:
+                    # Acumulamos parciales (comportamiento histórico).
+                    current = last_partida.quantity or 0.0
+                    last_partida.quantity = current + qty_in_measure
+                    used_for_quantity = True
 
         # Paso E: si la fila NO fue clasificada como cabecera/jerarquía/qty,
         # y hay una partida activa, acumular el texto como continuación de
@@ -745,6 +764,48 @@ def _extract_quantity_from_measurement_row(row: TabularRow) -> Optional[float]:
             return qty
 
     return None
+
+
+def _is_partida_aggregated_total_row(row: TabularRow, current_accumulated_qty: Optional[float]) -> bool:
+    """Detecta la línea de "total agregado" al final de una partida con
+    mediciones detalladas (layout Quatre Cantons / Marina 8 / Vivienda 31).
+
+    Características de la línea total agregado:
+      - Tiene CANTIDAD (o PARCIALES) con un único número.
+      - NO tiene RESUMEN/DESCRIPCIÓN (la línea de total no lleva etiqueta).
+      - NO tiene UDS (no es una fila parcial con "Baño 1   2   2,000").
+      - NO tiene LONGITUD/ANCHURA/ALTURA (sería una medición geométrica).
+      - La partida ya tiene cantidad acumulada de las parciales (es el
+        cierre, no el inicio).
+
+    Sprint 4 Fase K — fix duplicación 2x.
+    """
+    # Debe haber CANTIDAD o PARCIALES poblado.
+    has_qty_cell = (
+        row.has_cell(ColumnConcept.CANTIDAD) or row.has_cell(ColumnConcept.PARCIALES)
+    )
+    if not has_qty_cell:
+        return False
+
+    # NO debe tener descripción/etiqueta ni dimensiones — las filas parciales
+    # siempre tienen al menos RESUMEN ("Baño 1", "Dormitorio 2", ...).
+    if row.has_cell(ColumnConcept.RESUMEN):
+        return False
+    if row.has_cell(ColumnConcept.UDS):
+        return False
+    if row.has_cell(ColumnConcept.LONGITUD):
+        return False
+    if row.has_cell(ColumnConcept.ANCHURA):
+        return False
+    if row.has_cell(ColumnConcept.ALTURA):
+        return False
+
+    # La partida ya debe haber acumulado al menos una parcial; si no, la
+    # primera fila con qty es la inicial, no un total.
+    if not current_accumulated_qty or current_accumulated_qty <= 0.0:
+        return False
+
+    return True
 
 
 # --- Helpers para acumulación de descripción multilínea en INLINE -----------
