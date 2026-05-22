@@ -62,7 +62,7 @@ service firebase.storage {
                     && request.resource.size < 10 * 1024 * 1024;
     }
 
-    // Pipeline Uploads — PDFs subidos directamente desde el navegador
+    // Pipeline Uploads — PDFs y BC3 subidos directamente desde el navegador
     // antes de que el dispatcher arranque el Cloud Run Job. Path layout:
     //
     //   pipeline_uploads/{uid}/{jobId}/{filename}
@@ -71,6 +71,12 @@ service firebase.storage {
     // Tamaño máximo 100 MB (los PDFs de 250+ páginas pesan ~30-50 MB).
     // El bucket aplica una lifecycle rule (7 días) sobre este prefijo —
     // ver `services/ai-core/scripts/setup-infrastructure.sh`.
+    //
+    // Sprint 4 Fase L — soporte BC3 (FIEBDC-3). Los .bc3 no tienen MIME
+    // estándar; el uploader los sube como application/octet-stream + valida
+    // extensión client-side. Aquí permitimos:
+    //   - application/pdf  (PDFs tradicionales)
+    //   - application/octet-stream cuando el filename termina en .bc3.
     match /pipeline_uploads/{uid}/{jobId}/{filename} {
       allow read: if request.auth != null
                   && (request.auth.uid == uid
@@ -78,7 +84,13 @@ service firebase.storage {
       allow write: if request.auth != null
                    && request.auth.uid == uid
                    && request.resource.size < 100 * 1024 * 1024
-                   && request.resource.contentType == 'application/pdf';
+                   && (
+                     request.resource.contentType == 'application/pdf'
+                     || (
+                       request.resource.contentType == 'application/octet-stream'
+                       && filename.lower().matches('.*[.]bc3')
+                     )
+                   );
     }
   }
 }
