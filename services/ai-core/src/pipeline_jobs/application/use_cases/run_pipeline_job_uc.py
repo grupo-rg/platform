@@ -95,8 +95,12 @@ class RunPipelineJobUseCase:
         partidas_resolved_count = 0
 
         try:
-            # 4. Download PDF if the job type needs one.
-            pdf_bytes = await self._download_pdf_if_needed(job.jobType, job.payload)
+            # 4. Download measurements file (PDF or BC3) if the job type needs one.
+            # Sprint 4 Fase L — detección por extensión del gcsUri: si termina en
+            # .bc3 → bc3_bytes; si .pdf → pdf_bytes; el resto → asume PDF.
+            pdf_bytes, bc3_bytes = await self._download_measurements_if_needed(
+                job.jobType, job.payload
+            )
 
             # 5. Define the checkpoint callback that the runner will call
             #    once per partida resolved.
@@ -120,6 +124,7 @@ class RunPipelineJobUseCase:
                 budget_id=job.budgetId,
                 lead_id=job.leadId,
                 pdf_bytes=pdf_bytes,
+                bc3_bytes=bc3_bytes,
                 resume_partidas=resume_partidas,
                 on_partida_resolved=on_partida_resolved,
                 cancellation_event=cancellation_event,
@@ -202,17 +207,29 @@ class RunPipelineJobUseCase:
     # Internals
     # ------------------------------------------------------------------
 
-    async def _download_pdf_if_needed(
+    async def _download_measurements_if_needed(
         self, job_type: JobType, payload: dict[str, Any]
-    ) -> Optional[bytes]:
-        if job_type in (JobType.MEASUREMENTS, JobType.VISION_EXTRACT):
-            gcs_uri = payload.get("gcsUri")
-            if not gcs_uri:
-                raise ValueError(
-                    f"Missing 'gcsUri' in payload for job_type={job_type.value}"
-                )
-            return await self.pdf_storage.download_to_bytes(gcs_uri)
-        return None
+    ) -> tuple[Optional[bytes], Optional[bytes]]:
+        """Descarga el archivo de mediciones del bucket y devuelve un tuple
+        `(pdf_bytes, bc3_bytes)` — solo uno está poblado según la extensión.
+
+        Detección por extensión del `gcsUri` (case-insensitive):
+          - `.bc3` → bc3_bytes
+          - `.pdf` o cualquier otro → pdf_bytes (default conservativo)
+        Sprint 4 Fase L.
+        """
+        if job_type not in (JobType.MEASUREMENTS, JobType.VISION_EXTRACT):
+            return None, None
+
+        gcs_uri = payload.get("gcsUri")
+        if not gcs_uri:
+            raise ValueError(
+                f"Missing 'gcsUri' in payload for job_type={job_type.value}"
+            )
+        bytes_data = await self.pdf_storage.download_to_bytes(gcs_uri)
+        if gcs_uri.lower().endswith(".bc3"):
+            return None, bytes_data
+        return bytes_data, None
 
     async def _poll_cancellation(
         self, job_id: str, cancellation_event: asyncio.Event

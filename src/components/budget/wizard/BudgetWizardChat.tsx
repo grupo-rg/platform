@@ -543,13 +543,24 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             const filesToUpload = [...pendingFiles];
             setPendingFiles([]); // clear from UI
             
-            const hasPdf = filesToUpload.some(file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'));
+            // Sprint 4 Fase L — detección polimórfica de archivo de mediciones.
+            // Soportamos PDF (parser TABULAR) y BC3 (parser FIEBDC-3 nativo).
+            const isPdfFile = (f: File) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+            const isBc3File = (f: File) => f.name.toLowerCase().endsWith('.bc3');
 
-            if (hasPdf) {
+            const bc3File = filesToUpload.find(isBc3File);
+            if (bc3File) {
+                // BC3: dispatch directo (sin extract-metadata, sin dialog). El
+                // parser BC3 ya conoce el title desde el root del árbol.
+                await handleFastTrackBc3(bc3File);
+                return;
+            }
+
+            const pdfFile = filesToUpload.find(isPdfFile);
+            if (pdfFile) {
                  // v006 UX: la estrategia ya está pre-seleccionada en el pill del
                  // adjunto (default 'INLINE', el usuario puede cambiar a 'ANNEXED'
                  // con el dropdown antes de enviar). Vamos directo a procesar.
-                 const pdfFile = filesToUpload.find(file => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))!;
                  setPdfAwaitingStrategy(pdfFile);
                  // Disparamos el procesamiento con el tipo ya elegido.
                  await handleConfirmPdfStrategy(pdfStrategy, pdfFile);
@@ -755,6 +766,110 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
             console.error("Fast Track PDF processing failed", error);
             setGenerationProgress({ step: 'error', error: error.message || "Error procesando el PDF." });
             // Sprint 4 Fase I — limpiar persistencia en error.
+            clearActiveJob();
+            setTimeout(() => setState('idle'), 3000);
+        }
+    };
+
+    /**
+     * Sprint 4 Fase L — handler nativo BC3 (FIEBDC-3).
+     *
+     * Flujo simplificado vs PDF:
+     *  - NO necesita `extractPdfMetadataAction` (el BC3 ya trae title del root).
+     *  - NO abre el dialog de confirmación de cliente/título.
+     *  - Upload directo a Storage → dispatch → SSE.
+     *
+     * El backend detecta la extensión `.bc3` del gcsUri y enruta al
+     * `Bc3Parser` saltando el extractor PDF.
+     */
+    const handleFastTrackBc3 = async (file: File) => {
+        const budgetId = uuidv4();
+
+        persistActiveJob({
+            budgetId,
+            leadId: leadId || undefined,
+            startedAt: Date.now(),
+            phase: 'uploading',
+            fileName: file.name,
+            uid: user?.uid,
+            strategy: 'INLINE', // no aplica a BC3 pero el tipo lo requiere
+            conversationId: conversationId || null,
+        });
+
+        setState('processing');
+        setGenerationProgress({
+            step: 'extracting',
+            currentItem: 'Subiendo BC3 al servidor…',
+            budgetId,
+        } as any);
+
+        try {
+            const { isPipelineJobsEnabled } = await import('@/lib/feature-flags');
+            const effectiveId = isAdmin ? 'admin-user' : (leadId || 'unknown-lead');
+
+            if (isPipelineJobsEnabled() && user?.uid) {
+                const { uploadPdfForPipelineJob } = await import('@/lib/firebase/storage-uploader');
+                const { dispatchPipelineJobAction } = await import(
+                    '@/actions/pipeline/dispatch-pipeline-job.action'
+                );
+                // 1. Upload BC3 al bucket (mismo path que PDF — backend detecta extensión).
+                const uploaded = await uploadPdfForPipelineJob({
+                    file,
+                    uid: user.uid,
+                    jobId: budgetId, // reusamos el budgetId como job-relative path
+                    onProgress: (fraction) => {
+                        const pct = Math.round(fraction * 100);
+                        setGenerationProgress(prev => ({
+                            ...prev,
+                            step: 'extracting',
+                            currentItem: pct < 100
+                                ? `Subiendo BC3 al servidor… ${pct}%`
+                                : 'Lanzando el motor de cálculo…',
+                            budgetId,
+                        } as any));
+                    },
+                });
+                persistActiveJob({
+                    phase: 'dispatching',
+                    gcsUri: uploaded.gcsUri,
+                });
+
+                // 2. Dispatch (sin extract-metadata, sin dialog).
+                const res = await dispatchPipelineJobAction({
+                    jobType: 'measurements',
+                    uid: user.uid,
+                    leadId: effectiveId,
+                    budgetId,
+                    payload: {
+                        gcsUri: uploaded.gcsUri,
+                        // strategy se ignora para BC3 en backend, pero el campo es required.
+                        strategy: 'INLINE',
+                    },
+                });
+                if (!res.success) {
+                    throw new Error(res.error);
+                }
+                setGenerationProgress(prev => ({
+                    ...prev,
+                    budgetId,
+                    pipelineJobId: res.jobId,
+                } as any));
+                persistActiveJob({
+                    budgetId,
+                    jobId: res.jobId,
+                    leadId: effectiveId,
+                    startedAt: Date.now(),
+                    phase: 'running',
+                    conversationId: conversationId || null,
+                });
+                return; // SSE telemetry takes over from here.
+            }
+
+            // Sin pipeline jobs (flag off): no soportamos BC3 por el path legacy.
+            throw new Error('BC3 requiere el pipeline de jobs (NEXT_PUBLIC_USE_PIPELINE_JOBS=true).');
+        } catch (error: any) {
+            console.error("Fast Track BC3 processing failed", error);
+            setGenerationProgress({ step: 'error', error: error.message || "Error procesando el BC3." });
             clearActiveJob();
             setTimeout(() => setState('idle'), 3000);
         }
@@ -1568,14 +1683,22 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                 <div className="flex flex-wrap gap-2 px-3 pt-3 pb-1 animate-in fade-in slide-in-from-top-2 duration-300 ease-out">
                                     {pendingFiles.map((file, i) => {
                                         const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                                        const isBc3 = file.name.toLowerCase().endsWith('.bc3');
                                         return (
                                             <div key={i} className="relative group flex items-center gap-2 bg-[#2a2b2e] border border-white/5 shadow-[0_2px_10px_rgba(0,0,0,0.2)] rounded-xl py-1.5 pl-3 pr-1.5">
-                                                {isPdf ? (
+                                                {isBc3 ? (
+                                                    <FileText className="w-4 h-4 text-amber-400" />
+                                                ) : isPdf ? (
                                                     <FileText className="w-4 h-4 text-blue-400" />
                                                 ) : (
                                                     <ImageIcon className="w-4 h-4 text-emerald-400" />
                                                 )}
                                                 <span className="text-[13px] font-medium text-white/90 max-w-[180px] truncate tracking-tight">{file.name}</span>
+                                                {isBc3 && (
+                                                    <span className="text-[9px] font-bold tracking-wider uppercase text-amber-300/90 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded">
+                                                        BC3
+                                                    </span>
+                                                )}
                                                 {isPdf && (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
@@ -1694,7 +1817,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                                 multiple
                                                 className="hidden"
                                                 onChange={handleFileChange}
-                                                accept="image/*,application/pdf"
+                                                accept="image/*,application/pdf,.bc3"
                                             />
                                             <label
                                                 htmlFor="file-upload"

@@ -97,6 +97,7 @@ class BudgetPipelineRunner(IPipelineRunner):
         budget_id: str,
         lead_id: str,
         pdf_bytes: Optional[bytes],
+        bc3_bytes: Optional[bytes] = None,
         resume_partidas: list[dict[str, Any]],
         on_partida_resolved: OnPartidaResolved,
         cancellation_event: asyncio.Event,
@@ -115,6 +116,7 @@ class BudgetPipelineRunner(IPipelineRunner):
                 budget_id=budget_id,
                 lead_id=lead_id,
                 pdf_bytes=pdf_bytes,
+                bc3_bytes=bc3_bytes,
                 resume_partidas=resume_partidas,
                 on_partida_resolved=on_partida_resolved,
                 cancellation_event=cancellation_event,
@@ -150,23 +152,32 @@ class BudgetPipelineRunner(IPipelineRunner):
         budget_id: str,
         lead_id: str,
         pdf_bytes: Optional[bytes],
+        bc3_bytes: Optional[bytes] = None,
         resume_partidas: list[dict[str, Any]],
         on_partida_resolved: OnPartidaResolved,
         cancellation_event: asyncio.Event,
     ) -> Any:
-        if not pdf_bytes:
-            raise ValueError(
-                f"pdf_bytes is required for jobType={job_type.value}"
-            )
+        # Sprint 4 Fase L — BC3 path: si tenemos bc3_bytes, saltamos el
+        # chunking PDF y el extractor. El use case detecta `bc3_bytes` y
+        # parsea el árbol FIEBDC-3 directamente.
+        if bc3_bytes is not None:
+            raw_items: list[dict[str, Any]] = []
+            strategy = "BC3"
+        else:
+            if not pdf_bytes:
+                raise ValueError(
+                    f"pdf_bytes or bc3_bytes is required for jobType={job_type.value}"
+                )
+            raw_items = self._pdf_to_chunks(pdf_bytes)
+            # Default strategy mirrors the legacy endpoint defaults.
+            strategy = (payload.get("strategy") or "INLINE").upper()
 
-        raw_items = self._pdf_to_chunks(pdf_bytes)
-        # Default strategy mirrors the legacy endpoint defaults.
-        strategy = (payload.get("strategy") or "INLINE").upper()
         logger.info(
-            "budget_pipeline_runner: PDF pipeline starting",
+            "budget_pipeline_runner: pipeline starting",
             extra={
                 "budgetId": budget_id,
                 "jobType": job_type.value,
+                "inputFormat": "bc3" if bc3_bytes else "pdf",
                 "strategy": strategy,
                 "chunks": len(raw_items),
                 "resumePartidas": len(resume_partidas),
@@ -201,6 +212,7 @@ class BudgetPipelineRunner(IPipelineRunner):
             budget_id=budget_id,
             strategy=strategy,
             pdf_bytes=pdf_bytes,
+            bc3_bytes=bc3_bytes,
             resume_from=resume_from_partidas,
             on_partida_resolved=_on_resolved,
             client_name=client_name,

@@ -112,6 +112,7 @@ class FakePipelineRunner(IPipelineRunner):
         budget_id: str,
         lead_id: str,
         pdf_bytes: Optional[bytes],
+        bc3_bytes: Optional[bytes] = None,
         resume_partidas: list[dict[str, Any]],
         on_partida_resolved: OnPartidaResolved,
         cancellation_event: asyncio.Event,

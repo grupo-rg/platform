@@ -183,7 +183,7 @@ class TestRouting:
 
 class TestFailure:
     async def test_measurements_without_pdf_bytes_raises(self, runner):
-        with pytest.raises(ValueError, match="pdf_bytes is required"):
+        with pytest.raises(ValueError, match="pdf_bytes or bc3_bytes is required"):
             await _run(
                 runner,
                 job_type=JobType.MEASUREMENTS,
