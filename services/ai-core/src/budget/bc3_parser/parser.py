@@ -1,0 +1,272 @@
+"""Parser principal BC3 → Bc3Tree."""
+
+from __future__ import annotations
+
+import logging
+from typing import Optional
+
+from src.budget.bc3_parser.entities import (
+    Bc3Concept,
+    Bc3ConceptKind,
+    Bc3Decomposition,
+    Bc3Measurement,
+    Bc3Tree,
+)
+from src.budget.bc3_parser.tokenizer import (
+    decode_bc3_bytes,
+    iter_records,
+    split_record,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _parse_spanish_float(s: str) -> Optional[float]:
+    """Parsea número español. Acepta `1.234,56` o `1234.56` o `1234,56`."""
+    if not s:
+        return None
+    cleaned = s.strip()
+    if not cleaned:
+        return None
+    # Eliminar separadores de miles (puntos antes de la coma) y promover coma a punto.
+    if "," in cleaned:
+        # Asumir formato es-ES: punto como thousands, coma como decimal.
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+class Bc3Parser:
+    """Parser FIEBDC-3 que construye un `Bc3Tree`.
+
+    Estrategia:
+      1. Decodificar bytes → str con encoding detection.
+      2. Iterar records, dispatch por tipo (~V, ~C, ~D, ~M, ~T, ~K).
+      3. Construir entidades en el tree.
+      4. Inferir `kind` de cada concepto en función de presencia/ausencia
+         de mediciones y decomposiciones (heurística).
+    """
+
+    def parse(self, raw_bytes: bytes) -> Bc3Tree:
+        text, encoding = decode_bc3_bytes(raw_bytes)
+        tree = Bc3Tree(encoding=encoding)
+
+        for line in iter_records(text):
+            record_type = line[:2]
+            try:
+                if record_type == "~V":
+                    self._parse_v(line, tree)
+                elif record_type == "~K":
+                    self._parse_k(line, tree)
+                elif record_type == "~C":
+                    self._parse_c(line, tree)
+                elif record_type == "~T":
+                    self._parse_t(line, tree)
+                elif record_type == "~D":
+                    self._parse_d(line, tree)
+                elif record_type == "~M":
+                    self._parse_m(line, tree)
+                # Otros records (~O, ~A, ~E, ~L, ~X) se ignoran silenciosamente.
+            except Exception as e:
+                # Un record corrupto no debe abortar el parse entero.
+                logger.warning(
+                    "BC3 record %s ignorado por error de parseo: %s | line=%r",
+                    record_type, e, line[:100],
+                )
+
+        # Post-process: inferir el `kind` de cada concepto.
+        self._infer_kinds(tree)
+        # Identificar roots (capítulos top-level que no son hijos de ninguna decomposition).
+        self._identify_roots(tree)
+        return tree
+
+    # --- record parsers ----------------------------------------------------
+
+    def _parse_v(self, line: str, tree: Bc3Tree) -> None:
+        """`~V|owner|FIEBDC-3/2002|exporter|...|ANSI|...|`."""
+        fields = split_record(line)
+        if len(fields) >= 3:
+            tree.version = fields[2].strip()
+
+    def _parse_k(self, line: str, tree: Bc3Tree) -> None:
+        """`~K|<numeric_format>|...|EUR|...|`.
+
+        El campo de moneda suele venir en una posición variable. Buscamos
+        cualquier código de 3 letras conocido.
+        """
+        fields = split_record(line)
+        for f in fields:
+            f_stripped = f.strip()
+            if f_stripped in ("EUR", "USD", "GBP"):
+                tree.currency = f_stripped
+                return
+
+    def _parse_c(self, line: str, tree: Bc3Tree) -> None:
+        """`~C|code|unit|description|price|date|type|`."""
+        fields = split_record(line)
+        if len(fields) < 4:
+            return
+        code = fields[1].strip()
+        unit = fields[2].strip()
+        description = fields[3].strip()
+        price = _parse_spanish_float(fields[4]) if len(fields) >= 5 else None
+
+        # Si ya existe, mergeamos campos (algunos exporters duplican records).
+        existing = tree.concepts.get(code)
+        if existing:
+            if not existing.description and description:
+                existing.description = description
+            if not existing.unit and unit:
+                existing.unit = unit
+            if existing.price is None and price is not None:
+                existing.price = price
+        else:
+            tree.concepts[code] = Bc3Concept(
+                code=code,
+                unit=unit,
+                description=description,
+                price=price,
+            )
+
+    def _parse_t(self, line: str, tree: Bc3Tree) -> None:
+        """`~T|code|long_description_text|`."""
+        fields = split_record(line)
+        if len(fields) < 3:
+            return
+        code = fields[1].strip()
+        long_desc = fields[2].strip()
+        concept = tree.concepts.get(code)
+        if concept is None:
+            # Texto sin concepto previo — creamos uno vacío para no perder el texto.
+            concept = Bc3Concept(code=code)
+            tree.concepts[code] = concept
+        # Acumular si ya había texto (concatenación segura).
+        if concept.long_description:
+            concept.long_description += " " + long_desc
+        else:
+            concept.long_description = long_desc
+
+    def _parse_d(self, line: str, tree: Bc3Tree) -> None:
+        """`~D|parent_code|child_code\\factor\\qty\\...|`.
+
+        Los hijos están en una sola cadena pipe-2, separados por `\\`.
+        Patrón típico: `child1\\factor1\\qty1\\child2\\factor2\\qty2\\...`
+        """
+        fields = split_record(line)
+        if len(fields) < 3:
+            return
+        parent_code = fields[1].strip()
+        children_raw = fields[2]
+        children = self._parse_decomposition_children(children_raw)
+        if not children:
+            return
+        existing = tree.decompositions.get(parent_code)
+        if existing:
+            existing.children.extend(children)
+        else:
+            tree.decompositions[parent_code] = Bc3Decomposition(
+                parent_code=parent_code,
+                children=children,
+            )
+
+    def _parse_decomposition_children(self, raw: str) -> list[tuple[str, float]]:
+        """Parsea `child1\\factor1\\qty1\\child2\\factor2\\qty2\\...`.
+
+        Cada hijo ocupa 3 tokens (code, factor, qty). El factor es el más
+        relevante (cuánto de child por unidad de parent).
+        """
+        parts = raw.split("\\")
+        children: list[tuple[str, float]] = []
+        i = 0
+        while i + 2 < len(parts):
+            child_code = parts[i].strip()
+            factor_str = parts[i + 1].strip()
+            # parts[i+2] es la qty pero la ignoramos (no es relevante para
+            # nuestro pipeline; el factor ya describe la relación).
+            if child_code:
+                factor = _parse_spanish_float(factor_str) or 1.0
+                children.append((child_code, factor))
+            i += 3
+        return children
+
+    def _parse_m(self, line: str, tree: Bc3Tree) -> None:
+        """`~M|parent_code\\child_code|position|total_qty|parciales_text|...|`.
+
+        El campo `parent_code\\child_code` identifica la relación; el código
+        de la partida medida es el child. El campo numérico siguiente es la
+        cantidad total (autoritativa).
+        """
+        fields = split_record(line)
+        if len(fields) < 4:
+            return
+
+        relation = fields[1]
+        parts = relation.split("\\")
+        if len(parts) < 2:
+            return
+        parent_code = parts[0].strip()
+        code = parts[-1].strip()  # último elemento es el code real
+        if not code:
+            return
+
+        qty_field = fields[3].strip()
+        qty = _parse_spanish_float(qty_field)
+        if qty is None:
+            return
+
+        parciales = fields[4] if len(fields) >= 5 else ""
+
+        tree.measurements[code] = Bc3Measurement(
+            parent_code=parent_code,
+            code=code,
+            total_quantity=qty,
+            parciales_text=parciales,
+        )
+
+    # --- post-processing ---------------------------------------------------
+
+    def _infer_kinds(self, tree: Bc3Tree) -> None:
+        """Asigna `Bc3ConceptKind` heurísticamente.
+
+        Reglas:
+          - Si tiene `~M` que lo mide → PARTIDA.
+          - Si tiene `~D` pero NO `~M` → CHAPTER.
+          - Si es referenciado como hijo en algún `~D` y no tiene `~M` → COMPONENT.
+          - Resto → UNKNOWN.
+        """
+        # Set de códigos que aparecen como hijos en alguna decomposition.
+        referenced_as_child: set[str] = set()
+        for decomp in tree.decompositions.values():
+            for child_code, _ in decomp.children:
+                referenced_as_child.add(child_code)
+
+        for code, concept in tree.concepts.items():
+            has_decomp = code in tree.decompositions
+            has_measure = code in tree.measurements
+
+            if has_measure:
+                concept.kind = Bc3ConceptKind.PARTIDA
+            elif has_decomp:
+                concept.kind = Bc3ConceptKind.CHAPTER
+            elif code in referenced_as_child:
+                concept.kind = Bc3ConceptKind.COMPONENT
+            else:
+                concept.kind = Bc3ConceptKind.UNKNOWN
+
+    def _identify_roots(self, tree: Bc3Tree) -> None:
+        """Identifica capítulos raíz (no son hijos de nadie).
+
+        En FIEBDC-3 el primer `~C` suele ser el root del documento (~25-126##
+        en Quatre Cantons). Sus hijos directos vía `~D` son los capítulos
+        de primer nivel. Aquí simplemente listamos los capítulos no referenciados.
+        """
+        referenced_as_child: set[str] = set()
+        for decomp in tree.decompositions.values():
+            for child_code, _ in decomp.children:
+                referenced_as_child.add(child_code)
+
+        for code, concept in tree.concepts.items():
+            if concept.kind == Bc3ConceptKind.CHAPTER and code not in referenced_as_child:
+                tree.root_codes.append(code)

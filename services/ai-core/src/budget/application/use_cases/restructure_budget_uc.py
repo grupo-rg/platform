@@ -48,6 +48,7 @@ class RestructureBudgetUseCase:
         strategy: str = "INLINE",
         pdf_bytes: Optional[bytes] = None,
         *,
+        bc3_bytes: Optional[bytes] = None,
         resume_from: Optional[List[BudgetPartida]] = None,
         on_partida_resolved=None,  # type: ignore[no-untyped-def] — keep import surface small
         client_name: Optional[str] = None,
@@ -57,20 +58,38 @@ class RestructureBudgetUseCase:
         start_time = time.time()
         metrics = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
 
-        # 1. POLIMORFISMO: Seleccionar Extractor en base a metadata
-        logger.info(f"Ochestrator Booting with PDF Strategy: {strategy}")
-        extractor = self.annexed_extractor if strategy.upper() == "ANNEXED" else self.inline_extractor
-
-        # Phase 1: Semantically structure messy spatial PDF chunks.
-        # Fase 9.2 — INLINE acepta `pdf_bytes` para habilitar el fast path
-        # heurístico. ANNEXED ignora el kwarg (su signature no lo declara
-        # todavía). Try/except mantiene compat sin introspección de tipos.
-        try:
-            restructured_items = await extractor.extract(
-                raw_items, budget_id, metrics, pdf_bytes=pdf_bytes,
+        # Phase 1: Estructurar partidas medidas en `restructured_items`.
+        # Sprint 4 Fase L — soporte BC3 nativo. Si `bc3_bytes` está, saltar el
+        # extractor PDF entero y parsear el árbol FIEBDC-3 directamente: el
+        # output es el mismo shape que el TABULAR/INLINE/ANNEXED, así que el
+        # SwarmPricingService aguas abajo no necesita saber el formato fuente.
+        if bc3_bytes is not None:
+            from src.budget.bc3_parser import Bc3Parser, bc3_tree_to_restructured_items
+            logger.info("Orchestrator Booting with BC3 input (FIEBDC-3 native)")
+            tree = Bc3Parser().parse(bc3_bytes)
+            restructured_items = bc3_tree_to_restructured_items(tree)
+            metrics["bc3_version"] = tree.version
+            metrics["bc3_encoding"] = tree.encoding
+            metrics["bc3_partidas_count"] = len(restructured_items)
+            metrics["document_title"] = (
+                tree.concepts[tree.root_codes[0]].description
+                if tree.root_codes and tree.root_codes[0] in tree.concepts
+                else None
             )
-        except TypeError:
-            restructured_items = await extractor.extract(raw_items, budget_id, metrics)
+        else:
+            # PDF path (existente). POLIMORFISMO: Seleccionar Extractor en base a metadata
+            logger.info(f"Orchestrator Booting with PDF Strategy: {strategy}")
+            extractor = self.annexed_extractor if strategy.upper() == "ANNEXED" else self.inline_extractor
+
+            # Fase 9.2 — INLINE acepta `pdf_bytes` para habilitar el fast path
+            # heurístico. ANNEXED ignora el kwarg (su signature no lo declara
+            # todavía). Try/except mantiene compat sin introspección de tipos.
+            try:
+                restructured_items = await extractor.extract(
+                    raw_items, budget_id, metrics, pdf_bytes=pdf_bytes,
+                )
+            except TypeError:
+                restructured_items = await extractor.extract(raw_items, budget_id, metrics)
 
         # Phase 2: Swarm Pricing (Deconstructor + Vector Search + LLM Evaluator).
         # P4.b — forward checkpoint kwargs when present; the swarm's new
