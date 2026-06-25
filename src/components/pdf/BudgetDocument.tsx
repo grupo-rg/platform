@@ -287,7 +287,7 @@ interface BudgetDocumentProps {
     includeBreakdown?: boolean;
 }
 
-const Footer = ({ pageNumber, company }: { pageNumber: number; company: CompanyConfig }) => {
+const Footer = ({ company }: { company: CompanyConfig }) => {
     // Línea fiscal mínima (los datos completos del emisor van en la cabecera).
     const line = [company.legalName || company.name, company.cif && `CIF: ${company.cif}`, company.address]
         .filter(Boolean)
@@ -297,7 +297,13 @@ const Footer = ({ pageNumber, company }: { pageNumber: number; company: CompanyC
             <View style={styles.footerLine} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={styles.footerText}>{line}</Text>
-                <Text style={styles.footerText}>Página {pageNumber}</Text>
+                {/* `render` se evalúa por página física, así que el número es correcto
+                    incluso cuando una <Page> desborda en varias páginas. */}
+                <Text
+                    style={styles.footerText}
+                    render={({ pageNumber, totalPages }) => `Página ${pageNumber} / ${totalPages}`}
+                    fixed
+                />
             </View>
             {company.footerText && (
                 <Text style={{ fontSize: 6, color: '#94A3B8', marginTop: 2 }}>{company.footerText}</Text>
@@ -549,7 +555,7 @@ export const BudgetDocument = ({
                         * Este documento es una estimación técnica preliminar. Un experto contactará con usted para realizar una visita técnica y refinar los detalles finales del presupuesto.
                     </Text>
                 </View>
-                <Footer pageNumber={1} company={company} />
+                <Footer company={company} />
             </Page>
 
             {/* --- PAGE: METHODOLOGY & INFO (MOVED TO THE END) --- */}
@@ -632,7 +638,7 @@ export const BudgetDocument = ({
                     </Text>
                 </View>
 
-                <Footer pageNumber={2} company={company} />
+                <Footer company={company} />
             </Page>
 
             {/* --- AI VISUAL PROPOSAL PAGES (antes / después) --- */}
@@ -678,7 +684,7 @@ export const BudgetDocument = ({
                         ))}
                     </View>
 
-                    <Footer pageNumber={3 + pageIdx} company={company} />
+                    <Footer company={company} />
                 </Page>
             ))}
         </Document>

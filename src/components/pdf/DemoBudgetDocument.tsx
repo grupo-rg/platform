@@ -193,7 +193,7 @@ interface DemoBudgetDocumentProps {
     budgetConfig?: { tax: number; marginGG: number; marginBI: number };
 }
 
-const Footer = ({ pageNumber, companyName, cif, address }: { pageNumber: number, companyName?: string, cif?: string, address?: string }) => {
+const Footer = ({ companyName, cif, address }: { companyName?: string, cif?: string, address?: string }) => {
     const defaultCompany = 'Grupo RG';
     const defaultCif = '';
     const defaultAddress = '';
@@ -204,10 +204,13 @@ const Footer = ({ pageNumber, companyName, cif, address }: { pageNumber: number,
     return (
         <View style={styles.footerContainer} fixed>
             <View style={styles.footerLine} />
-            <Text style={styles.footerText}>
-                {companyPart}{addressPart} {"\n"}
-                Página {pageNumber}
-            </Text>
+            {/* `render` se evalúa por página física → numeración correcta aunque
+                una <Page> desborde en varias páginas. */}
+            <Text
+                style={styles.footerText}
+                render={({ pageNumber, totalPages }) => `${companyPart}${addressPart}\nPágina ${pageNumber} / ${totalPages}`}
+                fixed
+            />
         </View>
     );
 };
@@ -339,9 +342,9 @@ export const DemoBudgetDocument = ({
                     </View>
                 </View>
 
-                <Footer pageNumber={1} companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
-                <Footer pageNumber={2} companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
-                <Footer pageNumber={3} companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
+                <Footer companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
+                <Footer companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
+                <Footer companyName={clientEmail} cif={clientEmail ? "Generado por Grupo RG" : undefined} address={clientEmail ? "Demostración Pública" : undefined} />
             </Page>
         </Document>
     );
