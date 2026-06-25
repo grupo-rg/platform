@@ -113,7 +113,7 @@ const calculateBreakdown = (
     };
 };
 
-const initialState: BudgetEditorState = {
+export const initialState: BudgetEditorState = {
     items: [],
     chapters: [],
     costBreakdown: {
@@ -135,7 +135,7 @@ const initialState: BudgetEditorState = {
 // Add new INIT_STATE action
 export type BudgetEditorInitAction = { type: 'INIT_STATE'; payload: { items: EditableBudgetLineItem[]; config?: BudgetConfig; executionMode?: ExecutionMode; calibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked' } };
 
-function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorAction | BudgetEditorInitAction): BudgetEditorState {
+export function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorAction | BudgetEditorInitAction): BudgetEditorState {
     switch (action.type) {
         case 'INIT_STATE': {
             console.log('[BudgetEditor] INIT_STATE triggered with', action.payload.items.length, 'items');
@@ -280,10 +280,19 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
                 const changes = action.payload.changes;
                 const payloadItemChanges = changes.item;
                 const prevUnitPrice = Number(oldItem.item?.unitPrice || 0);
-                
-                // 1. Proportional Scaling Logic for Breakdown
-                let newBreakdown = oldItem.item?.breakdown;
-                if (payloadItemChanges && payloadItemChanges.unitPrice !== undefined && newBreakdown) {
+
+                // 1. Determinar el descompuesto resultante.
+                // Si el caller provee un descompuesto NUEVO (referencia distinta a la
+                // actual) es autoritativo — reparación desde catálogo o edición manual
+                // de componentes — y se usa tal cual: NO se escala ni se sobreescribe.
+                // Si el descompuesto viene heredado (spread del item, misma referencia)
+                // aplicamos el escalado proporcional al cambiar el unitPrice.
+                const incomingBreakdown = payloadItemChanges?.breakdown;
+                const breakdownExplicitlyProvided =
+                    incomingBreakdown !== undefined && incomingBreakdown !== oldItem.item?.breakdown;
+
+                let newBreakdown = breakdownExplicitlyProvided ? incomingBreakdown : oldItem.item?.breakdown;
+                if (!breakdownExplicitlyProvided && payloadItemChanges && payloadItemChanges.unitPrice !== undefined && newBreakdown) {
                     const newUnitPrice = Number(payloadItemChanges.unitPrice);
                     if (prevUnitPrice > 0 && newUnitPrice !== prevUnitPrice) {
                         const scaleFactor = newUnitPrice / prevUnitPrice;
