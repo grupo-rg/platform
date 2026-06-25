@@ -41,9 +41,14 @@ interface BudgetEditorWrapperProps {
         originalPrompt: string;
         telemetry: any;
     };
+    /**
+     * Config de empresa emisora resuelta en el servidor. Pasarla evita el delay
+     * de la carga async (el primer PDF salía con DEFAULT_COMPANY_CONFIG).
+     */
+    initialCompanyConfig?: CompanyConfig;
 }
 
-const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperProps) => {
+const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: BudgetEditorWrapperProps) => {
     const {
         state,
         updateItem,
@@ -93,7 +98,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
 
     // PDF Config State
     const [pdfMeta, setPdfMeta] = React.useState<any>(null);
-    const [companyConfig, setCompanyConfig] = React.useState<CompanyConfig>(DEFAULT_COMPANY_CONFIG);
+    const [companyConfig, setCompanyConfig] = React.useState<CompanyConfig>(initialCompanyConfig ?? DEFAULT_COMPANY_CONFIG);
 
     React.useEffect(() => {
         const fetchPdfMeta = async () => {
@@ -108,8 +113,11 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
     }, [budget.leadId]);
 
     React.useEffect(() => {
+        // Si el servidor ya resolvió la config, no refetcheamos (evita el delay
+        // que hacía salir el primer PDF con datos por defecto).
+        if (initialCompanyConfig) return;
         getCompanyConfigAction().then(setCompanyConfig).catch(console.error);
-    }, []);
+    }, [initialCompanyConfig]);
 
     const handleSavePdfSettings = async (meta: any) => {
         if (!budget.leadId || budget.leadId === 'unassigned') {
@@ -621,7 +629,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                         items={state.items}
                                         chapters={state.chapters}
                                         clientName={budget.clientSnapshot?.name || 'Cliente'}
-                                        budgetNumber={budget.id.substring(0, 8)}
+                                        budgetNumber={budgetNumber}
                                         executionMode={state.executionMode}
                                         onPdfDownloaded={handlePdfDownloaded}
                                         initialPdfMeta={pdfMeta}
@@ -646,7 +654,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
     );
 };
 
-export const BudgetEditorWrapper = ({ budget, isAdmin = false, traceData }: BudgetEditorWrapperProps) => {
+export const BudgetEditorWrapper = ({ budget, isAdmin = false, traceData, initialCompanyConfig }: BudgetEditorWrapperProps) => {
     // Compatibility Layer: Migrate new 'chapters' structure to 'lineItems' for old UI components
     // pending full Phase 4 refactor.
     const legacyLineItems = React.useMemo(() => {
@@ -708,5 +716,5 @@ export const BudgetEditorWrapper = ({ budget, isAdmin = false, traceData }: Budg
     //    return <BudgetRequestViewer budget={compatibleBudget} isAdmin={isAdmin} />;
     // }
 
-    return <BudgetEditorMain budget={compatibleBudget} isAdmin={isAdmin} traceData={traceData} />;
+    return <BudgetEditorMain budget={compatibleBudget} isAdmin={isAdmin} traceData={traceData} initialCompanyConfig={initialCompanyConfig} />;
 };

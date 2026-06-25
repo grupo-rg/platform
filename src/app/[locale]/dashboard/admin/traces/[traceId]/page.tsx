@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { FirestoreAiTrainingRepository } from '@/backend/ai-training/infrastructure/firestore-ai-training-repository';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { BudgetEditorWrapper } from '@/components/budget-editor/BudgetEditorWrapper';
+import { getCompanyConfigAction } from '@/actions/platform/company-config.action';
 import { Budget } from '@/backend/budget/domain/budget';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -123,6 +124,7 @@ export default async function TraceViewerPage({ params }: TraceViewerPageProps) 
                 budget={safeProxyBudget}
                 isAdmin={true}
                 traceData={safeTraceData}
+                initialCompanyConfig={await getCompanyConfigAction()}
             />
 
             <CommunityFeedbackPanel 
