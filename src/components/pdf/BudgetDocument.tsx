@@ -21,16 +21,31 @@ const styles = StyleSheet.create({
         borderColor: '#E2E8F0',
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-end'
+        alignItems: 'flex-start'
     },
     logoSection: {
-        width: '40%'
+        width: '50%'
     },
     companyLogo: {
-        width: 140,
-        height: 60,
-        marginBottom: 10,
+        width: 210,
+        height: 90,
+        marginBottom: 8,
         objectFit: 'contain'
+    },
+    // Bloque de datos del emisor bajo el logo (cabecera, columna izquierda).
+    issuerBlock: {
+        marginTop: 6,
+    },
+    issuerName: {
+        fontSize: 9,
+        fontWeight: 'bold',
+        color: '#0F172A',
+        marginBottom: 1,
+    },
+    issuerLine: {
+        fontSize: 7.5,
+        color: '#64748B',
+        lineHeight: 1.45,
     },
     metaSection: {
         textAlign: 'right',
@@ -273,6 +288,7 @@ interface BudgetDocumentProps {
 }
 
 const Footer = ({ pageNumber, company }: { pageNumber: number; company: CompanyConfig }) => {
+    // Línea fiscal mínima (los datos completos del emisor van en la cabecera).
     const line = [company.legalName || company.name, company.cif && `CIF: ${company.cif}`, company.address]
         .filter(Boolean)
         .join(' · ');
@@ -303,6 +319,20 @@ const Header = ({ budgetNumber, date, logoUrl, company, totalAmount }: { budgetN
                 {company.tagline && (
                     <Text style={{ fontSize: 8, color: '#64748B', marginTop: 2 }}>{company.tagline}</Text>
                 )}
+                {/* Datos de la empresa emisora bajo el logo. */}
+                <View style={styles.issuerBlock}>
+                    {(company.legalName || company.name) && (
+                        <Text style={styles.issuerName}>{company.legalName || company.name}</Text>
+                    )}
+                    {company.cif && <Text style={styles.issuerLine}>CIF: {company.cif}</Text>}
+                    {company.address && <Text style={styles.issuerLine}>{company.address}</Text>}
+                    {(company.phone || company.email) && (
+                        <Text style={styles.issuerLine}>
+                            {[company.phone, company.email].filter(Boolean).join('  ·  ')}
+                        </Text>
+                    )}
+                    {company.web && <Text style={styles.issuerLine}>{company.web}</Text>}
+                </View>
             </View>
             <View style={styles.metaSection}>
                 <Text style={styles.bold}>PRESUPUESTO Nº {budgetNumber}</Text>
@@ -312,8 +342,6 @@ const Header = ({ budgetNumber, date, logoUrl, company, totalAmount }: { budgetN
                         Total: {formatCurrency(totalAmount)}
                     </Text>
                 )}
-                {company.web && <Text>{company.web}</Text>}
-                {company.phone && <Text>{company.phone}</Text>}
             </View>
         </View>
     );

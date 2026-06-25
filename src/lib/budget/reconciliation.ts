@@ -9,6 +9,7 @@
  * admin edita unit_price manualmente y los componentes ya no cuadran.
  */
 import type { EditableBudgetLineItem } from '@/types/budget-editor';
+import type { BudgetBreakdownComponent } from '@/backend/budget/domain/budget';
 
 export type DivergenceInfo = {
     /** True si la desviación supera la tolerancia visual (>0.5%) y la partida tiene breakdown evaluable. */
@@ -92,4 +93,132 @@ export function previewReconcile(line: EditableBudgetLineItem): ReconcilePartida
             after: Math.round((b.total || 0) * scale * 100) / 100,
         })),
     };
+}
+
+// ---------------------------------------------------------------------------
+// Reparación de descompuestos a 0 desde el catálogo COAATMCA.
+//
+// Cuando una partida emparejó correctamente con el catálogo pero su breakdown
+// persistido llegó con precios a 0 (sum = 0), no se puede "escalar" (escalar 0
+// da 0). En su lugar re-poblamos los precios desde el catálogo y luego escalamos
+// para que el sumatorio cuadre con el unit_price validado (que en budgets
+// phase17 ya viene baked con margen). El total de la partida NO cambia.
+// ---------------------------------------------------------------------------
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/**
+ * Componente de catálogo normalizado. Cada fuente (server action v005, breakdown
+ * embebido en `selected_candidate`, o el JSON COAATMCA del script de backfill)
+ * mapea su shape a éste antes de construir el descompuesto reparado.
+ *
+ * `lineTotal` es el total de línea del componente (p.ej. `%` = 4% de la base =
+ * 2,89 €), NO `unitPrice × quantity` — clave para que `%` (medios auxiliares)
+ * sea correcto.
+ */
+export type NormalizedCatalogComponent = {
+    code?: string;
+    description?: string;
+    unit?: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    is_variable?: boolean;
+};
+
+/** Clasifica el tipo de componente por prefijo de código (convención COAATMCA). */
+function classifyComponentType(code: string): BudgetBreakdownComponent['type'] {
+    const c = (code || '').toLowerCase();
+    if (c.startsWith('mo')) return 'LABOR';
+    if (c.startsWith('mq')) return 'MACHINERY';
+    if (c.startsWith('mt')) return 'MATERIAL';
+    return 'OTHER';
+}
+
+/** Mapea componentes de catálogo normalizados a `BudgetBreakdownComponent[]`. */
+export function mapCatalogToBreakdown(comps: NormalizedCatalogComponent[]): BudgetBreakdownComponent[] {
+    return comps.map((c) => {
+        const code = c.code || '';
+        const quantity = Number(c.quantity || 0);
+        const unitPrice = Number(c.unitPrice || 0);
+        const total = typeof c.lineTotal === 'number' ? c.lineTotal : unitPrice * quantity;
+        return {
+            code,
+            concept: c.description || code || 'Componente',
+            type: classifyComponentType(code),
+            price: unitPrice,
+            unitPrice,
+            yield: quantity,
+            quantity,
+            total: round2(total),
+            totalPrice: round2(total),
+            is_variable: c.is_variable === true,
+        };
+    });
+}
+
+/**
+ * Escala un descompuesto para que `sum(total) === unitPrice`, preservando las
+ * proporciones entre componentes. Back-calcula `price` desde el nuevo total y el
+ * rendimiento (misma lógica que `reconcile-partidas.action`). Devuelve copia nueva.
+ */
+export function scaleBreakdownToUnitPrice(
+    comps: BudgetBreakdownComponent[],
+    unitPrice: number,
+): BudgetBreakdownComponent[] {
+    const sum = comps.reduce((s, c: any) => s + (c.total || c.totalPrice || 0), 0);
+    if (sum <= 0 || unitPrice <= 0) return comps;
+    const scale = unitPrice / sum;
+    return comps.map((c: any) => {
+        const newTotal = round2((c.total || c.totalPrice || 0) * scale);
+        const yieldQty = c.yield || c.quantity || 0;
+        const newPrice = yieldQty > 0 ? round2(newTotal / yieldQty) : round2((c.price || c.unitPrice || 0) * scale);
+        return { ...c, total: newTotal, totalPrice: newTotal, price: newPrice, unitPrice: newPrice };
+    });
+}
+
+/**
+ * Construye el descompuesto reparado: re-pobla desde el catálogo y escala al
+ * `unitPrice` validado. Garantiza divergencia 0.
+ */
+export function buildRepairedBreakdown(
+    catalogComps: NormalizedCatalogComponent[],
+    unitPrice: number,
+): BudgetBreakdownComponent[] {
+    return scaleBreakdownToUnitPrice(mapCatalogToBreakdown(catalogComps), unitPrice);
+}
+
+/** Código del candidato del catálogo emparejado por la IA, si existe. */
+export function getWinnerCatalogCode(line: EditableBudgetLineItem): string | null {
+    const item: any = line.item;
+    const winner = item?.aiResolution?.selected_candidate ?? item?.ai_resolution?.selected_candidate;
+    if (!winner) return null;
+    const code = typeof winner === 'string' ? winner : winner.code;
+    return code ? String(code) : null;
+}
+
+/**
+ * True si el descompuesto tiene al menos un componente con precio Y total a 0 —
+ * síntoma del bug de "precios perdidos" del catálogo. Detecta tanto el caso
+ * total (todos a 0 → divergencia) como el parcial (algunos a 0 pero la suma
+ * coincide por casualidad con el unit_price, p.ej. NL-15, sin divergencia).
+ */
+export function hasZeroPricedComponent(line: EditableBudgetLineItem): boolean {
+    const bd = line.item?.breakdown;
+    if (!bd || bd.length === 0) return false;
+    return bd.some((c: any) => {
+        const total = Number(c.total ?? c.totalPrice ?? 0);
+        const price = Number(c.price ?? c.unitPrice ?? 0);
+        return total <= 0.0001 && price <= 0.0001;
+    });
+}
+
+/**
+ * Predicado unificado usado por banner, modal y panel lateral: la partida
+ * necesita reconciliación si hay divergencia de sumatorios, o si tiene
+ * componentes a 0 reparables desde el catálogo (candidato emparejado).
+ */
+export function needsReconciliation(line: EditableBudgetLineItem): boolean {
+    if (detectDivergence(line).hasDivergence) return true;
+    return hasZeroPricedComponent(line) && !!getWinnerCatalogCode(line);
 }

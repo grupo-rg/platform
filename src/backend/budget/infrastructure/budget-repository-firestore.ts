@@ -2,6 +2,7 @@
 import { Budget, BudgetRepository } from '../domain/budget';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
+import { generateNextBudgetNumber } from './budget-number-generator';
 
 /**
  * Firestore implementation of the BudgetRepository.
@@ -83,10 +84,21 @@ export class BudgetRepositoryFirestore implements BudgetRepository {
 
   async save(budget: Budget): Promise<void> {
     console.log(`[Infrastructure] Saving budget to Firestore (Subcollections): ${budget.id}`);
-    
+
+    // Asigna un número de presupuesto legible tipo factura (YYYY-MM/NNNN) la
+    // primera vez que se persiste. Atómico vía transacción sobre un contador.
+    // Se mutará también el objeto entrante para que el caller lo vea de inmediato.
+    if (!budget.budgetNumber) {
+      try {
+        budget.budgetNumber = await generateNextBudgetNumber(this.db);
+      } catch (err) {
+        console.error('[Infrastructure] No se pudo generar budgetNumber (se continúa sin él):', err);
+      }
+    }
+
     const batch = this.db.batch();
     const docRef = this.collection.doc(budget.id);
-    
+
     const { chapters, ...budgetMeta } = budget;
 
     batch.set(docRef, {

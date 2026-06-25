@@ -93,7 +93,7 @@ export interface BudgetEditorState {
 
 export type BudgetEditorAction =
     | { type: 'SET_ITEMS'; payload: EditableBudgetLineItem[] }
-    | { type: 'UPDATE_ITEM'; payload: { id: string; changes: Partial<EditableBudgetLineItem> } }
+    | { type: 'UPDATE_ITEM'; payload: { id: string; changes: Partial<EditableBudgetLineItem>; transient?: boolean } }
     | { type: 'ADD_ITEM'; payload: EditableBudgetLineItem }
     | { type: 'DUPLICATE_ITEM'; payload: string }
     | { type: 'REMOVE_ITEM'; payload: string }

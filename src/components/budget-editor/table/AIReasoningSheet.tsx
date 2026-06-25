@@ -20,7 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import {
     Sparkles, AlertTriangle, ListTree, FileText,
     TrendingUp, ChevronDown, ChevronUp, Bot, Send, Package, PlusCircle, Settings2, Trash2,
-    ChevronRight,
+    ChevronRight, Loader2, Wrench,
 } from "lucide-react";
 import { ComponentSubBreakdown } from './ComponentSubBreakdown';
 import { EditableBudgetLineItem } from "@/types/budget-editor";
@@ -29,6 +29,8 @@ import { SemanticCatalogSidebar } from '../SemanticCatalogSidebar';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
 import { MatchKindChip, UnitConversionApplied, CandidateMetaBadges, AppliedFragmentsBadge } from './audit-v005';
 import { useMarkupFactor } from '@/hooks/use-markup-factor';
+import { computeRepairedBreakdown, buildRepairPatch } from '@/lib/budget/repair-breakdown.client';
+import { getWinnerCatalogCode, hasZeroPricedComponent } from '@/lib/budget/reconciliation';
 
 interface AIReasoningSheetProps {
     open: boolean;
@@ -69,6 +71,33 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
     const [captureOpen, setCaptureOpen] = useState(false);
     const aiProposedRef = useRef<{ itemId: string; snapshot: PriceOrUnitSnapshot } | null>(null);
     const lastSnapshotRef = useRef<PriceOrUnitSnapshot | undefined>(undefined);
+
+    // Reparación de descompuesto a 0 desde el catálogo COAATMCA.
+    const [isRepairing, setIsRepairing] = useState(false);
+    const handleRepairFromCatalog = async () => {
+        if (!item) return;
+        setIsRepairing(true);
+        try {
+            const repaired = await computeRepairedBreakdown(item);
+            if (!repaired || repaired.length === 0) {
+                sileo.error({
+                    title: 'No se pudo reparar',
+                    description: 'No se encontró el descompuesto de esta partida en el catálogo COAATMCA.',
+                });
+                return;
+            }
+            onUpdate(item.id, { item: buildRepairPatch(item.item, repaired), isDirty: true });
+            sileo.success({
+                title: 'Descompuesto reparado',
+                description: 'Precios recargados desde el catálogo y ajustados al precio total de la partida.',
+            });
+        } catch (err) {
+            console.error('[Repair] handleRepairFromCatalog failed', err);
+            sileo.error({ title: 'Error al reparar', description: 'Inténtalo de nuevo en unos segundos.' });
+        } finally {
+            setIsRepairing(false);
+        }
+    };
 
     const currentSnapshot: PriceOrUnitSnapshot | undefined = item?.item
         ? { unitPrice: Number(item.item.unitPrice) || 0, unit: item.item.unit || '' }
@@ -132,6 +161,10 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
     const realEditedTotal = rawBreakdown.reduce((acc: number, comp: any) => acc + calculateCompTotal(comp), 0);
     const deviation = Math.abs((rawBreakdown.length > 0 ? realEditedTotal : itemTotal) - itemTotal);
     const isDeviated = rawBreakdown.length > 0 && deviation > 0.05; // 5 cents tolerance
+    // Componentes a 0 (bug de precios perdidos) aunque la suma cuadre — caso NL-15.
+    const hasZeroComp = hasZeroPricedComponent(item);
+    const canRepairFromCatalog = !!getWinnerCatalogCode(item);
+    const showRepairBox = (isDeviated || hasZeroComp) && hasBreakdown;
 
     // Recursive calculation for Thermometer (Mo, Mt, Other)
     let calcLabor = 0;
@@ -435,16 +468,43 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                 </div>
                             )}
 
-                            {/* Deviation Warning Box */}
-                            {isDeviated && hasBreakdown && (
-                                <div className="mt-3 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-xs p-2.5 rounded-lg border border-amber-200 dark:border-amber-800/50 flex items-start gap-2">
-                                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                                    <div>
-                                        <p className="font-semibold mb-0.5">Divergencia de sumatorios detectada</p>
-                                        <p className="opacity-80 leading-relaxed text-[11px]">
-                                            El sumatorio del descompuesto ({formatCurrency(breakdownTotal * markupFactor)}) difiere del precio oficial de la base ({formatCurrency(itemTotal * markupFactor)}).
-                                        </p>
+                            {/* Caja de divergencia / componentes sin precio */}
+                            {showRepairBox && (
+                                <div className="mt-3 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-xs p-2.5 rounded-lg border border-amber-200 dark:border-amber-800/50 flex flex-col gap-2">
+                                    <div className="flex items-start gap-2">
+                                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                        <div>
+                                            {isDeviated ? (
+                                                <>
+                                                    <p className="font-semibold mb-0.5">Divergencia de sumatorios detectada</p>
+                                                    <p className="opacity-80 leading-relaxed text-[11px]">
+                                                        El sumatorio del descompuesto ({formatCurrency(breakdownTotal * markupFactor)}) difiere del precio oficial de la base ({formatCurrency(itemTotal * markupFactor)}).
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <p className="font-semibold mb-0.5">Componentes sin precio</p>
+                                                    <p className="opacity-80 leading-relaxed text-[11px]">
+                                                        Algunos componentes del descompuesto están a 0 €. Recárgalos desde el catálogo para obtener la distribución real.
+                                                    </p>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
+                                    {/* Reparar desde catálogo: re-pobla los precios de los componentes
+                                        desde COAATMCA y los escala al precio total validado. */}
+                                    {canRepairFromCatalog && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={isRepairing}
+                                            onClick={handleRepairFromCatalog}
+                                            className="h-7 self-start border-amber-400 text-amber-900 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40 text-[11px] font-semibold gap-1.5"
+                                        >
+                                            {isRepairing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wrench className="w-3.5 h-3.5" />}
+                                            Reparar desde catálogo (COAATMCA)
+                                        </Button>
+                                    )}
                                 </div>
                             )}
                         </div>

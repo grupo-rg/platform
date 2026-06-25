@@ -5,6 +5,13 @@ import { cn, formatCurrency } from '@/lib/utils';
 interface EditableCellProps {
     value: string | number;
     onChange: (value: string | number) => void;
+    /**
+     * Se dispara en cada pulsación (no sólo al blur) para campos number/currency.
+     * Permite recalcular totales de partida, capítulo y global EN VIVO mientras el
+     * usuario escribe, sin esperar a que el input pierda el foco. El commit final
+     * (con efectos secundarios como logging RLHF) sigue ocurriendo en `onChange`.
+     */
+    onLiveChange?: (value: number) => void;
     type?: 'text' | 'number' | 'currency' | 'textarea';
     className?: string;
     placeholder?: string;
@@ -14,6 +21,7 @@ interface EditableCellProps {
 export const EditableCell = ({
     value,
     onChange,
+    onLiveChange,
     type = 'text',
     className,
     placeholder,
@@ -23,14 +31,29 @@ export const EditableCell = ({
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
+    // No sobreescribimos el valor local mientras el campo está enfocado: el valor
+    // del prop puede recalcularse en vivo (p.ej. precio unitario derivado del total)
+    // y machacaría lo que el usuario está tecleando — impidiendo escribir decimales.
     useEffect(() => {
-        setLocalValue(value);
-    }, [value]);
+        if (!isFocused) setLocalValue(value);
+    }, [value, isFocused]);
+
+    const isNumeric = type === 'number' || type === 'currency';
+
+    const handleInputChange = (raw: string) => {
+        setLocalValue(raw);
+        if (!onLiveChange || !isNumeric) return;
+        // Evitamos commitear valores intermedios incompletos ("", "-", "10.")
+        // que romperían el cálculo; esperamos a tener un número parseable.
+        if (raw === '' || raw === '-' || raw.endsWith('.') || raw.endsWith(',')) return;
+        const num = Number(raw.replace(',', '.'));
+        if (!Number.isNaN(num)) onLiveChange(num);
+    };
 
     const handleBlur = () => {
         setIsFocused(false);
         if (localValue !== value) {
-            onChange(type === 'number' || type === 'currency' ? Number(localValue) : localValue);
+            onChange(isNumeric ? Number(localValue) : localValue);
         }
     };
 
@@ -81,7 +104,7 @@ export const EditableCell = ({
                 ref={inputRef as any}
                 type={type === 'currency' ? 'number' : type}
                 value={Number.isNaN(localValue) ? '' : localValue}
-                onChange={(e) => setLocalValue(e.target.value)}
+                onChange={(e) => handleInputChange(e.target.value)}
                 onBlur={handleBlur}
                 onFocus={() => setIsFocused(true)}
                 onKeyDown={handleKeyDown}

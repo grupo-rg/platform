@@ -162,6 +162,15 @@ export interface BudgetTelemetry {
 export interface Budget {
   id: string;
 
+  /**
+   * Número de presupuesto legible tipo factura, formato `YYYY-MM/NNNN`
+   * (p.ej. "2026-06/0001"). La secuencia reinicia cada mes natural. Se asigna
+   * de forma atómica (transacción Firestore sobre un contador) la primera vez
+   * que el presupuesto se persiste. Los presupuestos históricos sin este campo
+   * caen al fragmento del `id` vía `displayBudgetNumber()`.
+   */
+  budgetNumber?: string;
+
   // Owner Reference (Linked to Lead Module)
   leadId: string;
 
@@ -271,6 +280,15 @@ export interface Budget {
     comment: string;
     ipAddress?: string;
   }[];
+}
+
+/**
+ * Número de presupuesto a mostrar al usuario. Usa el `budgetNumber` tipo factura
+ * si existe; si no (presupuestos históricos), cae al fragmento corto del `id` en
+ * mayúsculas para conservar compatibilidad visual.
+ */
+export function displayBudgetNumber(budget: Pick<Budget, 'id' | 'budgetNumber'>): string {
+  return budget.budgetNumber || budget.id.substring(0, 8).toUpperCase();
 }
 
 export interface BudgetRender {

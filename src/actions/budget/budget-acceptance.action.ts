@@ -6,6 +6,7 @@ import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budge
 import { EventDispatcher } from '@/backend/shared/events/event-dispatcher';
 import { BudgetAcceptedEvent } from '@/backend/budget/domain/events/budget-accepted.event';
 import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/resend-email.service';
+import { displayBudgetNumber } from '@/backend/budget/domain/budget';
 import { sanitizeUserText } from '@/backend/shared/security/input-sanitizer';
 
 const budgetRepo = new BudgetRepositoryFirestore();
@@ -79,7 +80,7 @@ export async function getBudgetByAcceptanceTokenAction(
             success: true,
             data: {
                 id: budget.id,
-                refShort: budget.id.substring(0, 8).toUpperCase(),
+                refShort: displayBudgetNumber(budget),
                 clientName: budget.clientSnapshot?.name || 'Cliente',
                 totalEstimated:
                     budget.costBreakdown?.total || budget.totalEstimated || 0,
@@ -178,7 +179,7 @@ export async function acceptBudgetAction(input: {
 
         return {
             success: true,
-            data: { refShort: budget.id.substring(0, 8).toUpperCase() },
+            data: { refShort: displayBudgetNumber(budget) },
         };
     } catch (err: any) {
         console.error('[acceptBudget] Error:', err);

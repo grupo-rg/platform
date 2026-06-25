@@ -1,4 +1,4 @@
-import { Budget } from "@/backend/budget/domain/budget";
+import { Budget, displayBudgetNumber } from "@/backend/budget/domain/budget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { FileText, Map, Phone, Mail, User, Image as ImageIcon, File } from "lucide-react";
@@ -117,7 +117,7 @@ export function BudgetRequestViewer({ budget, isAdmin = false }: BudgetRequestVi
                         {isNewBuild ? "Solicitud de Obra Nueva" : "Solicitud de Presupuesto Rápido"}
                     </h1>
                     <p className="text-slate-500 mt-1 flex items-center gap-2 text-sm">
-                        <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">Ref: {budget.id.substring(0, 8)}</span>
+                        <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-700">Ref: {displayBudgetNumber(budget)}</span>
                         <span>•</span>
                         <span>{format(createdAt, "PPP 'a las' p", { locale: es })}</span>
                     </p>

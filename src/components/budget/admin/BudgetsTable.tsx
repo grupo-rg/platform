@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Budget } from '@/backend/budget/domain/budget';
+import { Budget, displayBudgetNumber } from '@/backend/budget/domain/budget';
 import { deleteBudgetsAction } from '@/actions/budget/delete-budgets.action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -273,7 +273,7 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
                                         <TableCell>
                                             <div className="flex flex-col gap-1">
                                                 <span className="font-mono text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded w-fit group-hover:bg-white dark:group-hover:bg-zinc-700 transition-colors">
-                                                    #{budget.id.substring(0, 8).toUpperCase()}
+                                                    Nº {displayBudgetNumber(budget)}
                                                 </span>
                                                 <div className="flex items-center text-xs text-muted-foreground">
                                                     <Calendar className="mr-1.5 h-3 w-3" />
@@ -353,6 +353,7 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
                                                 {(budget.status === 'pending_review' || budget.status === 'draft') && (
                                                     <BudgetApproveButton
                                                         budgetId={budget.id}
+                                                        budgetNumber={displayBudgetNumber(budget)}
                                                         clientName={budget.clientSnapshot?.name || (budget as any).clientData?.name || 'Cliente'}
                                                         totalEstimated={budget.totalEstimated}
                                                         locale={locale}

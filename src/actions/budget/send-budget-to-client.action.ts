@@ -7,6 +7,7 @@ import { uploadBuffer } from '@/backend/shared/infrastructure/storage/upload-pub
 import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/resend-email.service';
 import { EventDispatcher } from '@/backend/shared/events/event-dispatcher';
 import { BudgetSentEvent } from '@/backend/budget/domain/events/budget-sent.event';
+import { displayBudgetNumber } from '@/backend/budget/domain/budget';
 import { verifyAuth } from '@/backend/auth/auth.middleware';
 
 interface SendBudgetToClientInput {
@@ -83,7 +84,7 @@ export async function sendBudgetToClientAction(
             acceptanceTokenIssuedAt,
         } as any);
 
-        const subject = `Tu presupuesto de Grupo RG está listo · ${budget.id.substring(0, 8).toUpperCase()}`;
+        const subject = `Tu presupuesto de Grupo RG está listo · ${displayBudgetNumber(budget)}`;
         const totalFmt = (budget.totalEstimated || budget.costBreakdown?.total || 0).toLocaleString('es-ES', {
             style: 'currency',
             currency: 'EUR',

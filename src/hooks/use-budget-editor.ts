@@ -324,6 +324,19 @@ function budgetEditorReducer(state: BudgetEditorState, action: BudgetEditorActio
 
             const breakdown = calculateBreakdown(updatedItems, state.config, state.executionMode, state.calibrationVersion, state.bakedConfig);
 
+            // Edición en vivo (cada pulsación mientras se escribe): recalculamos
+            // totales pero NO empujamos al historial, para que Deshacer no tenga
+            // que recorrer dígito a dígito. El commit final (blur) sí registra una
+            // única entrada de historial.
+            if (action.payload.transient) {
+                return {
+                    ...state,
+                    items: updatedItems,
+                    costBreakdown: breakdown,
+                    hasUnsavedChanges: true
+                };
+            }
+
             // Add to history
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push({ items: updatedItems, timestamp: Date.now() });
@@ -633,8 +646,8 @@ export function useBudgetEditor(
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [state.hasUnsavedChanges]);
 
-    const updateItem = useCallback((id: string, changes: Partial<EditableBudgetLineItem>) => {
-        dispatch({ type: 'UPDATE_ITEM', payload: { id, changes } });
+    const updateItem = useCallback((id: string, changes: Partial<EditableBudgetLineItem>, transient = false) => {
+        dispatch({ type: 'UPDATE_ITEM', payload: { id, changes, transient } });
     }, []);
 
     const reorderItems = useCallback((newItems: EditableBudgetLineItem[]) => {

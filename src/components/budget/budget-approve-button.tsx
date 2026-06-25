@@ -20,12 +20,14 @@ import { useRouter } from 'next/navigation';
 
 interface BudgetApproveButtonProps {
     budgetId: string;
+    /** Número de presupuesto tipo factura (YYYY-MM/NNNN); fallback al id corto. */
+    budgetNumber?: string;
     clientName: string;
     totalEstimated: number;
     locale: string;
 }
 
-export function BudgetApproveButton({ budgetId, clientName, totalEstimated, locale }: BudgetApproveButtonProps) {
+export function BudgetApproveButton({ budgetId, budgetNumber, clientName, totalEstimated, locale }: BudgetApproveButtonProps) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -119,7 +121,7 @@ export function BudgetApproveButton({ budgetId, clientName, totalEstimated, loca
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs text-muted-foreground">Ref.</span>
                                     <span className="text-[10px] font-mono bg-zinc-200 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
-                                        #{budgetId.substring(0, 8).toUpperCase()}
+                                        Nº {budgetNumber || budgetId.substring(0, 8).toUpperCase()}
                                     </span>
                                 </div>
                             </div>

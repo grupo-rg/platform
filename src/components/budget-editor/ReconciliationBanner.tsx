@@ -15,7 +15,7 @@ import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ReconciliationDiffModal } from './ReconciliationDiffModal';
-import { detectDivergence } from '@/lib/budget/reconciliation';
+import { needsReconciliation } from '@/lib/budget/reconciliation';
 import type { EditableBudgetLineItem } from '@/types/budget-editor';
 
 interface ReconciliationBannerProps {
@@ -38,7 +38,7 @@ export function ReconciliationBanner({ items, budgetId, calibrationVersion, onRe
             const hasBreakdown = !!(line.item?.breakdown && line.item.breakdown.length > 0);
             if (!hasBreakdown) continue;
             evaluable += 1;
-            if (detectDivergence(line).hasDivergence) divergent += 1;
+            if (needsReconciliation(line)) divergent += 1;
         }
         return { divergent, evaluable };
     }, [items, isPhase17]);

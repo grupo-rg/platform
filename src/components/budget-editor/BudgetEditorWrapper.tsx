@@ -6,7 +6,7 @@ import { BudgetEditorTable } from './BudgetEditorTable';
 import { BudgetEditorToolbar } from './BudgetEditorToolbar';
 import { updateBudgetAction } from '@/actions/budget/update-budget.action';
 import { rebakePartidasIfFactorChanged } from '@/lib/budget/markup-rebake';
-import { Budget } from '@/backend/budget/domain/budget';
+import { Budget, displayBudgetNumber } from '@/backend/budget/domain/budget';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -151,6 +151,9 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
 
     const sourceInfo = getSourceInfo(budget.source);
     const SourceIcon = sourceInfo.icon;
+
+    // Número de presupuesto tipo factura (YYYY-MM/NNNN); fallback al id corto.
+    const budgetNumber = displayBudgetNumber(budget);
 
     // Handle Save
     const handleSave = async () => {
@@ -356,7 +359,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                 clientName={budget.clientSnapshot?.name || 'Cliente'}
                 items={state.items}
                 costBreakdown={state.costBreakdown}
-                budgetNumber={budget.id.substring(0, 8)}
+                budgetNumber={budgetNumber}
                 showGhostMode={isGhostMode}
                 onToggleGhostMode={() => setIsGhostMode(!isGhostMode)}
                 executionMode={state.executionMode}
@@ -381,7 +384,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                     <SourceIcon className="w-3.5 h-3.5" />
                                     {sourceInfo.label}
                                 </Badge>
-                                <span className="text-xs font-mono text-muted-foreground">#{budget.id.substring(0, 8).toUpperCase()}</span>
+                                <span className="text-xs font-mono text-muted-foreground">Nº {budgetNumber}</span>
                             </div>
 
                             <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight font-headline text-foreground flex items-center gap-2 flex-wrap">
@@ -451,7 +454,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData }: BudgetEditorWrapperPro
                                                 items={state.items}
                                                 chapters={state.chapters}
                                                 clientName={budget.clientSnapshot?.name || 'Cliente'}
-                                                budgetNumber={budget.id.substring(0, 8)}
+                                                budgetNumber={budgetNumber}
                                                 executionMode={state.executionMode}
                                                 onPdfDownloaded={handlePdfDownloaded}
                                                 initialPdfMeta={pdfMeta}

@@ -20,8 +20,9 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { reconcilePartidasAction } from '@/actions/admin/reconcile-partidas.action';
-import { detectDivergence, previewReconcile } from '@/lib/budget/reconciliation';
+import { detectDivergence, previewReconcile, needsReconciliation, hasZeroPricedComponent } from '@/lib/budget/reconciliation';
+import { computeRepairedBreakdown, buildRepairPatch, getWinnerCatalogCode } from '@/lib/budget/repair-breakdown.client';
+import { useBudgetEditorContext } from './BudgetEditorContext';
 import type { EditableBudgetLineItem } from '@/types/budget-editor';
 
 interface ReconciliationDiffModalProps {
@@ -45,20 +46,26 @@ export function ReconciliationDiffModal({
     onReconciled,
 }: ReconciliationDiffModalProps) {
     const { toast } = useToast();
+    const { updateItem } = useBudgetEditorContext();
     const [isPending, startTransition] = useTransition();
 
     const candidateRows = useMemo(() => {
         return items
             .filter((line) => {
                 if (focusedPartidaId) return line.id === focusedPartidaId;
-                return detectDivergence(line).hasDivergence;
+                return needsReconciliation(line);
             })
             .map((line) => {
                 const div = detectDivergence(line);
-                const preview = previewReconcile(line);
-                return { line, div, preview };
+                // Si faltan precios de componentes (suma ~0 o componentes a 0), se
+                // reconstruye desde el catálogo en vez de escalar. `previewReconcile`
+                // no es representativo en ese caso → mostramos un mensaje distinto.
+                const willUseCatalog = div.sumBreakdown <= 0.005 || hasZeroPricedComponent(line);
+                const preview = willUseCatalog ? null : previewReconcile(line);
+                const winnerCode = getWinnerCatalogCode(line);
+                return { line, div, preview, willUseCatalog, winnerCode };
             })
-            .filter((r) => r.preview != null);
+            .filter((r) => r.willUseCatalog || r.preview != null);
     }, [items, focusedPartidaId]);
 
     const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -76,20 +83,40 @@ export function ReconciliationDiffModal({
     const handleConfirm = () => {
         if (selectedIds.length === 0) return;
         startTransition(async () => {
-            const result = await reconcilePartidasAction(budgetId, selectedIds);
-            if (!result.ok) {
+            let reconciled = 0;
+            let skipped = 0;
+            for (const id of selectedIds) {
+                const line = items.find((l) => l.id === id);
+                if (!line || !line.item) {
+                    skipped += 1;
+                    continue;
+                }
+                // Escala el descompuesto al unit_price, o lo reconstruye desde el
+                // catálogo COAATMCA si está a 0. Cliente-side → reflejo inmediato en
+                // el editor; se persiste con "Guardar".
+                const repaired = await computeRepairedBreakdown(line);
+                if (!repaired || repaired.length === 0) {
+                    skipped += 1;
+                    continue;
+                }
+                updateItem(id, { item: buildRepairPatch(line.item, repaired), isDirty: true });
+                reconciled += 1;
+            }
+
+            if (reconciled === 0) {
                 toast({
                     variant: 'destructive',
-                    title: 'Error al reconciliar',
-                    description: result.error || 'No se pudo aplicar la reconciliación.',
+                    title: 'No se pudo reconciliar',
+                    description: 'No se encontró el descompuesto en el catálogo para las partidas seleccionadas.',
                 });
                 return;
             }
+
             toast({
-                title: `${result.reconciled} partidas reconciliadas`,
-                description: result.skipped > 0
-                    ? `${result.skipped} omitidas (ya cuadraban o sin breakdown).`
-                    : 'Descompuesto recalculado para que sume el unit_price.',
+                title: `${reconciled} partida${reconciled === 1 ? '' : 's'} reconciliada${reconciled === 1 ? '' : 's'}`,
+                description: skipped > 0
+                    ? `${skipped} omitida${skipped === 1 ? '' : 's'} (sin candidato de catálogo).`
+                    : 'Descompuesto recalculado para que sume el precio total. Recuerda Guardar.',
             });
             onReconciled?.(selectedIds);
             onOpenChange(false);
@@ -118,7 +145,7 @@ export function ReconciliationDiffModal({
                     </div>
                 ) : (
                     <div className="space-y-3 my-2">
-                        {candidateRows.map(({ line, div, preview }) => (
+                        {candidateRows.map(({ line, div, preview, willUseCatalog, winnerCode }) => (
                             <div key={line.id} className="border rounded-md p-3 bg-muted/20">
                                 <div className="flex items-start gap-3">
                                     <Checkbox
@@ -154,26 +181,39 @@ export function ReconciliationDiffModal({
                                                 {div.diffAmount.toFixed(2)} € ({(div.diffPct * 100).toFixed(1)}%)
                                             </span>
                                         </div>
-                                        <table className="w-full text-xs">
-                                            <thead>
-                                                <tr className="border-b text-muted-foreground">
-                                                    <th className="text-left py-1">Componente</th>
-                                                    <th className="text-right py-1">Total actual</th>
-                                                    <th className="text-right py-1">Total nuevo</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {preview!.componentScales.map((c, i) => (
-                                                    <tr key={i} className="border-b border-dashed last:border-0">
-                                                        <td className="py-1 font-mono text-xs">{c.code || '—'}</td>
-                                                        <td className="text-right py-1 font-mono">{c.before.toFixed(2)} €</td>
-                                                        <td className="text-right py-1 font-mono font-semibold text-green-700">
-                                                            {c.after.toFixed(2)} €
-                                                        </td>
+                                        {willUseCatalog ? (
+                                            <div className="text-xs rounded-md border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-950/20 px-2.5 py-2 text-emerald-800 dark:text-emerald-300">
+                                                {winnerCode ? (
+                                                    <>Componentes sin precio — se reconstruirá el descompuesto desde el catálogo COAATMCA{' '}
+                                                        (<span className="font-mono">{winnerCode}</span>) y se escalará al precio total.</>
+                                                ) : (
+                                                    <span className="text-amber-700 dark:text-amber-400">
+                                                        Descompuesto sin precios y sin candidato de catálogo asociado — no se puede reparar automáticamente.
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <table className="w-full text-xs">
+                                                <thead>
+                                                    <tr className="border-b text-muted-foreground">
+                                                        <th className="text-left py-1">Componente</th>
+                                                        <th className="text-right py-1">Total actual</th>
+                                                        <th className="text-right py-1">Total nuevo</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    {preview!.componentScales.map((c, i) => (
+                                                        <tr key={i} className="border-b border-dashed last:border-0">
+                                                            <td className="py-1 font-mono text-xs">{c.code || '—'}</td>
+                                                            <td className="text-right py-1 font-mono">{c.before.toFixed(2)} €</td>
+                                                            <td className="text-right py-1 font-mono font-semibold text-green-700">
+                                                                {c.after.toFixed(2)} €
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
                                     </div>
                                 </div>
                             </div>

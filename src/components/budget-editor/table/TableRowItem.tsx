@@ -53,7 +53,7 @@ import { logCorrectionPairAction } from '@/actions/ai-training/log-correction-pa
 
 interface TableRowItemProps {
     item: EditableBudgetLineItem;
-    onUpdate: (id: string, changes: Partial<EditableBudgetLineItem>) => void;
+    onUpdate: (id: string, changes: Partial<EditableBudgetLineItem>, transient?: boolean) => void;
     onRemove: (id: string) => void;
     onDuplicate: (id: string) => void;
     showGhostMode?: boolean;
@@ -177,15 +177,23 @@ export const TableRowItem = React.memo(({
     const displayTotal = Number((activePrice * markupFactor).toFixed(2));
     const displayUnitPrice = Number(((item.item?.quantity || 1) > 0 ? displayTotal / item.item!.quantity : 0).toFixed(2));
 
-    const handleTotalChange = (val: string | number) => {
-        // El usuario edita el valor all-in mostrado. Almacenamos raw PEM.
+    // Convierte el total all-in editado por el usuario en el precio unitario raw
+    // que almacenamos internamente. Reutilizado por el commit final (blur) y por
+    // el recálculo en vivo (cada pulsación).
+    const totalToUnitPrice = (val: string | number) => {
         const newTotalAllIn = Number(val);
         const newTotalRaw = newTotalAllIn / (markupFactor || 1);
         const quantity = item.item?.quantity || 1;
-        const newUnitPrice = newTotalRaw / (quantity === 0 ? 1 : quantity);
-        // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
-        handleUpdate(item.id, { item: { ...item.item!, unitPrice: newUnitPrice } });
+        return newTotalRaw / (quantity === 0 ? 1 : quantity);
     };
+
+    const handleTotalChange = (val: string | number) => {
+        // El usuario edita el valor all-in mostrado. Almacenamos raw PEM.
+        // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
+        handleUpdate(item.id, { item: { ...item.item!, unitPrice: totalToUnitPrice(val) } });
+    };
+
+    const unitPriceAllInToRaw = (val: string | number) => Number(val) / (markupFactor || 1);
 
     const handleGenerateBreakdown = (forceShowCandidates: boolean = false) => {
         if (!item.originalTask) return;
@@ -420,6 +428,7 @@ export const TableRowItem = React.memo(({
                 <EditableCell
                     value={item.item?.quantity || 0}
                     onChange={(val) => handleUpdate(item.id, { item: { ...item.item!, quantity: Number(val) } })}
+                    onLiveChange={(val) => onUpdate(item.id, { item: { ...item.item!, quantity: Number(val) } }, true)}
                     type="number"
                     className="text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full pr-2"
                 />
@@ -432,11 +441,10 @@ export const TableRowItem = React.memo(({
                         value={displayUnitPrice}
                         onChange={(val) => {
                             // Phase 15 — el usuario edita en all-in; almacenamos raw PEM.
-                            const newUnitPriceAllIn = Number(val);
-                            const newUnitPriceRaw = newUnitPriceAllIn / (markupFactor || 1);
                             // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
-                            handleUpdate(item.id, { item: { ...item.item!, unitPrice: newUnitPriceRaw } });
+                            handleUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } });
                         }}
+                        onLiveChange={(val) => onUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } }, true)}
                         type="currency"
                         className={cn(
                             "text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full",
@@ -456,6 +464,7 @@ export const TableRowItem = React.memo(({
                 <EditableCell
                     value={displayTotal}
                     onChange={handleTotalChange}
+                    onLiveChange={(val) => onUpdate(item.id, { item: { ...item.item!, unitPrice: totalToUnitPrice(val) } }, true)}
                     type="currency"
                     className="text-right bg-transparent border-transparent w-full"
                 />
