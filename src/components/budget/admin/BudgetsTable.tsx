@@ -53,6 +53,7 @@ import { Input } from '@/components/ui/input';
 import { BudgetApproveButton } from '@/components/budget/budget-approve-button';
 import Link from 'next/link';
 import { sileo } from 'sileo';
+import { formatCurrency } from '@/lib/utils';
 
 interface BudgetsTableProps {
     budgets: Budget[];
@@ -341,7 +342,7 @@ export function BudgetsTable({ budgets, locale }: BudgetsTableProps) {
 
                                         <TableCell className="text-right">
                                             <div className="font-mono font-bold text-foreground text-base">
-                                                {(budget.totalEstimated || 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                                                {formatCurrency(budget.totalEstimated || 0)}
                                             </div>
                                             <div className="text-[10px] uppercase text-muted-foreground font-medium tracking-wide">
                                                 IVA incluido

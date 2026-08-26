@@ -8,6 +8,7 @@ import { BudgetAcceptedEvent } from '@/backend/budget/domain/events/budget-accep
 import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/resend-email.service';
 import { displayBudgetNumber } from '@/backend/budget/domain/budget';
 import { sanitizeUserText } from '@/backend/shared/security/input-sanitizer';
+import { formatCurrency } from '@/lib/utils';
 
 const budgetRepo = new BudgetRepositoryFirestore();
 
@@ -254,11 +255,7 @@ async function notifyAdminOfAcceptance(args: {
 }) {
     const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
     if (!adminEmail) return;
-    const totalFmt = args.totalEstimated.toLocaleString('es-ES', {
-        style: 'currency',
-        currency: 'EUR',
-        maximumFractionDigits: 0,
-    });
+    const totalFmt = formatCurrency(args.totalEstimated);
     const html = `<!doctype html><html><body style="font-family:sans-serif;color:#1f2937;padding:24px;">
         <h2 style="color:#059669;">✅ Presupuesto aceptado por el cliente</h2>
         <p><b>Cliente:</b> ${escapeHtml(args.clientName)}</p>

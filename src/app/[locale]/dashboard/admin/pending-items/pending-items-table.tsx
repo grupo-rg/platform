@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Check, X, Edit, ExternalLink, Loader2 } from 'lucide-react';
 import { approvePendingItemAction, rejectPendingItemAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
+import { formatCurrency } from '@/lib/utils';
 
 interface PendingItemsTableProps {
     initialItems: PendingPriceItem[];
@@ -124,7 +125,7 @@ export function PendingItemsTable({ initialItems }: PendingItemsTableProps) {
                                 </div>
                             </TableCell>
                             <TableCell className="font-bold">
-                                {item.suggestedPrice.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} / {item.suggestedUnit}
+                                {formatCurrency(item.suggestedPrice)} / {item.suggestedUnit}
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-2">

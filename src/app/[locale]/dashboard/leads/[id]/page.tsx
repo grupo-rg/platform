@@ -30,6 +30,7 @@ import { RefineBudgetButton } from '@/components/leads/RefineBudgetButton';
 import { DeleteLeadButton } from '@/components/leads/DeleteLeadButton';
 import { LeadAttachmentsGallery } from '@/components/leads/LeadAttachmentsGallery';
 import type { QualificationDecision } from '@/backend/lead/domain/lead';
+import { formatCurrency } from '@/lib/utils';
 
 const DECISION_META: Record<QualificationDecision, { label: string; className: string; Icon: any }> = {
     qualified: {
@@ -511,7 +512,7 @@ export default async function AdminLeadDetailPage({ params, searchParams }: Page
                                     {effectiveIntake.approxBudget && (
                                         <Field
                                             label="Presupuesto cliente"
-                                            value={`${effectiveIntake.approxBudget.toLocaleString('es-ES')} €`}
+                                            value={formatCurrency(effectiveIntake.approxBudget)}
                                         />
                                     )}
                                 </div>
@@ -696,7 +697,7 @@ export default async function AdminLeadDetailPage({ params, searchParams }: Page
                                         <div className="flex items-center gap-3">
                                             <span className="text-sm font-medium">
                                                 {b.total > 0
-                                                    ? `${b.total.toLocaleString('es-ES', { maximumFractionDigits: 0 })} €`
+                                                    ? formatCurrency(b.total)
                                                     : '—'}
                                             </span>
                                             <ExternalLink className="h-4 w-4 text-muted-foreground" />

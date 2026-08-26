@@ -453,7 +453,7 @@ export const TableRowItem = React.memo(({
                     />
                     {showGhostMode && item.originalState && (
                         <div className="absolute -bottom-4 right-2 text-[10px] text-slate-400 line-through">
-                            {(item.originalState.unitPrice * markupFactor).toFixed(2)}€
+                            {formatCurrency(item.originalState.unitPrice * markupFactor)}
                         </div>
                     )}
                 </div>

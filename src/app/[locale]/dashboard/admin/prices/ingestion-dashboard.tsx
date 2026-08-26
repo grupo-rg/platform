@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Terminal, Eye, Database, Activity, FileText } from 'lucide-react';
 import { IngestionJob } from '@/backend/price-book/domain/ingestion-job';
+import { formatCurrency } from '@/lib/utils';
 
 interface IngestionDashboardProps {
     job: IngestionJob;
@@ -134,7 +135,7 @@ export function IngestionDashboard({ job, onCancel }: IngestionDashboardProps) {
                                     <div className="p-3 bg-white border border-orange-200 rounded-lg shadow-sm border-l-4 border-l-orange-500">
                                         <div className="flex justify-between items-start mb-1">
                                             <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px]">{currentMeta.lastItem.code}</Badge>
-                                            <span className="font-mono text-sm font-bold">{currentMeta.lastItem.price.toFixed(2)}€</span>
+                                            <span className="font-mono text-sm font-bold">{formatCurrency(currentMeta.lastItem.price)}</span>
                                         </div>
                                         <p className="text-xs text-slate-600 line-clamp-2">{currentMeta.lastItem.description}</p>
                                     </div>

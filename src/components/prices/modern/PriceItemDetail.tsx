@@ -8,6 +8,7 @@ import { Sparkles, Replace, Loader2, CheckCircle2, TrendingUp, Send, Bot } from 
 import { Button } from "@/components/ui/button";
 import { searchPriceBookAction } from '@/actions/search-price-book.action';
 import { getPriceBookBreakdown } from '@/actions/price-book/get-price-book-breakdown.action';
+import { formatNumberES } from '@/lib/utils';
 
 interface BreakdownItem extends PriceBookComponent {
     price: number;
@@ -240,7 +241,7 @@ export function PriceItemDetail({ item }: { item: PriceBookItem }) {
                                         )}
                                     </div>
                                     <div className="col-span-2 text-right text-muted-foreground font-mono text-xs">
-                                        {Number.isFinite(cQuantityNum) ? cQuantityNum.toFixed(3) : '0.000'} {comp.unit || ''}
+                                        {formatNumberES(Number.isFinite(cQuantityNum) ? cQuantityNum : 0, 3)} {comp.unit || ''}
                                     </div>
                                     <div className="col-span-1 text-right text-muted-foreground font-mono text-xs">
                                         {formatCurrency(cPriceNum)}

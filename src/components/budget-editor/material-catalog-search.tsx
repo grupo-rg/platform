@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { searchMaterialsAction } from '@/actions/material-catalog/search-materials.action';
 import { MaterialItem } from '@/backend/material-catalog/domain/material-item';
+import { formatCurrency } from '@/lib/utils';
 
 interface MaterialCatalogSearchProps {
     onSelect: (item: MaterialItem) => void;
@@ -108,7 +109,7 @@ export function MaterialCatalogSearch({ onSelect, trigger, open: controlledOpen,
                                 </div>
                                 <div className="text-right whitespace-nowrap ml-4">
                                     <div className="font-bold text-lg">
-                                        {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(item.price)}
+                                        {formatCurrency(item.price)}
                                     </div>
                                     <div className="text-xs text-muted-foreground">/ {item.unit}</div>
                                 </div>

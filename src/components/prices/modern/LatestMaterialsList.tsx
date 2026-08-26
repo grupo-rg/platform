@@ -8,6 +8,7 @@ import { RefreshCw, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getLatestMaterialsAction } from '@/actions/material-catalog/get-latest-materials.action';
 import { MaterialItem } from '@/backend/material-catalog/domain/material-item';
+import { formatCurrency } from '@/lib/utils';
 
 export function LatestMaterialsList() {
     const [items, setItems] = useState<MaterialItem[]>([]);
@@ -66,7 +67,7 @@ export function LatestMaterialsList() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right font-bold">
-                                        {item.price.toFixed(2)} € / {item.unit}
+                                        {formatCurrency(item.price)} / {item.unit}
                                     </TableCell>
                                 </TableRow>
                             ))

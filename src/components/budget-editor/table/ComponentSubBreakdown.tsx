@@ -21,7 +21,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatNumberES } from '@/lib/utils';
 import { getPriceBookBreakdown } from '@/actions/price-book/get-price-book-breakdown.action';
 import type { PriceBookComponent } from '@/backend/price-book/domain/price-book-item';
 
@@ -122,7 +122,7 @@ export function ComponentSubBreakdown({ parentCode }: ComponentSubBreakdownProps
                                 )}
                             </span>
                             <span className="text-right font-mono text-slate-500">
-                                {qty.toFixed(3)} {c.unit || ''}
+                                {formatNumberES(qty, 3)} {c.unit || ''}
                             </span>
                             <span className="text-right font-mono text-slate-600 dark:text-slate-400">
                                 {formatCurrency(price)}

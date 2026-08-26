@@ -19,7 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useDropzone } from 'react-dropzone';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
@@ -468,10 +468,10 @@ export default function MeasurementsPage() {
                                                                         <span className="text-muted-foreground ml-1 text-xs">{item.unit}</span>
                                                                     </div>
                                                                     <div className="col-span-1 text-right text-sm text-muted-foreground font-mono">
-                                                                        {item.unitPrice.toFixed(2)}€
+                                                                        {formatCurrency(item.unitPrice)}
                                                                     </div>
                                                                     <div className="col-span-2 text-right font-bold font-mono text-foreground">
-                                                                        {item.totalPrice.toFixed(2)}€
+                                                                        {formatCurrency(item.totalPrice)}
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -495,8 +495,8 @@ export default function MeasurementsPage() {
                                                 <div className="col-span-1 font-mono text-xs text-muted-foreground">{item.code || '-'}</div>
                                                 <div className="col-span-6 pr-4 line-clamp-2" title={item.description}>{item.description}</div>
                                                 <div className="col-span-1 text-right font-mono">{item.quantity} {item.unit}</div>
-                                                <div className="col-span-2 text-right font-mono text-muted-foreground">€{item.unitPrice.toFixed(2)}</div>
-                                                <div className="col-span-2 text-right font-mono font-medium">€{item.totalPrice.toFixed(2)}</div>
+                                                <div className="col-span-2 text-right font-mono text-muted-foreground">{formatCurrency(item.unitPrice)}</div>
+                                                <div className="col-span-2 text-right font-mono font-medium">{formatCurrency(item.totalPrice)}</div>
                                             </div>
                                         ))}
                                     </div>

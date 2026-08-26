@@ -25,6 +25,7 @@ import { ArrowLeft, Activity, Clock, Coins, Layers, Repeat2, AlertCircle, Extern
 import Link from 'next/link';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatCurrency } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -197,7 +198,7 @@ export default async function AdminJobDetailPage({ params }: PageProps) {
                     icon={<Coins className="h-4 w-4" />}
                     label="Importe estimado"
                     value={typeof summary.totalEstimated === 'number'
-                        ? summary.totalEstimated.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
+                        ? formatCurrency(summary.totalEstimated)
                         : '—'}
                     className="text-amber-600 dark:text-amber-400"
                 />

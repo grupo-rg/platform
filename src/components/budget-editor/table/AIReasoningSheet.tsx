@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { AuthContext } from '@/context/auth-context';
-import { formatCurrency, cn } from '@/lib/utils';
+import { formatCurrency, formatNumberES, cn } from '@/lib/utils';
 import {
     CorrectionCaptureDialog,
     detectPriceOrUnitChange,
@@ -31,6 +31,7 @@ import { MatchKindChip, UnitConversionApplied, CandidateMetaBadges, AppliedFragm
 import { useMarkupFactor } from '@/hooks/use-markup-factor';
 import { computeRepairedBreakdown, buildRepairPatch } from '@/lib/budget/repair-breakdown.client';
 import { getWinnerCatalogCode, hasZeroPricedComponent } from '@/lib/budget/reconciliation';
+import { EditableCell } from '../EditableCell';
 
 interface AIReasoningSheetProps {
     open: boolean;
@@ -608,28 +609,26 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                                     />
                                                 </div>
                                                 <div className="flex items-center justify-end">
-                                                    <input 
-                                                        type="number" 
+                                                    <EditableCell
                                                         value={qty}
-                                                        onChange={(e) => handleBreakdownEdit(idx, 'quantity', e.target.value)}
-                                                        className="w-16 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 tabular-nums bg-transparent border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" 
-                                                        step="0.01" 
+                                                        onChange={(val) => handleBreakdownEdit(idx, 'quantity', String(val))}
+                                                        type="number"
+                                                        decimals={3}
+                                                        className="w-16 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 tabular-nums border border-slate-200 dark:border-slate-700 rounded px-1 py-0.5"
                                                     />
                                                     <span className="ml-1 text-[10px] text-slate-400">{b.unit || 'ud'}</span>
                                                 </div>
                                                 <div className="flex items-center justify-end">
-                                                    <input
-                                                        type="number"
-                                                        value={Number(displayPrice.toFixed(2))}
-                                                        onChange={(e) => {
+                                                    <EditableCell
+                                                        value={displayPrice}
+                                                        onChange={(val) => {
                                                             // El admin edita el valor PVP. Almacenamos el equivalente
                                                             // dividiendo por markupFactor para mantener invariante stored.
-                                                            const typed = parseFloat(e.target.value) || 0;
-                                                            const stored = typed / safeFactor;
+                                                            const stored = Number(val) / safeFactor;
                                                             handleBreakdownEdit(idx, 'price', String(stored));
                                                         }}
-                                                        className="w-20 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums bg-transparent border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                                        step="0.01"
+                                                        type="number"
+                                                        className="w-20 text-right text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1"
                                                     />
                                                 </div>
                                                 {/* Phase 17.8 — Total prominente como columna propia (no más hint pequeño). */}
@@ -639,7 +638,7 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                                     </span>
                                                     {storedTotal !== null && Math.abs(total - qty * displayPrice) > 0.01 && (
                                                         <span className="text-[9px] text-indigo-500 tabular-nums" title="El total stored incluye multiplicadores propagados desde el cálculo del agente">
-                                                            ≠ {(qty).toLocaleString('es-ES', { maximumFractionDigits: 3 })} × {formatCurrency(displayPrice)}
+                                                            ≠ {formatNumberES(qty, 3)} × {formatCurrency(displayPrice)}
                                                         </span>
                                                     )}
                                                 </div>

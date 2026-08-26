@@ -8,6 +8,7 @@ import {
     type PublicBudgetView,
 } from '@/actions/budget/budget-acceptance.action';
 import { BudgetAcceptanceForm } from '@/components/public/BudgetAcceptanceForm';
+import { formatCurrency } from '@/lib/utils';
 
 interface PageProps {
     params: Promise<{ locale: string; token: string }>;
@@ -75,11 +76,7 @@ export default async function AcceptBudgetPage({ params }: PageProps) {
                         <div className="flex items-baseline justify-between gap-3 flex-wrap">
                             <p className="text-xs text-muted-foreground">Importe total · IVA incluido</p>
                             <p className="text-3xl md:text-4xl font-bold tracking-tight font-mono">
-                                {budget.totalEstimated.toLocaleString('es-ES', {
-                                    style: 'currency',
-                                    currency: 'EUR',
-                                    maximumFractionDigits: 0,
-                                })}
+                                {formatCurrency(budget.totalEstimated)}
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">

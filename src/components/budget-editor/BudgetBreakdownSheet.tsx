@@ -18,7 +18,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Hammer, Package, AlertTriangle, Sparkles, Wand2 } from "lucide-react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatNumberES } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { MaterialCatalogSearch } from "./material-catalog-search";
@@ -275,7 +275,7 @@ export function BudgetBreakdownSheet({ item, open, onOpenChange, onUpdate, isAdm
                                                     )}
                                                 </div>
                                                 <div className="col-span-2 text-right text-muted-foreground font-mono text-xs">
-                                                    {cQuantity.toFixed(3)} {comp.unit || 'ud'}
+                                                    {formatNumberES(cQuantity, 3)} {comp.unit || 'ud'}
                                                 </div>
                                                 <div className="col-span-1 text-right text-muted-foreground font-mono text-xs">
                                                     {formatCurrency(cPrice)}

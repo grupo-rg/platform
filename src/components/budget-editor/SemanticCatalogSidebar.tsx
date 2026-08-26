@@ -11,7 +11,7 @@ import { searchCatalogAction } from '@/actions/catalog/search-catalog.action';
 import { getPriceBookBreakdown } from '@/actions/price-book/get-price-book-breakdown.action';
 import { useToast } from '@/hooks/use-toast';
 import { EditableBudgetLineItem } from '@/types/budget-editor';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatNumberES } from '@/lib/utils';
 
 interface SemanticCatalogSidebarProps {
     onAddItem: (item: Partial<EditableBudgetLineItem>) => void;
@@ -244,7 +244,7 @@ export const SemanticCatalogSidebar = ({ onAddItem }: SemanticCatalogSidebarProp
                                                     <div key={idx} className="flex justify-between items-center text-xs text-slate-600 dark:text-slate-300">
                                                         <span className="truncate pr-2" title={cDesc}>
                                                             • {cDesc}
-                                                            {comp.unit && <span className="text-[10px] text-slate-400 ml-1">({parseFloat(cQuantity).toFixed(2)} {comp.unit})</span>}
+                                                            {comp.unit && <span className="text-[10px] text-slate-400 ml-1">({formatNumberES(parseFloat(cQuantity), 2)} {comp.unit})</span>}
                                                         </span>
                                                         <span className="font-mono whitespace-nowrap">
                                                             {formatCurrency(computedTotal)}

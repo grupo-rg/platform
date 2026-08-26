@@ -15,7 +15,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 interface ReconciliationChipProps {
     diffAmount: number;
@@ -26,7 +26,7 @@ interface ReconciliationChipProps {
 
 export function ReconciliationChip({ diffAmount, diffPct, onClick, className }: ReconciliationChipProps) {
     const sign = diffAmount >= 0 ? '+' : '';
-    const formattedAmount = `${sign}${diffAmount.toFixed(2)} €`;
+    const formattedAmount = `${sign}${formatCurrency(diffAmount)}`;
     const formattedPct = `${(diffPct * 100).toFixed(1)}%`;
 
     return (

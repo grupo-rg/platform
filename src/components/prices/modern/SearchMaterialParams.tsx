@@ -8,6 +8,7 @@ import { searchMaterialsAction } from '@/actions/material-catalog/search-materia
 import { MaterialItem } from '@/backend/material-catalog/domain/material-item';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/utils';
 
 export function SearchMaterialParams() {
     const [query, setQuery] = useState('');
@@ -66,7 +67,7 @@ export function SearchMaterialParams() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right font-mono font-bold">
-                                        {item.price.toFixed(2)} € / {item.unit}
+                                        {formatCurrency(item.price)} / {item.unit}
                                     </TableCell>
                                 </TableRow>
                             ))}

@@ -24,6 +24,7 @@ import { detectDivergence, previewReconcile, needsReconciliation, hasZeroPricedC
 import { computeRepairedBreakdown, buildRepairPatch, getWinnerCatalogCode } from '@/lib/budget/repair-breakdown.client';
 import { useBudgetEditorContext } from './BudgetEditorContext';
 import type { EditableBudgetLineItem } from '@/types/budget-editor';
+import { formatCurrency } from '@/lib/utils';
 
 interface ReconciliationDiffModalProps {
     open: boolean;
@@ -165,12 +166,12 @@ export function ReconciliationDiffModal({
                                             </div>
                                             <div className="text-xs whitespace-nowrap">
                                                 <span className="text-muted-foreground">unit_price</span>{' '}
-                                                <span className="font-mono">{line.item?.unitPrice?.toFixed(2)} €</span>
+                                                <span className="font-mono">{formatCurrency(line.item?.unitPrice ?? 0)}</span>
                                             </div>
                                         </div>
                                         <div className="text-xs text-muted-foreground mb-2">
                                             Sum actual:{' '}
-                                            <span className="font-mono">{div.sumBreakdown.toFixed(2)} €</span>{' '}
+                                            <span className="font-mono">{formatCurrency(div.sumBreakdown)}</span>{' '}
                                             · Diferencia:{' '}
                                             <span
                                                 className={
@@ -178,7 +179,7 @@ export function ReconciliationDiffModal({
                                                 }
                                             >
                                                 {div.diffAmount >= 0 ? '+' : ''}
-                                                {div.diffAmount.toFixed(2)} € ({(div.diffPct * 100).toFixed(1)}%)
+                                                {formatCurrency(div.diffAmount)} ({(div.diffPct * 100).toFixed(1)}%)
                                             </span>
                                         </div>
                                         {willUseCatalog ? (
@@ -205,9 +206,9 @@ export function ReconciliationDiffModal({
                                                     {preview!.componentScales.map((c, i) => (
                                                         <tr key={i} className="border-b border-dashed last:border-0">
                                                             <td className="py-1 font-mono text-xs">{c.code || '—'}</td>
-                                                            <td className="text-right py-1 font-mono">{c.before.toFixed(2)} €</td>
+                                                            <td className="text-right py-1 font-mono">{formatCurrency(c.before)}</td>
                                                             <td className="text-right py-1 font-mono font-semibold text-green-700">
-                                                                {c.after.toFixed(2)} €
+                                                                {formatCurrency(c.after)}
                                                             </td>
                                                         </tr>
                                                     ))}

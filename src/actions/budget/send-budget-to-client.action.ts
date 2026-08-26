@@ -9,6 +9,7 @@ import { EventDispatcher } from '@/backend/shared/events/event-dispatcher';
 import { BudgetSentEvent } from '@/backend/budget/domain/events/budget-sent.event';
 import { displayBudgetNumber } from '@/backend/budget/domain/budget';
 import { verifyAuth } from '@/backend/auth/auth.middleware';
+import { formatCurrency } from '@/lib/utils';
 
 interface SendBudgetToClientInput {
     budgetId: string;
@@ -85,11 +86,7 @@ export async function sendBudgetToClientAction(
         } as any);
 
         const subject = `Tu presupuesto de Grupo RG está listo · ${displayBudgetNumber(budget)}`;
-        const totalFmt = (budget.totalEstimated || budget.costBreakdown?.total || 0).toLocaleString('es-ES', {
-            style: 'currency',
-            currency: 'EUR',
-            maximumFractionDigits: 0,
-        });
+        const totalFmt = formatCurrency(budget.totalEstimated || budget.costBreakdown?.total || 0);
         const acceptanceUrl = buildAcceptanceUrl(acceptanceToken);
         const html = renderClientEmailHtml({
             clientName,

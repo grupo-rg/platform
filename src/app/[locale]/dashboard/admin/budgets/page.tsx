@@ -27,6 +27,7 @@ import { es } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { BudgetApproveButton } from '@/components/budget/budget-approve-button';
 import { BudgetsTable } from '@/components/budget/admin/BudgetsTable';
+import { formatCurrency } from '@/lib/utils';
 
 export default async function BudgetsListPage({ params }: { params: Promise<{ locale: string }> }) {
     const { locale } = await params;
@@ -88,7 +89,7 @@ export default async function BudgetsListPage({ params }: { params: Promise<{ lo
                     </CardHeader>
                     <CardContent>
                         <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-                            {budgets.reduce((acc, b) => acc + (b.totalEstimated || 0), 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+                            {formatCurrency(budgets.reduce((acc, b) => acc + (b.totalEstimated || 0), 0))}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">Volumen acumulado</p>
                     </CardContent>
