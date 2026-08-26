@@ -2,11 +2,12 @@
 
 import * as React from 'react';
 import { motion, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
-import { ArrowRight, Play, Star, ArrowUpRight } from 'lucide-react';
+import { ArrowRight, Star, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useWidgetContext } from '@/context/budget-widget-context';
+import { VideoModalButton } from '@/components/home/video-modal-button';
 
 interface HeroHybridProps {
     title: string;
@@ -16,6 +17,7 @@ interface HeroHybridProps {
     ctaLink: string;
     secondaryCtaText?: string;
     secondaryCtaLink?: string;
+    videoCtaText?: string;
     floatingCards?: {
         featured: string;
         clients: string;
@@ -33,6 +35,7 @@ export function HeroHybrid({
     ctaLink,
     secondaryCtaText,
     secondaryCtaLink,
+    videoCtaText,
     floatingCards = {
         featured: "Featured",
         clients: "+500 Clients",
@@ -122,7 +125,7 @@ export function HeroHybrid({
                             <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </Button>
 
-                        {/* Secondary Button - Improved visibility for text */}
+                        {/* Secundario: lleva al catalogo de servicios */}
                         {secondaryCtaText && secondaryCtaLink && (
                             <Link href={secondaryCtaLink}>
                                 <Button
@@ -130,11 +133,14 @@ export function HeroHybrid({
                                     size="xl"
                                     className="group border-white/40 bg-black/20 text-white hover:bg-white/20 hover:text-white rounded-full px-8 h-14 text-lg backdrop-blur-md transition-all font-medium"
                                 >
-                                    <Play className="mr-2 w-5 h-5 fill-white/80 group-hover:fill-white transition-colors" />
                                     {secondaryCtaText}
+                                    <ArrowUpRight className="ml-2 w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                                 </Button>
                             </Link>
                         )}
+
+                        {/* Terciario: abre el video corporativo en un modal */}
+                        {videoCtaText && <VideoModalButton label={videoCtaText} />}
                     </div>
                 </motion.div>
 

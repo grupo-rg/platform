@@ -4,7 +4,7 @@ import { getDictionary } from '@/lib/dictionaries';
 import { InterlinkingCloud } from '@/components/seo/interlinking-cloud';
 import { ProcessTimeline } from '@/components/services/process-timeline';
 import { FAQSection } from '@/components/services/faq-section';
-import Image from 'next/image';
+import { SafeImage } from '@/components/ui/safe-image';
 import { ChevronRight, CheckCircle2, ArrowRight } from 'lucide-react';
 import type { Metadata } from 'next';
 import { constructMetadata } from '@/i18n/seo-utils';
@@ -58,7 +58,7 @@ export async function generateMetadata({ params }: { params: Promise<{ category:
     return constructMetadata({
         title: `${subserviceTranslation.title} en Mallorca | ${categoryTranslation.title} - Grupo RG`,
         description: subserviceTranslation.description,
-        image: service.image,
+        image: service.ogImage ?? service.image,
         path: '/services/[category]/[subcategory]',
         locale,
         params: { category, subcategory }
@@ -97,7 +97,7 @@ export default async function SubServicePage({ params }: { params: Promise<{ cat
                 name={subserviceTranslation.title}
                 description={subserviceTranslation.description}
                 category={categoryTranslation.title}
-                image={service.image}
+                image={service.ogImage ?? service.image}
                 areaServed="Mallorca, Islas Baleares"
             />
             <BreadcrumbJsonLd items={breadcrumbItems} />
@@ -105,7 +105,7 @@ export default async function SubServicePage({ params }: { params: Promise<{ cat
             <main className="flex-1 bg-background">
                 {/* Cinematic Hero */}
                 <section className="relative h-[60vh] min-h-[500px] w-full flex items-end pb-16 overflow-hidden">
-                    <Image
+                    <SafeImage
                         src={service.image}
                         alt={`${subserviceTranslation.title} en Mallorca - Grupo RG`}
                         fill

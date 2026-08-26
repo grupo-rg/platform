@@ -1,10 +1,11 @@
 import { getDictionary } from '@/lib/dictionaries';
 import { Button } from '@/components/ui/button';
-import { Mail, MapPin, Phone, ArrowRight } from 'lucide-react';
+import { Mail, MapPin, Phone, ArrowRight, MessageCircle } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { WebPageJsonLd, BreadcrumbJsonLd } from '@/components/seo/json-ld';
 import { SmartTriggerButton } from '@/components/contact/SmartTriggerButton';
 import * as motion from 'framer-motion/client';
+import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_HREF, CONTACT_WHATSAPP_URL } from '@/lib/contact';
 
 export default async function ContactPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -16,18 +17,21 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
       icon: <MapPin className="h-5 w-5" />,
       label: t.address.label,
       value: t.address.value || "Petra, Mallorca",
+      href: undefined,
       description: "Nuestras oficinas centrales",
     },
     {
       icon: <Phone className="h-5 w-5" />,
       label: t.phone.label,
-      value: "+34 674 26 69 69",
+      value: CONTACT_PHONE_DISPLAY,
+      href: CONTACT_PHONE_HREF,
       description: "Lunes a Viernes, 9:00 - 18:00",
     },
     {
       icon: <Mail className="h-5 w-5" />,
       label: t.email.label,
-      value: "info@gruporg.com",
+      value: t.email.value || "info@gruporg.com",
+      href: `mailto:${t.email.value || "info@gruporg.com"}`,
       description: "Respuesta en menos de 24h",
     },
   ];
@@ -101,9 +105,18 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
                       <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">
                         {detail.label}
                       </p>
-                      <p className="text-lg font-medium text-foreground mb-1">
-                        {detail.value}
-                      </p>
+                      {detail.href ? (
+                        <a
+                          href={detail.href}
+                          className="block text-lg font-medium text-foreground mb-1 hover:text-primary transition-colors"
+                        >
+                          {detail.value}
+                        </a>
+                      ) : (
+                        <p className="text-lg font-medium text-foreground mb-1">
+                          {detail.value}
+                        </p>
+                      )}
                       <p className="text-sm text-muted-foreground">
                         {detail.description}
                       </p>
@@ -156,10 +169,22 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
             <p className="text-lg md:text-xl opacity-90 mb-10 font-light">
               {t.cta?.subtitle || "Agenda una consulta gratuita y descubre cómo podemos hacer realidad tu visión."}
             </p>
-            <SmartTriggerButton
-              label={t.cta?.buttonPrimary || "Solicitar Presupuesto"}
-              className="bg-white text-primary hover:bg-stone-100 rounded-full px-10 py-7 text-lg font-bold"
-            />          </motion.div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <SmartTriggerButton
+                label={t.cta?.buttonPrimary || "Solicitar Presupuesto"}
+                className="bg-white text-primary hover:bg-stone-100 rounded-full px-10 py-7 text-lg font-bold"
+              />
+              <a
+                href={CONTACT_WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/40 px-8 py-4 text-lg font-bold hover:bg-primary-foreground/10 transition-colors"
+              >
+                <MessageCircle className="h-5 w-5" />
+                WhatsApp {CONTACT_PHONE_DISPLAY}
+              </a>
+            </div>
+          </motion.div>
         </div>
       </section>
     </div>

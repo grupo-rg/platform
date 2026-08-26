@@ -83,7 +83,7 @@ const phases = [
 export default async function RoadmapPage({ params }: { params: Promise<{ locale: string }> }) {
     const { locale } = await params;
     const dict = await getDictionary(locale as any);
-    const logoUrl = "https://firebasestorage.googleapis.com/v0/b/local-digital-eye.firebasestorage.app/o/business%2Fdochevi%2FLogo-Express-web-276w.webp?alt=media&token=70fcace5-1efc-4999-867c-6d933be5cada";
+    const logoUrl = "/images/logo.avif";
 
     return (
         <>

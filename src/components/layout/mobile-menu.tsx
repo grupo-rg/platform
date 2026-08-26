@@ -1,107 +1,211 @@
 'use client';
 
+import * as React from 'react';
 import { Link } from '@/i18n/navigation';
+import { useLocale } from 'next-intl';
 import {
     Accordion,
     AccordionContent,
     AccordionItem,
     AccordionTrigger,
-} from "@/components/ui/accordion";
+} from '@/components/ui/accordion';
 import { services } from '@/lib/services';
-import { cn } from '@/lib/utils';
+import { locations } from '@/lib/locations';
+import { getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
 import { SheetClose } from '@/components/ui/sheet';
 import { BudgetWidget } from '@/components/budget-widget';
 import { Button } from '@/components/ui/button';
+import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_HREF, CONTACT_WHATSAPP_URL } from '@/lib/contact';
+import { Phone, MessageCircle, ArrowRight } from 'lucide-react';
 
 interface MobileMenuProps {
     t: any;
-    navLinks: { href: any; label: string }[];
     onLinkClick: () => void;
     user: any;
 }
 
-export function MobileMenu({ t, navLinks, onLinkClick, user }: MobileMenuProps) {
+/** Rótulo de sección: pequeño, en mayúsculas y sin peso visual. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
     return (
-        <div className="flex flex-col gap-4 py-4 h-full overflow-y-auto pb-20">
-            <Accordion type="single" collapsible className="w-full">
-                {/* Services with Submenu */}
-                <AccordionItem value="services" className="border-b-0">
-                    <AccordionTrigger className="text-lg font-medium text-foreground hover:text-primary font-headline py-2 hover:no-underline">
-                        {t.header?.nav?.services || "Servicios"}
-                    </AccordionTrigger>
-                    <AccordionContent className='pb-2'>
-                        <div className="pl-4 border-l-2 border-primary/20 ml-2 space-y-4 mt-2">
-                            {services.map((service) => (
-                                <Accordion type="single" collapsible className="w-full" key={service.id}>
-                                    <AccordionItem value={service.id} className="border-b-0">
-                                        <AccordionTrigger className="text-base font-medium text-foreground/80 hover:text-primary py-1 hover:no-underline justify-between">
-                                            {t.services?.[service.id]?.title || service.id}
-                                        </AccordionTrigger>
-                                        <AccordionContent>
-                                            <div className="flex flex-col gap-2 pl-4 mt-1 border-l border-white/10 ml-1">
-                                                {service.subservices?.map((sub) => (
-                                                    <SheetClose asChild key={sub.id}>
-                                                        <Link
-                                                            href={{
-                                                                pathname: '/services/[category]/[subcategory]',
-                                                                params: {
-                                                                    category: service.id,
-                                                                    subcategory: sub.id
-                                                                }
-                                                            }}
-                                                            className="text-sm text-muted-foreground hover:text-primary transition-colors py-1 block"
-                                                            onClick={onLinkClick}
-                                                        >
-                                                            {t.services?.[service.id]?.subservices?.[sub.id]?.title || sub.id}
-                                                        </Link>
-                                                    </SheetClose>
-                                                ))}
-                                            </div>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                </Accordion>
-                            ))}
-                            <SheetClose asChild>
-                                <Link
-                                    href="/services"
-                                    className="text-sm font-bold text-primary block pt-2"
-                                    onClick={onLinkClick}
-                                >
-                                    {t.header?.megaMenu?.viewAll || "Ver todos los servicios"}
-                                </Link>
-                            </SheetClose>
-                        </div>
-                    </AccordionContent>
-                </AccordionItem>
-            </Accordion>
+        <p className="px-6 pt-6 pb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+            {children}
+        </p>
+    );
+}
 
-            {navLinks.filter(link => {
-                const isServices = typeof link.href === 'object'
-                    ? link.href.hash === 'services'
-                    : link.href === '/#services';
-                return !isServices;
-            }).map((link) => (
-                <SheetClose asChild key={link.href}>
+/** Enlace de primer nivel del menú. */
+function NavRow({
+    href,
+    children,
+    onLinkClick,
+}: {
+    href: any;
+    children: React.ReactNode;
+    onLinkClick: () => void;
+}) {
+    return (
+        <SheetClose asChild>
+            <Link
+                href={href}
+                onClick={onLinkClick}
+                className="flex items-center justify-between px-6 py-3.5 text-[15px] text-foreground transition-colors hover:text-primary"
+            >
+                {children}
+            </Link>
+        </SheetClose>
+    );
+}
+
+export function MobileMenu({ t, onLinkClick, user }: MobileMenuProps) {
+    const locale = useLocale();
+    const nav = t?.header?.nav ?? {};
+
+    // Slugs traducidos: en en/ca/de/nl la URL correcta no es el id en español.
+    const serviceSilos = React.useMemo(
+        () =>
+            services.map((service) => {
+                const translation = t?.services?.[service.id];
+                return {
+                    id: service.id,
+                    slug: getTranslatedCategorySlug(service.id, locale),
+                    title: translation?.title || service.id,
+                    subservices: (service.subservices ?? []).map((sub) => ({
+                        id: sub.id,
+                        slug: getTranslatedSubcategorySlug(sub.id, locale),
+                        title: translation?.subservices?.[sub.id]?.title || sub.id,
+                    })),
+                };
+            }),
+        [t, locale]
+    );
+
+    const zones = React.useMemo(
+        () =>
+            locations.map((location) => ({
+                name: location,
+                slug: location.toLowerCase().replace(/\s+/g, '-'),
+            })),
+        []
+    );
+
+    return (
+        <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
+                <SectionLabel>{nav.services || 'Servicios'}</SectionLabel>
+
+                <Accordion type="single" collapsible className="w-full">
+                    {serviceSilos.map((silo) => (
+                        <AccordionItem
+                            key={silo.id}
+                            value={silo.id}
+                            className="border-b border-border/40"
+                        >
+                            <AccordionTrigger className="px-6 py-3.5 text-[15px] font-normal text-foreground hover:no-underline hover:text-primary [&>svg]:text-muted-foreground/50">
+                                {silo.title}
+                            </AccordionTrigger>
+                            <AccordionContent className="px-6 pb-3 pt-0">
+                                <div className="ml-1 flex flex-col border-l border-border/60 pl-4">
+                                    {silo.subservices.map((sub) => (
+                                        <SheetClose asChild key={sub.id}>
+                                            <Link
+                                                href={{
+                                                    pathname: '/services/[category]/[subcategory]',
+                                                    params: { category: silo.slug, subcategory: sub.slug },
+                                                }}
+                                                onClick={onLinkClick}
+                                                className="py-2 text-sm leading-snug text-muted-foreground transition-colors hover:text-primary"
+                                            >
+                                                {sub.title}
+                                            </Link>
+                                        </SheetClose>
+                                    ))}
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    ))}
+                </Accordion>
+
+                <SheetClose asChild>
                     <Link
-                        href={link.href as any}
-                        className="text-lg font-medium text-foreground transition-colors hover:text-primary font-headline py-2"
+                        href="/services"
                         onClick={onLinkClick}
+                        className="group flex items-center gap-2 px-6 py-3.5 text-sm font-medium text-primary"
                     >
-                        {link.label}
+                        {t?.header?.megaMenu?.viewAll || 'Ver todos los servicios'}
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                     </Link>
                 </SheetClose>
-            ))}
 
-            {/* Budget Omni Button / Widget */}
-            <div className="pt-4 mt-auto">
+                <SectionLabel>Navegación</SectionLabel>
+                <div className="flex flex-col">
+                    <NavRow href="/" onLinkClick={onLinkClick}>
+                        Inicio
+                    </NavRow>
+                    <NavRow href="/budget-request" onLinkClick={onLinkClick}>
+                        {nav.budgetRequest || 'Presupuesto al instante'}
+                    </NavRow>
+                    <NavRow href="/blog" onLinkClick={onLinkClick}>
+                        {nav.blog || 'Blog'}
+                    </NavRow>
+                    <NavRow href="/contact" onLinkClick={onLinkClick}>
+                        {nav.contact || 'Contacto'}
+                    </NavRow>
+                    {user ? (
+                        <NavRow href="/dashboard" onLinkClick={onLinkClick}>
+                            {t?.header?.userNav?.dashboard || 'Panel'}
+                        </NavRow>
+                    ) : (
+                        <NavRow href="/login" onLinkClick={onLinkClick}>
+                            {nav.login || 'Iniciar Sesión'}
+                        </NavRow>
+                    )}
+                </div>
+
+                <SectionLabel>Zonas</SectionLabel>
+                <div className="flex flex-wrap gap-x-2 gap-y-1 px-6 pb-2">
+                    {zones.map((zone) => (
+                        <SheetClose asChild key={zone.slug}>
+                            <Link
+                                href={{ pathname: '/zonas/[zone]', params: { zone: zone.slug } }}
+                                onClick={onLinkClick}
+                                className="rounded-full border border-border/50 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                            >
+                                {zone.name}
+                            </Link>
+                        </SheetClose>
+                    ))}
+                </div>
+            </div>
+
+            {/* Pie fijo: acción principal y contacto directo */}
+            <div className="shrink-0 border-t border-border/40 bg-background/80 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur">
                 <BudgetWidget
                     t={t}
                     trigger={
-                        <Button className="w-full gap-2 text-lg h-12" size="lg">
-                            {t.header.nav.budgetRequest}
+                        <Button className="h-12 w-full gap-2 text-base font-semibold" size="lg">
+                            {nav.budgetRequest || 'Presupuesto al instante'}
                         </Button>
                     }
                 />
+                <div className="mt-3 flex items-center justify-between text-sm">
+                    <a
+                        href={CONTACT_PHONE_HREF}
+                        className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-primary"
+                    >
+                        <Phone className="h-4 w-4 text-primary" />
+                        {CONTACT_PHONE_DISPLAY}
+                    </a>
+                    <a
+                        href={CONTACT_WHATSAPP_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="WhatsApp"
+                        className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-primary"
+                    >
+                        <MessageCircle className="h-4 w-4 text-primary" />
+                        WhatsApp
+                    </a>
+                </div>
             </div>
         </div>
     );

@@ -76,6 +76,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           ctaLink="/budget-request"
           secondaryCtaText={t.hero.ctaSecondary}
           secondaryCtaLink="/services"
+          videoCtaText={t.hero.ctaVideo}
           floatingCards={t.hero.floating}
         />
 

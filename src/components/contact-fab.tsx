@@ -6,11 +6,12 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { CONTACT_PHONE_E164, CONTACT_WHATSAPP_URL } from '@/lib/contact';
 
 export function ContactFab() {
   const [isOpen, setIsOpen] = useState(false);
-  const phoneNumber = '+34626006461';
-  const whatsappLink = `https://wa.me/${phoneNumber.replace('+', '')}`;
+  const phoneNumber = CONTACT_PHONE_E164;
+  const whatsappLink = CONTACT_WHATSAPP_URL;
 
   return (
     <div className="fixed bottom-6 right-6 z-50">

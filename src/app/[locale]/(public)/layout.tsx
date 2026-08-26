@@ -19,7 +19,7 @@ export default async function PublicLayout({
             <main className="flex-1">
                 {children}
             </main>
-            <Footer t={dict.home?.cta} />
+            <Footer t={dict.home?.cta} locale={locale} />
             {/* <ContactFab /> */}
         </>
     );

@@ -4,6 +4,7 @@ import { useWidgetContext } from '@/context/budget-widget-context';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_HREF } from '@/lib/contact';
 
 interface ServiceCTAProps {
     title?: string;
@@ -73,11 +74,11 @@ export function ServiceCTA({
                     Llámanos directamente
                 </p>
                 <a
-                    href="tel:+34971000000"
+                    href={CONTACT_PHONE_HREF}
                     className="inline-flex items-center justify-center gap-2 font-headline font-bold text-xl hover:text-primary transition-colors text-foreground"
                 >
                     <Phone className="h-4 w-4 text-primary" />
-                    +34 971 000 000
+                    {CONTACT_PHONE_DISPLAY}
                 </a>
             </div>
         </div>

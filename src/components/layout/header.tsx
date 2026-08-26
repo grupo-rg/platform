@@ -35,12 +35,6 @@ export function Header({ t }: { t: any }) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const navLinks = [
-    { href: { pathname: '/', hash: 'wizard' }, label: "Asistente Costes" },
-    { href: '/', label: "Plataforma" },
-    { href: '/', label: "Casos de Uso" },
-  ];
-
   const handleLinkClick = () => {
     setIsMobileMenuOpen(false);
   };
@@ -76,19 +70,21 @@ export function Header({ t }: { t: any }) {
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[300px] p-0 border-l border-border/40 bg-background/95 backdrop-blur-lg">
-                <SheetHeader className="px-6 py-4 border-b border-border/40">
-                  <SheetTitle className="sr-only">Menú Móvil</SheetTitle>
-                  <Logo className="h-8" width={110} height={32} />
+              <SheetContent
+                side="right"
+                className="flex w-[88vw] max-w-[380px] flex-col gap-0 border-l border-border/40 bg-background p-0 sm:max-w-[380px]"
+              >
+                <SheetHeader className="shrink-0 border-b border-border/40 px-6 py-5 text-left">
+                  <SheetTitle className="sr-only">Menú</SheetTitle>
+                  {/* El logo es amarillo: sobre fondo claro se pinta en negro y sobre oscuro en blanco. */}
+                  <Logo className="h-8 dark:hidden" variant="dark" width={110} height={32} />
+                  <Logo className="hidden h-8 dark:block" variant="light" width={110} height={32} />
                 </SheetHeader>
-                <div className="overflow-y-auto max-h-[calc(100vh-80px)]">
-                  <MobileMenu
-                    t={t}
-                    navLinks={navLinks}
-                    onLinkClick={handleLinkClick}
-                    user={user}
-                  />
-                </div>
+                <MobileMenu
+                  t={t}
+                  onLinkClick={handleLinkClick}
+                  user={user}
+                />
               </SheetContent>
             </Sheet>
           </div>

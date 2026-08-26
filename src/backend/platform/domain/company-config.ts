@@ -1,3 +1,5 @@
+import { CONTACT_PHONE_DISPLAY } from '@/lib/contact';
+
 /**
  * Datos globales de la empresa emisora (single-tenant).
  * Fuente única para: PDFs de presupuesto, headers/footers públicos,
@@ -48,7 +50,8 @@ export const DEFAULT_COMPANY_CONFIG: CompanyConfig = {
     legalName: 'Grupo RG S.L.',
     cif: '',
     address: '',
-    phone: '',
+    // Fallback público mientras no se configure en Ajustes > Empresa.
+    phone: CONTACT_PHONE_DISPLAY,
     email: '',
     web: '',
     updatedAt: new Date(),

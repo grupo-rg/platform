@@ -45,44 +45,56 @@
     {
       "id": "service-construccion-reformas",
       "description": "A construction site with workers.",
-      "imageUrl": "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      "imageUrl": "/images/services/construccion-y-reformas.webp",
       "imageHint": "construction site"
     },
     {
       "id": "service-piscinas",
       "description": "A modern residential swimming pool.",
-      "imageUrl": "https://images.unsplash.com/photo-1563489438097-482f504f051b?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      "imageUrl": "/images/services/piscinas.webp",
       "imageHint": "swimming pool"
     },
     {
       "id": "service-reformas-interiores",
       "description": "A stylish and modern renovated kitchen.",
-      "imageUrl": "https://images.unsplash.com/photo-1600607687932-e3edd5c89f79?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      "imageUrl": "/images/services/reformas-de-interiores.webp",
       "imageHint": "modern kitchen"
     },
     {
       "id": "service-paramentos-verticales",
       "description": "A worker applying stucco to an exterior wall.",
-      "imageUrl": "https://images.unsplash.com/photo-1621905251929-0639450336e8?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      "imageUrl": "/images/services/paramentos-verticales.webp",
       "imageHint": "building facade"
     },
     {
       "id": "service-electricidad",
       "description": "An electrician working on a circuit breaker.",
-      "imageUrl": "https://images.unsplash.com/photo-1555963962-969a0812ab56?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      "imageUrl": "/images/services/electricidad.webp",
       "imageHint": "electrical work"
     },
     {
       "id": "service-carpinteria",
       "description": "A carpenter working with wood in a workshop.",
-      "imageUrl": "https://images.unsplash.com/photo-1572999003433-80f3438f8f2b?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      "imageUrl": "/images/services/carpinteria.webp",
       "imageHint": "carpentry work"
     },
     {
       "id": "service-fontaneria",
       "description": "A plumber fixing pipes under a sink.",
-      "imageUrl": "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=2069&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+      "imageUrl": "/images/services/fontaneria.webp",
       "imageHint": "plumbing work"
+    },
+    {
+      "id": "service-pintura",
+      "description": "Painter applying a roller to an interior wall.",
+      "imageUrl": "/images/services/pintura.webp",
+      "imageHint": "painting work"
+    },
+    {
+      "id": "service-impermeabilizacion",
+      "description": "A modern roof, waterproofed and insulated.",
+      "imageUrl": "/images/services/impermeabilizacion.webp",
+      "imageHint": "roof waterproofing"
     }
   ]
 }

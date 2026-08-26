@@ -2,7 +2,7 @@ import { getDictionary } from '@/lib/dictionaries';
 import { services } from '@/lib/services';
 import { constructMetadata } from '@/i18n/seo-utils';
 import { WebPageJsonLd, BreadcrumbJsonLd } from '@/components/seo/json-ld';
-import Image from 'next/image';
+import { SafeImage } from '@/components/ui/safe-image';
 import { Link } from '@/i18n/navigation';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -109,7 +109,7 @@ export default async function ServicesPage({ params }: { params: Promise<{ local
                                         )}
                                     >
                                         {/* Image Background */}
-                                        <Image
+                                        <SafeImage
                                             src={service.image}
                                             alt={categoryTranslation?.title || service.id}
                                             fill

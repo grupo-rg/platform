@@ -3,6 +3,15 @@
  * Reusable across all public pages for SEO
  */
 import { companyConfigService } from '@/backend/platform/application/company-config-service';
+import { CONTACT_PHONE_E164 } from '@/lib/contact';
+
+/** Schema.org espera URLs absolutas: convierte "/images/x.jpg" en una URL completa. */
+function absoluteUrl(src: string | undefined, base: string): string | undefined {
+    if (!src) return undefined;
+    if (src.startsWith('http') || src.startsWith('data:')) return src;
+    const origin = (base || process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
+    return origin ? `${origin}${src.startsWith('/') ? '' : '/'}${src}` : src;
+}
 
 interface BreadcrumbItem {
     name: string;
@@ -40,7 +49,7 @@ export async function OrganizationJsonLd(props: OrganizationSchemaProps = {}) {
     const url = props.url ?? company.web;
     const logo = props.logo ?? company.logoUrl ?? '/logo.webp';
     const areaServed = props.areaServed ?? ['Mallorca', 'Menorca', 'Ibiza', 'Formentera', 'Islas Baleares'];
-    const telephone = props.telephone ?? company.phone;
+    const telephone = props.telephone || company.phone || CONTACT_PHONE_E164;
     const email = props.email ?? company.email;
 
     const schema = {
@@ -116,7 +125,7 @@ export async function ServiceJsonLd({
             '@type': 'Place',
             name: areaServed
         },
-        ...(image && { image })
+        ...(image && { image: absoluteUrl(image, company.web) })
     };
 
     return (
