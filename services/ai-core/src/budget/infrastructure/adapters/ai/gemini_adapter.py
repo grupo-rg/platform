@@ -5,7 +5,6 @@ import time
 import json
 import logging
 import re
-import httpx
 from typing import Deque, Dict, Any, Type, Optional, List
 from pydantic import BaseModel, ValidationError
 
@@ -281,12 +280,25 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
         base_delay: float = 2.0,
         per_call_timeout_seconds: Optional[float] = None,
     ):
-        self.api_key = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError("GOOGLE_GENAI_API_KEY environment variable missing.")
+        # Vertex AI (Gemini Enterprise Agent Platform): pago por uso vía la cuenta
+        # de facturación de GCP, autenticado con ADC del service-account de runtime
+        # (Cloud Run) o `gcloud auth application-default login` (local). Ya no se usa
+        # la Gemini Developer API / API key (saldo prepago agotado).
+        self.project = (
+            os.environ.get("GOOGLE_CLOUD_PROJECT")
+            or os.environ.get("GCLOUD_PROJECT")
+            or os.environ.get("FIREBASE_PROJECT_ID")
+        )
+        self.location = os.environ.get("GOOGLE_CLOUD_LOCATION", "europe-southwest1")
+        if not self.project:
+            raise ValueError(
+                "GOOGLE_CLOUD_PROJECT / GCLOUD_PROJECT / FIREBASE_PROJECT_ID missing for Vertex AI."
+            )
 
         from google import genai
-        self.genai_client = genai.Client(api_key=self.api_key)
+        self.genai_client = genai.Client(
+            vertexai=True, project=self.project, location=self.location
+        )
 
         self.model_name = model_name
         # S1-A-06 — defaults configurables vía env vars. Las llamadas pueden
@@ -340,31 +352,32 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
             f"El JSON DEBE cumplir estrictamente con el siguiente esquema JSON Schema:\n{schema_json}"
         )
 
-        import httpx
         import asyncio
         import random
+        import base64
+        from google.genai import types
+        from google.genai import errors as genai_errors
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
-
-        parts = []
+        # Contenidos + config para el SDK google-genai en modo Vertex.
+        parts: List[Any] = []
         if image_base64:
-            parts.append({
-                "inlineData": {
-                    "mimeType": "image/jpeg",
-                    "data": image_base64
-                }
-            })
-        parts.append({"text": user_prompt})
+            parts.append(
+                types.Part(
+                    inline_data=types.Blob(
+                        mime_type="image/jpeg",
+                        data=base64.b64decode(image_base64),
+                    )
+                )
+            )
+        parts.append(types.Part(text=user_prompt))
+        contents = [types.Content(role="user", parts=parts)]
 
-        payload = {
-            "contents": [{"role": "user", "parts": parts}],
-            "systemInstruction": {"parts": [{"text": full_system}]},
-            "generationConfig": {
-                "temperature": temperature,
-                "responseMimeType": "application/json",
-                "maxOutputTokens": max_output_tokens,
-            }
-        }
+        gen_config = types.GenerateContentConfig(
+            temperature=temperature,
+            response_mime_type="application/json",
+            max_output_tokens=max_output_tokens,
+            system_instruction=full_system,
+        )
         
         attempt = 0
         while attempt < self.max_retries:
@@ -373,56 +386,50 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
             raw_json: str = ""
             usage_metadata: Dict[str, Any] = {}
             try:
-                headers = {'Content-Type': 'application/json'}
+                logger.debug(f"Calling Vertex AI {model} (Attempt {attempt + 1}/{self.max_retries})...")
 
-                logger.debug(f"Calling GenAI API {model} (Attempt {attempt + 1}/{self.max_retries})...")
-
-                limits = httpx.Limits(max_keepalive_connections=0, keepalive_expiry=0)
-                # S1-A-06 — per-call timeout via `asyncio.wait_for`. Sin esto,
-                # un retry interno de httpx/genai puede bloquear el slot del
-                # semaphore del swarm indefinidamente (incidente 2026-05-18).
-                # Cuando el timeout expira lanzamos `asyncio.TimeoutError` que
-                # captura el `except` específico de abajo y degrada el retry
-                # según política (loggear + intentar de nuevo o salir).
+                # S1-A-06 - per-call timeout via `asyncio.wait_for`. Sin esto, un
+                # retry interno del SDK puede bloquear el slot del semaphore del
+                # swarm indefinidamente (incidente 2026-05-18). Al expirar lanzamos
+                # `asyncio.TimeoutError`, capturado por el except de abajo.
                 call_started_at = time.monotonic()
-                async with httpx.AsyncClient(timeout=300.0, limits=limits, http2=False) as client:
-                    response = await asyncio.wait_for(
-                        client.post(url, json=payload, headers=headers),
-                        timeout=self.per_call_timeout_seconds,
-                    )
+                response = await asyncio.wait_for(
+                    self.genai_client.aio.models.generate_content(
+                        model=model, contents=contents, config=gen_config
+                    ),
+                    timeout=self.per_call_timeout_seconds,
+                )
 
-                if response.status_code in [400, 401, 403, 404]:
-                    # S2-A-02 — terminal error: cuenta como failure (cliente
-                    # mal configurado o cuota agotada deberían abrir el circuit
-                    # rápido para no quemar más recursos).
-                    _circuit_breaker.record_failure()
-                    raise AIProviderError(f"Terminal API Error {response.status_code} on GenAI API: {response.text}")
-                    
-                response.raise_for_status()
-                data = response.json()
-                
-                if "candidates" not in data or not data["candidates"]:
-                    raise AIProviderError(f"No candidates returned from Vertex AI. Response: {data}")
-                    
-                raw_json = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                if not response.candidates:
+                    raise AIProviderError(f"No candidates returned from Vertex AI. Response: {response}")
+
+                candidate = response.candidates[0]
+                _content = getattr(candidate, "content", None)
+                _parts = getattr(_content, "parts", None) if _content else None
+                raw_json = (_parts[0].text or "").strip() if (_parts and _parts[0].text) else ""
                 if raw_json.startswith("```json"):
                     raw_json = raw_json[7:]
                 if raw_json.endswith("```"):
                     raw_json = raw_json[:-3]
                 raw_json = raw_json.strip()
 
-                # finishReason='MAX_TOKENS' indica que Gemini se quedó sin tokens de salida
-                # y el JSON está truncado. Lo loggeamos antes de intentar parsear para
-                # diagnosticar fácilmente si el `max_output_tokens` actual sigue corto.
-                finish_reason = data["candidates"][0].get("finishReason")
-                if finish_reason and finish_reason != "STOP":
+                # finishReason != STOP indica truncado/bloqueo (p.ej. MAX_TOKENS
+                # deja el JSON truncado). Lo loggeamos antes de parsear.
+                finish_reason = getattr(candidate, "finish_reason", None)
+                finish_reason_str = getattr(finish_reason, "name", None) or (str(finish_reason) if finish_reason is not None else None)
+                if finish_reason_str and finish_reason_str != "STOP":
                     logger.warning(
-                        f"[adapter] finishReason={finish_reason} (model={model}, "
+                        f"[adapter] finishReason={finish_reason_str} (model={model}, "
                         f"max_output_tokens={max_output_tokens}, raw_len={len(raw_json)}). "
                         f"Si es MAX_TOKENS, subir max_output_tokens."
                     )
 
-                usage_metadata = data.get("usageMetadata", {"promptTokenCount": 0, "candidatesTokenCount": 0, "totalTokenCount": 0})
+                _um = getattr(response, "usage_metadata", None)
+                usage_metadata = {
+                    "promptTokenCount": getattr(_um, "prompt_token_count", 0) or 0,
+                    "candidatesTokenCount": getattr(_um, "candidates_token_count", 0) or 0,
+                    "totalTokenCount": getattr(_um, "total_token_count", 0) or 0,
+                } if _um else {"promptTokenCount": 0, "candidatesTokenCount": 0, "totalTokenCount": 0}
                 
                 if raw_json.startswith("[") and raw_json.endswith("]"):
                     schema_dict = response_schema.model_json_schema()
@@ -446,9 +453,15 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                     f"(attempt {attempt + 1}/{self.max_retries})"
                 )
                 logger.warning(error_str)
-            except httpx.HTTPError as e:
-                error_str = f"HTTP Error: {str(e)}"
-                logger.error(f"GenAI API REST Error: {error_str}")
+            except genai_errors.APIError as e:
+                code = getattr(e, "code", None)
+                if code in (400, 401, 403, 404):
+                    # S2-A-02 - terminal error: cuenta como failure y abre el
+                    # circuit rapido para no quemar recursos.
+                    _circuit_breaker.record_failure()
+                    raise AIProviderError(f"Terminal API Error {code} on Vertex AI: {e}")
+                error_str = f"Vertex API Error {code}: {e}"
+                logger.error(f"Vertex AI Error: {error_str}")
             except ValidationError as e:
                 error_str = f"ValidationError: {str(e)}"
                 logger.error(f"GenAI Unknown Error: {error_str}")
@@ -502,16 +515,19 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
     async def get_embedding(self, text: str) -> List[float]:
         import asyncio
         import random
-        from google import genai
-        
+        from google.genai import types
+
         attempt = 0
         while attempt < self.max_retries:
             try:
-                # Ejecutamos en Thread Pool el método síncrono del cliente genai
+                # Ejecutamos en Thread Pool el método síncrono del cliente genai.
+                # output_dimensionality=768 para casar con los vectores ya
+                # almacenados en Firestore (gemini-embedding-001 @768).
                 response = await asyncio.to_thread(
                     self.genai_client.models.embed_content,
                     model='gemini-embedding-001',
-                    contents=text
+                    contents=text,
+                    config=types.EmbedContentConfig(output_dimensionality=768),
                 )
                 
                 embeddings = response.embeddings[0].values

@@ -1,6 +1,7 @@
 import { MessagingService } from "./messaging.service";
 import { MARKETING_TEMPLATES } from "../domain/marketing-templates";
 import { marked } from "marked";
+import { getGeminiClient } from "@/backend/ai/core/infrastructure/gemini-client";
 
 /**
  * Decorator (Interceptor Pattern) para reescribir mensajes usando Gemini
@@ -69,32 +70,23 @@ REGLAS ESTRICTAS E INQUEBRANTABLES:
 4. Nunca ofrezcas "SaaS" o "Módulos". La venta es "Desarrollo de Capa a Medida" o "Infraestructura IA".
 5. Mantén la longitud estrictamente similar a la plantilla original (aprox 100-150 palabras). Usa Markdown (Negritas, cursivas).`;
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            console.warn("[AI Decorator] GEMINI_API_KEY no encontrada. Redirigiendo fallback estático.");
-            return baseTemplate;
-        }
-
         try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: `Reescribe y devuelve el EMAIL COMPLETO de principio a fin adaptado a mi perfil ahora mismo.` }] }],
-                    systemInstruction: { parts: [{ text: systemInstruction }] },
-                    generationConfig: { temperature: 0.35 } // Eliminado el maxOutputTokens limitante
-                })
+            // Migrado de la Gemini Developer API (REST key-in-URL, saldo prepago
+            // agotado) a Vertex AI (pago por uso) vía el cliente @google/genai.
+            const client = getGeminiClient();
+            const response = await client.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: `Reescribe y devuelve el EMAIL COMPLETO de principio a fin adaptado a mi perfil ahora mismo.` }] }],
+                config: {
+                    systemInstruction,
+                    temperature: 0.35, // Sin maxOutputTokens limitante
+                },
             });
-            
-            if (!res.ok) {
-                throw new Error(`Error en la request de IA: ${res.statusText}`);
-            }
 
-            const raw = await res.json();
-            return raw.candidates?.[0]?.content?.parts?.[0]?.text || baseTemplate;
+            const text = response.candidates?.[0]?.content?.parts?.find((p: any) => p.text)?.text;
+            return text || baseTemplate;
         } catch (error) {
-            console.error("[AI Decorator] Fallo severo durante Inference con Gemini:", error);
+            console.error("[AI Decorator] Fallo severo durante Inference con Vertex AI:", error);
             return baseTemplate;
         }
     }

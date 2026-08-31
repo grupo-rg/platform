@@ -34,7 +34,7 @@ export const validationAgent = ai.defineFlow(
         `;
 
         const result = await ai.generate({
-            model: 'googleai/gemini-2.0-flash-001',
+            model: 'vertexai/gemini-2.5-flash',
             prompt: prompt,
             output: {
                 format: 'json',

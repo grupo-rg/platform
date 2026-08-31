@@ -65,7 +65,7 @@ export const generateRenderFlow = ai.defineFlow(
 
         // 3. Call Gemini via Vertex AI (no geo-restrictions)
         const response = await client.models.generateContent({
-            model: "gemini-2.0-flash-preview-image-generation",
+            model: "gemini-2.5-flash-image",
             contents: [
                 { role: 'user', parts: [{ text: promptText }, ...imageParts] }
             ],

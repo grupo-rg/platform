@@ -94,7 +94,7 @@ export const aparejadorOrchestratorAgent = ai.defineFlow(
         const { safeGenerate } = await import('@/backend/ai/core/utils/safe-generation');
 
         const result = await safeGenerate({
-            model: 'googleai/gemini-2.0-flash-001',
+            model: 'vertexai/gemini-2.5-flash',
             prompt: prompt,
             output: {
                 format: 'json',

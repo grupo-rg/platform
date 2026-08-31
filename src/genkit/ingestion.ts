@@ -58,7 +58,7 @@ export async function processPriceBookPdf(fileUrl: string, year: number) {
     `;
 
         const { output } = await ai.generate({
-            model: 'googleai/gemini-2.5-pro',
+            model: 'vertexai/gemini-2.5-pro',
             prompt: [
                 { text: extractionPrompt },
                 { media: { url: `data:application/pdf;base64,${pdfBase64}` } }

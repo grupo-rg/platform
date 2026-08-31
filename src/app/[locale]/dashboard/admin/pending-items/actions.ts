@@ -26,6 +26,7 @@ export async function approvePendingItemAction(input: ApproveItemInput) {
         const embeddingResult = await ai.embed({
             embedder: embeddingModel,
             content: input.finalDescription,
+            options: { outputDimensionality: 768 },
         });
 
         const embedding = Array.isArray(embeddingResult)

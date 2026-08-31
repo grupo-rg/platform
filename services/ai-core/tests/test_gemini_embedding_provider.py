@@ -1,7 +1,7 @@
-"""Tests del `GeminiEmbeddingProvider` — batch embeddings vía API key.
+"""Tests del `GeminiEmbeddingProvider` — batch embeddings vía Vertex AI.
 
-Usa el cliente `google.genai` con `GOOGLE_GENAI_API_KEY` (no requiere
-IAM permissions de Vertex). Batch nativo: `embed_content(contents=[...])`
+Usa el cliente `google.genai` en modo Vertex (ADC del service-account).
+Batch nativo: `embed_content(contents=[...])`
 devuelve una `embeddings` list con un vector por texto.
 
 Modelo: `gemini-embedding-001` — 768 dims, consistente con el modelo que
@@ -21,11 +21,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-# Patch del env ANTES de importar el adapter: el constructor lee
-# GOOGLE_GENAI_API_KEY del entorno al instanciarse.
+# Patch del env ANTES de construir el provider: el constructor lee el
+# proyecto GCP (Vertex AI) del entorno al instanciarse.
 @pytest.fixture(autouse=True)
-def _set_api_key(monkeypatch):
-    monkeypatch.setenv("GOOGLE_GENAI_API_KEY", "dummy-key-for-tests")
+def _set_project(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
 
 
 def _mock_embed_response(vectors: list[list[float]]):
@@ -36,13 +36,14 @@ def _mock_embed_response(vectors: list[list[float]]):
 
 
 class TestGeminiEmbeddingProviderConstruction:
-    def test_raises_when_api_key_missing(self, monkeypatch):
-        monkeypatch.delenv("GOOGLE_GENAI_API_KEY", raising=False)
-        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    def test_raises_when_project_missing(self, monkeypatch):
+        monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+        monkeypatch.delenv("GCLOUD_PROJECT", raising=False)
+        monkeypatch.delenv("FIREBASE_PROJECT_ID", raising=False)
         from src.budget.catalog.infrastructure.adapters.gemini_embedding_provider import (
             GeminiEmbeddingProvider,
         )
-        with pytest.raises(RuntimeError, match="API key"):
+        with pytest.raises(RuntimeError, match="Vertex AI"):
             GeminiEmbeddingProvider()
 
 

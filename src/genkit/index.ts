@@ -1,12 +1,13 @@
 
 import { genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/googleai';
+import { vertexAI } from '@genkit-ai/vertexai';
+import { getVertexPluginConfig } from '@/backend/ai/shared/config/vertex-auth';
 // import { firebase } from '@genkit-ai/firebase';
 
 export const ai = genkit({
     plugins: [
-        googleAI(),
+        vertexAI(getVertexPluginConfig()),
         // firebase(), // Temporarily disabled due to import error // Temporarily disabled due to import error
     ],
-    model: 'googleai/gemini-2.0-flash', // Switched to 2.0-flash for speed/reliability
+    model: 'vertexai/gemini-2.5-flash', // Migrado a Vertex AI (pago por uso)
 });

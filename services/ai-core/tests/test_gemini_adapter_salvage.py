@@ -7,8 +7,8 @@ pipeline continúe sin agotar los 5 retries del backoff.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import List, Optional
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import BaseModel
@@ -101,52 +101,47 @@ def test_salvage_returns_none_when_no_array_field_matches():
     assert parsed is None and recovered == 0
 
 
-# ---------- Integración del salvage dentro del adapter ----------
+# ---------- Integración del salvage dentro del adapter (SDK Vertex) ----------
 
 
-class _FakeAsyncClient:
-    """Sustituto mínimo de httpx.AsyncClient que devuelve una respuesta canned."""
+def _fake_sdk_response(text: str):
+    """Respuesta mínima con la forma del SDK google-genai (Vertex)."""
+    return SimpleNamespace(
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(parts=[SimpleNamespace(text=text)]),
+                finish_reason=SimpleNamespace(name="MAX_TOKENS"),
+            )
+        ],
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=100,
+            candidates_token_count=500,
+            total_token_count=600,
+        ),
+    )
 
-    def __init__(self, payload_text: str):
-        self._payload_text = payload_text
-        self.call_count = 0
 
-    async def __aenter__(self):
-        return self
+def _install_fake_generate(adapter: GoogleGenerativeAIAdapter, side_effect):
+    """Reemplaza `adapter.genai_client.aio.models.generate_content`.
 
-    async def __aexit__(self, *args):
-        return None
+    `side_effect` recibe **kwargs (model/contents/config) y devuelve/lanza.
+    """
+    call_count = {"n": 0}
 
-    async def post(self, url, json=None, headers=None):
-        self.call_count += 1
+    async def _fake_generate(**kwargs):
+        call_count["n"] += 1
+        return side_effect(**kwargs)
 
-        class _Resp:
-            def __init__(self, text):
-                self._text = text
-                self.status_code = 200
-
-            def raise_for_status(self):
-                return None
-
-            def json(self):
-                return {
-                    "candidates": [{
-                        "content": {"parts": [{"text": self._text}]},
-                    }],
-                    "usageMetadata": {
-                        "promptTokenCount": 100,
-                        "candidatesTokenCount": 500,
-                        "totalTokenCount": 600,
-                    },
-                }
-
-        return _Resp(self._payload_text)
+    adapter.genai_client = SimpleNamespace(
+        aio=SimpleNamespace(models=SimpleNamespace(generate_content=_fake_generate))
+    )
+    return call_count
 
 
 def test_adapter_uses_salvage_before_retry(monkeypatch):
-    """Ante JSON truncado, el adapter NO agota los 5 retries: devuelve items rescatados en el primer intento."""
+    """Ante JSON truncado, el adapter NO agota los retries: devuelve items rescatados en el primer intento."""
     import asyncio
-    monkeypatch.setenv("GOOGLE_GENAI_API_KEY", "dummy")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
 
     truncated_raw = (
         '{"items": ['
@@ -154,53 +149,41 @@ def test_adapter_uses_salvage_before_retry(monkeypatch):
         '{"code": "A.2", "description": "Dos", "quantity": 20},'
         '{"code": "A.3", "description": "truncado'  # ← EOF en medio de string
     )
-    client = _FakeAsyncClient(payload_text=truncated_raw)
 
     adapter = GoogleGenerativeAIAdapter(max_retries=5, base_delay=0.01)
+    call_count = _install_fake_generate(adapter, lambda **kw: _fake_sdk_response(truncated_raw))
 
-    with patch("httpx.AsyncClient", return_value=client):
-        parsed, usage = asyncio.run(adapter.generate_structured(
-            system_prompt="",
-            user_prompt="x",
-            response_schema=_WrapperSchema,
-        ))
+    parsed, usage = asyncio.run(adapter.generate_structured(
+        system_prompt="",
+        user_prompt="x",
+        response_schema=_WrapperSchema,
+    ))
 
     assert parsed is not None
     assert len(parsed.items) == 2
-    assert client.call_count == 1  # ¡no hizo retries!
+    assert call_count["n"] == 1  # ¡no hizo retries!
     assert usage.get("_salvaged") is True
     assert usage.get("_items_recovered") == 2
 
 
 def test_adapter_retries_on_non_validation_errors(monkeypatch):
-    """Errores HTTP no son truncamiento; el adapter debe seguir el camino de retry normal."""
+    """Errores no-validación (no truncamiento) siguen el camino de retry normal."""
     import asyncio
-    import httpx
-    monkeypatch.setenv("GOOGLE_GENAI_API_KEY", "dummy")
-
-    call_count = {"n": 0}
-
-    class _ErrorClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def post(self, url, json=None, headers=None):
-            call_count["n"] += 1
-            raise httpx.ConnectError("connection refused")
-
-    adapter = GoogleGenerativeAIAdapter(max_retries=2, base_delay=0.001)
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
 
     from src.budget.domain.exceptions import AIProviderError
 
-    with patch("httpx.AsyncClient", return_value=_ErrorClient()):
-        with pytest.raises(AIProviderError):
-            asyncio.run(adapter.generate_structured(
-                system_prompt="",
-                user_prompt="x",
-                response_schema=_WrapperSchema,
-            ))
+    def _raise(**kwargs):
+        raise RuntimeError("connection refused")
+
+    adapter = GoogleGenerativeAIAdapter(max_retries=2, base_delay=0.001)
+    call_count = _install_fake_generate(adapter, _raise)
+
+    with pytest.raises(AIProviderError):
+        asyncio.run(adapter.generate_structured(
+            system_prompt="",
+            user_prompt="x",
+            response_schema=_WrapperSchema,
+        ))
 
     assert call_count["n"] == 2  # respetó max_retries

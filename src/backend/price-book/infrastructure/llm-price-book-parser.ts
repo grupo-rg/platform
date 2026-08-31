@@ -127,7 +127,7 @@ export class LLMPriceBookParser {
                 `;
 
                 const result = await ai.generate({
-                    model: 'googleai/gemini-2.5-flash',
+                    model: 'vertexai/gemini-2.5-flash',
                     prompt: [
                         { text: promptText },
                         { media: { url: dataUri, contentType: 'application/pdf' } }

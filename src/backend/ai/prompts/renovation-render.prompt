@@ -1,5 +1,5 @@
 ---
-model: googleai/gemini-2.5-flash-image
+model: vertexai/gemini-2.5-flash-image
 input:
   schema:
     style: string

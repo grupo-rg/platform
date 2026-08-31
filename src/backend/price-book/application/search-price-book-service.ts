@@ -13,7 +13,8 @@ export class SearchPriceBookService {
         // Note: ai.embed returns an Array of results even for single content in this SDK version
         const embeddingResult = await ai.embed({
             embedder: embeddingModel,
-            content: query
+            content: query,
+            options: { outputDimensionality: 768 }
         });
 
         // Handle Array return type

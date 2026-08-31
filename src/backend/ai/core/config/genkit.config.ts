@@ -1,16 +1,23 @@
 
 import { genkit } from 'genkit';
-import { googleAI, geminiEmbedding001, textEmbedding004, gemini } from '@genkit-ai/googleai';
+import { vertexAI, geminiEmbedding001, gemini } from '@genkit-ai/vertexai';
+import { getVertexPluginConfig } from '../../shared/config/vertex-auth';
 
 /**
  * Shared Genkit Instance Configuration.
- * Initializes Genkit with Google AI plugin and exports the AI instance and Embedding Model.
+ * Inicializa Genkit con el plugin Vertex AI (Gemini Enterprise Agent Platform)
+ * y exporta la instancia `ai` y el modelo de embeddings.
+ *
+ * Migrado desde el plugin `googleAI()` (Gemini Developer API / AI Studio, con
+ * saldo prepago) a Vertex AI (pago por uso vía la cuenta de facturación de GCP).
+ * Los IDs de modelo y el nombre del embedder son idénticos; sólo cambia el
+ * proveedor y la autenticación (service-account en vez de API key).
  */
 
 // Initialize Genkit
 export const ai = genkit({
     plugins: [
-        googleAI(), // Automatically uses GOOGLE_GENAI_API_KEY from env
+        vertexAI(getVertexPluginConfig()),
     ],
     promptDir: 'src/backend/ai/prompts', // Explicitly set prompt directory
 });

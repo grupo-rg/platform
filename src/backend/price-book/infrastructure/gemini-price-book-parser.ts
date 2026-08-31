@@ -119,7 +119,7 @@ export class GeminiPriceBookParser {
         `;
 
         const { output } = await ai.generate({
-            model: 'googleai/gemini-2.0-flash',
+            model: 'vertexai/gemini-2.5-flash',
             config: {
                 temperature: 0.1,
             },

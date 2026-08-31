@@ -23,6 +23,7 @@
     "@genkit-ai/dotprompt": "^0.9.12",
     "@genkit-ai/firebase": "^1.27.0",
     "@genkit-ai/googleai": "^1.27.0",
+    "@genkit-ai/vertexai": "1.27.0",
     "@google-cloud/tasks": "^6.2.1",
     "@google-cloud/vertexai": "^1.10.0",
     "@google/genai": "^1.38.0",

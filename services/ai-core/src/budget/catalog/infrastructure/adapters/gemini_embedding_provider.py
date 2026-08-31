@@ -1,8 +1,8 @@
-"""Adapter `GeminiEmbeddingProvider` — batch embeddings vía API key.
+"""Adapter `GeminiEmbeddingProvider` — batch embeddings vía Vertex AI.
 
-Usa el SDK `google.genai` con `GOOGLE_GENAI_API_KEY` del entorno. No
-requiere IAM de Vertex AI — es la misma vía que usa el resto del sistema
-(`gemini_adapter.py:get_embedding`).
+Usa el SDK `google.genai` en modo Vertex (ADC del service-account de runtime,
+pago por uso). Requiere el rol `roles/aiplatform.user` en el SA. Misma vía que
+el resto del sistema (`gemini_adapter.py:get_embedding`).
 
 Modelo: `gemini-embedding-001` (MRL, 3072 dims por defecto). Truncamos a
 768 para:
@@ -56,14 +56,19 @@ class GeminiEmbeddingProvider(IEmbeddingProvider):
         base_delay: float = 4.0,
         inter_batch_delay: float = 0.7,
     ) -> None:
-        api_key = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-        if not api_key:
+        project = (
+            os.environ.get("GOOGLE_CLOUD_PROJECT")
+            or os.environ.get("GCLOUD_PROJECT")
+            or os.environ.get("FIREBASE_PROJECT_ID")
+        )
+        if not project:
             raise RuntimeError(
-                "GeminiEmbeddingProvider requires API key "
-                "(GOOGLE_GENAI_API_KEY or GEMINI_API_KEY env)."
+                "GeminiEmbeddingProvider requires GOOGLE_CLOUD_PROJECT / GCLOUD_PROJECT / "
+                "FIREBASE_PROJECT_ID (Vertex AI)."
             )
+        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "europe-southwest1")
         from google import genai
-        self._client: Any = genai.Client(api_key=api_key)
+        self._client: Any = genai.Client(vertexai=True, project=project, location=location)
         self._max_retries = max_retries
         self._base_delay = base_delay
         # Throttle preventivo entre batches — 0.7s da <90 RPM, por debajo del
@@ -77,10 +82,12 @@ class GeminiEmbeddingProvider(IEmbeddingProvider):
         last_exc: Exception | None = None
         for attempt in range(self._max_retries):
             try:
+                from google.genai import types
                 response = await asyncio.to_thread(
                     self._client.models.embed_content,
                     model=_MODEL,
                     contents=texts,
+                    config=types.EmbedContentConfig(output_dimensionality=_FIRESTORE_DIM_LIMIT),
                 )
                 vectors = [emb.values for emb in response.embeddings]
                 if len(vectors) != len(texts):

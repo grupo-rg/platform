@@ -1,49 +1,47 @@
-
 import { VectorizerPort } from '../../domain/vectorizer.port';
+import { ai, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
 
-interface GeminiEmbeddingResponse {
-    embedding: {
-        values: number[];
-    };
-}
-
+/**
+ * Vectorizador basado en Vertex AI (Gemini Enterprise Agent Platform) vía Genkit.
+ *
+ * Migrado desde la Gemini Developer API (REST con API key + saldo prepago
+ * agotado) a Vertex (pago por uso vía la cuenta de facturación de GCP). Usa el
+ * MISMO modelo `gemini-embedding-001` con `outputDimensionality: 768`, así que
+ * los vectores son compatibles con los ya almacenados en Firestore (campo
+ * `embedding`) — no requiere re-indexar.
+ *
+ * (Se mantiene el nombre `RestApiVectorizerAdapter` para no tocar los ~10 sitios
+ * que lo instancian; internamente ya no es REST.)
+ */
 export class RestApiVectorizerAdapter implements VectorizerPort {
-    private apiKey: string;
-    // Reverted to gemini-embedding-001 as text-embedding-004 is unavailable for this key
-    private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent';
-
-    constructor() {
-        const key = process.env.GOOGLE_GENAI_API_KEY || process.env.GEMINI_API_KEY;
-        if (!key) throw new Error("GOOGLE_GENAI_API_KEY or GEMINI_API_KEY is not set");
-        this.apiKey = key;
-    }
-
     async embedText(text: string): Promise<number[]> {
         if (!text) throw new Error("Text to embed cannot be empty");
 
-        const url = `${this.baseUrl}?key=${this.apiKey}`;
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                content: { parts: [{ text }] },
-                outputDimensionality: 768
-            })
+        const result = await ai.embed({
+            embedder: embeddingModel,
+            content: text,
+            options: { outputDimensionality: 768 },
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Gemini API Error: ${response.status} ${response.statusText} - ${errorText}`);
-        }
+        const vector = Array.isArray(result)
+            ? result[0]?.embedding
+            : (result as any).embedding;
 
-        const data = await response.json() as GeminiEmbeddingResponse;
-        return data.embedding.values;
+        if (!vector || vector.length === 0) {
+            throw new Error("Vertex embedding returned an empty vector");
+        }
+        return vector;
     }
 
     async embedMany(texts: string[]): Promise<number[][]> {
-        // Simple parallel implementation. 
-        // Note: For large batches, we might need rate limiting/throttling.
-        // But the UseCase sends batches of 50, which should be fine for concurrency.
-        return Promise.all(texts.map(text => this.embedText(text)));
+        if (!texts.length) return [];
+
+        const results = await ai.embedMany({
+            embedder: embeddingModel,
+            content: texts,
+            options: { outputDimensionality: 768 },
+        });
+
+        return results.map((r) => r.embedding);
     }
 }

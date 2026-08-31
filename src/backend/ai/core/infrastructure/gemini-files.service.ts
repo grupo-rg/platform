@@ -1,4 +1,4 @@
-import { getGeminiClient } from './gemini-client';
+import { getFilesApiClient as getGeminiClient } from './gemini-client';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';

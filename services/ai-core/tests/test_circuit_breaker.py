@@ -7,18 +7,19 @@ Política:
   - Tras 2 min, transicionamos a `half_open`: la próxima call llega al API.
     Si OK → `healthy`. Si falla → vuelve a `degraded` con reloj reiniciado.
 
-Estos tests NO levantan la API real — mockean `httpx.AsyncClient.post` para
-inducir fallos y verifican que el adapter respete el estado del breaker.
+Estos tests NO levantan la API real — mockean el cliente SDK Vertex
+(`genai_client.aio.models.generate_content`) para inducir fallos y verifican
+que el adapter respete el estado del breaker.
 """
 from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
-import httpx
 import pytest
+from google.genai import errors as genai_errors
+from pydantic import BaseModel
 
 from src.budget.domain.exceptions import AIProviderError
 from src.budget.infrastructure.adapters.ai.gemini_adapter import (
@@ -30,17 +31,61 @@ from src.budget.infrastructure.adapters.ai.gemini_adapter import (
     _reset_circuit_for_tests,
     get_circuit_breaker,
 )
-from pydantic import BaseModel
 
 
 class _MiniSchema(BaseModel):
     value: int
 
 
+class _FakeAPIError(genai_errors.APIError):
+    """APIError mínima con un `.code` controlable (evita el constructor real)."""
+
+    def __init__(self, code: int):
+        self.code = code
+        self.message = f"fake {code}"
+        self.status = "ERROR"
+        self.details = None
+
+    def __str__(self) -> str:
+        return self.message
+
+
+def _ok_response(value: int):
+    """Respuesta con la forma del SDK google-genai (Vertex)."""
+    return SimpleNamespace(
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(parts=[SimpleNamespace(text=f'{{"value": {value}}}')]),
+                finish_reason=SimpleNamespace(name="STOP"),
+            )
+        ],
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=1, candidates_token_count=1, total_token_count=2
+        ),
+    )
+
+
+def _install(adapter: GoogleGenerativeAIAdapter, side_effect):
+    """Reemplaza `adapter.genai_client` por un fake y cuenta invocaciones.
+
+    `side_effect(**kwargs)` devuelve una respuesta o lanza.
+    """
+    calls: list[int] = []
+
+    async def _gen(**kwargs):
+        calls.append(1)
+        return side_effect(**kwargs)
+
+    adapter.genai_client = SimpleNamespace(
+        aio=SimpleNamespace(models=SimpleNamespace(generate_content=_gen))
+    )
+    return calls
+
+
 @pytest.fixture(autouse=True)
 def reset_breaker_and_env(monkeypatch):
-    """Cada test arranca con breaker fresco y API key dummy."""
-    monkeypatch.setenv("GOOGLE_GENAI_API_KEY", "dummy-test-key")
+    """Cada test arranca con breaker fresco y project dummy (Vertex)."""
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     _reset_circuit_for_tests()
     yield
     _reset_circuit_for_tests()
@@ -128,30 +173,18 @@ def test_breaker_failures_outside_window_dont_count():
     assert len(cb.failure_timestamps) == 1  # solo el nuevo
 
 
-# ---- Integration: adapter respects the breaker -----------------------------
+# ---- Integration: adapter respects the breaker (SDK Vertex) ----------------
 
 
 @pytest.mark.asyncio
 async def test_adapter_record_success_on_ok(monkeypatch):
     """Una respuesta OK al adapter llama a `record_success`."""
     adapter = GoogleGenerativeAIAdapter(model_name="gemini-2.5-flash")
+    _install(adapter, lambda **kw: _ok_response(42))
 
-    # Mock de httpx que devuelve un JSON válido para _MiniSchema.
-    async def _mock_post(self, *args, **kwargs):
-        class _R:
-            status_code = 200
-            def raise_for_status(self): pass
-            def json(self):
-                return {
-                    "candidates": [{"content": {"parts": [{"text": '{"value": 42}'}]}, "finishReason": "STOP"}],
-                    "usageMetadata": {"promptTokenCount": 1, "candidatesTokenCount": 1, "totalTokenCount": 2},
-                }
-        return _R()
-
-    with patch("httpx.AsyncClient.post", _mock_post):
-        result, _ = await adapter.generate_structured(
-            system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
-        )
+    result, _ = await adapter.generate_structured(
+        system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+    )
     assert result.value == 42
     assert get_circuit_breaker().state == CIRCUIT_HEALTHY
 
@@ -159,23 +192,20 @@ async def test_adapter_record_success_on_ok(monkeypatch):
 @pytest.mark.asyncio
 async def test_adapter_record_failure_after_retries_exhausted(monkeypatch):
     """Tras agotar retries con fallos, el breaker registra un failure."""
-    # Reducimos retries y delay para que el test no tarde.
     monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "2")
     adapter = GoogleGenerativeAIAdapter(
-        model_name="gemini-2.5-flash",
-        max_retries=2,
-        base_delay=0.0,  # sin sleeps
+        model_name="gemini-2.5-flash", max_retries=2, base_delay=0.0,
     )
 
-    # Mock httpx que siempre lanza error.
-    async def _mock_fail(self, *args, **kwargs):
-        raise httpx.HTTPError("simulated network down")
+    def _fail(**kw):
+        raise RuntimeError("simulated network down")
 
-    with patch("httpx.AsyncClient.post", _mock_fail):
-        with pytest.raises(AIProviderError):
-            await adapter.generate_structured(
-                system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
-            )
+    _install(adapter, _fail)
+
+    with pytest.raises(AIProviderError):
+        await adapter.generate_structured(
+            system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+        )
 
     cb = get_circuit_breaker()
     assert len(cb.failure_timestamps) == 1
@@ -188,9 +218,7 @@ async def test_adapter_blocks_calls_when_circuit_degraded(monkeypatch):
     """
     monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "1")
     adapter = GoogleGenerativeAIAdapter(
-        model_name="gemini-2.5-flash",
-        max_retries=1,
-        base_delay=0.0,
+        model_name="gemini-2.5-flash", max_retries=1, base_delay=0.0,
     )
 
     # Forzamos el breaker a degraded directamente.
@@ -199,24 +227,12 @@ async def test_adapter_blocks_calls_when_circuit_degraded(monkeypatch):
     cb.state = CIRCUIT_DEGRADED
     cb.opened_at = time.monotonic()
 
-    # Mock que cuenta calls. Si el breaker funciona, NO debe llegar.
-    calls = []
+    calls = _install(adapter, lambda **kw: _ok_response(1))
 
-    async def _mock_post(self, *args, **kwargs):
-        calls.append(1)
-        class _R:
-            status_code = 200
-            def raise_for_status(self): pass
-            def json(self):
-                return {"candidates": [{"content": {"parts": [{"text": '{"value": 1}'}]}, "finishReason": "STOP"}],
-                        "usageMetadata": {}}
-        return _R()
-
-    with patch("httpx.AsyncClient.post", _mock_post):
-        with pytest.raises(AIProviderError) as exc_info:
-            await adapter.generate_structured(
-                system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
-            )
+    with pytest.raises(AIProviderError) as exc_info:
+        await adapter.generate_structured(
+            system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+        )
 
     # La llamada NO debió llegar al API.
     assert calls == [], f"El breaker no bloqueó: {len(calls)} llamadas"
@@ -230,9 +246,7 @@ async def test_adapter_probes_after_2_min_in_degraded(monkeypatch):
     """
     monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "1")
     adapter = GoogleGenerativeAIAdapter(
-        model_name="gemini-2.5-flash",
-        max_retries=1,
-        base_delay=0.0,
+        model_name="gemini-2.5-flash", max_retries=1, base_delay=0.0,
     )
 
     # Forzamos breaker a degraded con `opened_at` hace 121s (>2 min).
@@ -241,22 +255,11 @@ async def test_adapter_probes_after_2_min_in_degraded(monkeypatch):
     cb.state = CIRCUIT_DEGRADED
     cb.opened_at = time.monotonic() - 121.0
 
-    calls = []
+    calls = _install(adapter, lambda **kw: _ok_response(7))
 
-    async def _mock_post(self, *args, **kwargs):
-        calls.append(1)
-        class _R:
-            status_code = 200
-            def raise_for_status(self): pass
-            def json(self):
-                return {"candidates": [{"content": {"parts": [{"text": '{"value": 7}'}]}, "finishReason": "STOP"}],
-                        "usageMetadata": {}}
-        return _R()
-
-    with patch("httpx.AsyncClient.post", _mock_post):
-        result, _ = await adapter.generate_structured(
-            system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
-        )
+    result, _ = await adapter.generate_structured(
+        system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+    )
 
     # La call DID reach the API.
     assert len(calls) == 1
@@ -270,24 +273,18 @@ async def test_adapter_4xx_terminal_error_records_failure(monkeypatch):
     """Un 4xx terminal cuenta como fallo para el breaker."""
     monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "1")
     adapter = GoogleGenerativeAIAdapter(
-        model_name="gemini-2.5-flash",
-        max_retries=1,
-        base_delay=0.0,
+        model_name="gemini-2.5-flash", max_retries=1, base_delay=0.0,
     )
 
-    async def _mock_403(self, *args, **kwargs):
-        class _R:
-            status_code = 403
-            text = "Forbidden"
-            def raise_for_status(self):
-                raise httpx.HTTPStatusError("403", request=None, response=None)
-        return _R()
+    def _raise_403(**kw):
+        raise _FakeAPIError(403)
 
-    with patch("httpx.AsyncClient.post", _mock_403):
-        with pytest.raises(AIProviderError):
-            await adapter.generate_structured(
-                system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
-            )
+    _install(adapter, _raise_403)
+
+    with pytest.raises(AIProviderError):
+        await adapter.generate_structured(
+            system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+        )
 
     cb = get_circuit_breaker()
     # El 4xx terminal registra fallo.
@@ -299,36 +296,31 @@ async def test_adapter_after_3_failures_blocks_4th_call(monkeypatch):
     """Tras 3 fallos reales (no manual), la 4ª call se bloquea sin tocar API."""
     monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "1")
     adapter = GoogleGenerativeAIAdapter(
-        model_name="gemini-2.5-flash",
-        max_retries=1,
-        base_delay=0.0,
+        model_name="gemini-2.5-flash", max_retries=1, base_delay=0.0,
     )
 
-    call_counter = []
+    def _fail(**kw):
+        raise RuntimeError("down")
 
-    async def _mock_post(self, *args, **kwargs):
-        call_counter.append(1)
-        raise httpx.HTTPError("down")
+    calls = _install(adapter, _fail)
 
-    with patch("httpx.AsyncClient.post", _mock_post):
-        # 3 calls fallidas.
-        for _ in range(3):
-            with pytest.raises(AIProviderError):
-                await adapter.generate_structured(
-                    system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
-                )
+    # 3 calls fallidas.
+    for _ in range(3):
+        with pytest.raises(AIProviderError):
+            await adapter.generate_structured(
+                system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+            )
 
     # Verificamos breaker abierto.
     cb = get_circuit_breaker()
     assert cb.state == CIRCUIT_DEGRADED
 
     # 4ª call: NO debe llegar al API.
-    before = len(call_counter)
-    with patch("httpx.AsyncClient.post", _mock_post):
-        with pytest.raises(AIProviderError) as exc_info:
-            await adapter.generate_structured(
-                system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
-            )
+    before = len(calls)
+    with pytest.raises(AIProviderError) as exc_info:
+        await adapter.generate_structured(
+            system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+        )
     # El mock NO se invocó.
-    assert len(call_counter) == before
+    assert len(calls) == before
     assert "circuit_breaker" in str(exc_info.value).lower()
