@@ -13,8 +13,19 @@ import { services } from '@/lib/services';
 import { locations } from '@/lib/locations';
 import { getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
 import { SheetClose } from '@/components/ui/sheet';
-import { BudgetWidget } from '@/components/budget-widget';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
+
+// El wizard de presupuesto (BudgetRequestWizard + createBudgetAction + backend)
+// es pesado y va tras un click. Se difiere con next/dynamic para no arrastrarlo
+// al compile/bundle de TODAS las rutas públicas (el MobileMenu vive en el Header).
+const BudgetWidget = dynamic(
+    () => import('@/components/budget-widget').then((m) => m.BudgetWidget),
+    {
+        ssr: false,
+        loading: () => <div className="h-12 w-full animate-pulse rounded-md bg-primary/20" />,
+    }
+);
 import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_HREF, CONTACT_WHATSAPP_URL } from '@/lib/contact';
 import { Phone, MessageCircle, ArrowRight } from 'lucide-react';
 
