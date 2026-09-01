@@ -4,6 +4,10 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '512mb',
     },
+    // Compila sólo los submódulos usados de librerías "barrel" pesadas
+    // (menos módulos en dev + bundle más pequeño en prod). lucide-react ya
+    // viene optimizada por defecto en Next 15.
+    optimizePackageImports: ['framer-motion', 'date-fns', 'lodash'],
   },
   /* config options here */
   typescript: {

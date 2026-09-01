@@ -1,12 +1,8 @@
 'use client';
 
-import Image from 'next/image';
-import { BudgetWidget } from '@/components/budget-widget';
-import { Link } from '@/i18n/navigation';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
-import { UserNav } from '@/components/auth/user-nav';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { Menu } from 'lucide-react';
