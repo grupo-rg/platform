@@ -440,6 +440,21 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [conversationId]);
 
+    // Fix UX: los estados TERMINALES del progress card (error / complete) son
+    // globales al componente, así que se colaban en TODAS las conversaciones
+    // (e incluso en una nueva): tras un error se llama `clearActiveJob()`, así
+    // que `readActiveJob()` es null y los efectos de arriba no los limpiaban.
+    // Al cambiar de conversación los reseteamos — un error/aviso solo tiene
+    // sentido en la conversación donde ocurrió.
+    React.useEffect(() => {
+        setGenerationProgress(prev =>
+            prev && (prev.step === 'error' || prev.step === 'complete')
+                ? { step: 'idle' }
+                : prev
+        );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversationId]);
+
 
 
     // Auto-resume generation after answering the Architect
@@ -1313,7 +1328,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                     <div className="w-64 flex flex-col h-full">
                         <div className="p-4 border-b border-gray-100 dark:border-white/5">
                             <Button
-                                onClick={startNewConversation}
+                                onClick={() => { setGenerationProgress({ step: 'idle' }); startNewConversation(); }}
                                 disabled={isLoadingChats}
                                 className="w-full justify-start font-medium text-sm transition-all"
                                 variant="outline"
