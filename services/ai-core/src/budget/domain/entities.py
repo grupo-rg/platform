@@ -136,6 +136,12 @@ class BudgetPartida(BaseModel):
     quantity: float
     unitPrice: float
     totalPrice: float
+    # BC3 — doble precio (Precio BC3 vs Precio IA) + mediciones estructuradas.
+    # None en presupuestos que no provienen de un archivo .bc3.
+    bc3_unit_price: Optional[float] = None       # precio unitario del propio BC3
+    ai_unit_price: Optional[float] = None         # estimación IA (catálogo + Vertex)
+    active_price_source: Optional[Literal['bc3', 'ai']] = None
+    measurements: Optional[List[Dict[str, Any]]] = None  # estado de mediciones estructurado
     originalTask: Optional[str] = None
     note: Optional[str] = None
     ai_justification: Optional[str] = None

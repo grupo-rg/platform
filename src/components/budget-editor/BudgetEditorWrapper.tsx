@@ -209,6 +209,11 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                         last_reconciled_at: (editorItem.item as any)?.last_reconciled_at,
                         reconciled_by: (editorItem.item as any)?.reconciled_by,
                         original_unit_price_before_reconciliation: (editorItem.item as any)?.original_unit_price_before_reconciliation,
+                        // BC3 — doble precio + mediciones (persistir para no perderlos cross-edit).
+                        bc3_unit_price: (editorItem.item as any)?.bc3_unit_price,
+                        ai_unit_price: (editorItem.item as any)?.ai_unit_price,
+                        active_price_source: (editorItem.item as any)?.active_price_source,
+                        measurements: (editorItem.item as any)?.measurements,
                     };
                 });
 
@@ -682,6 +687,11 @@ export const BudgetEditorWrapper = ({ budget, isAdmin = false, traceData, initia
                     alternativeCandidates: item.alternativeCandidates || item.alternatives || [],
                     needsHumanReview: item.ai_resolution?.needs_human_review || item.needsHumanReview || false,
                     matchConfidence: item.matchConfidence,
+                    // BC3 — doble precio + mediciones estructuradas.
+                    bc3_unit_price: item.bc3_unit_price,
+                    ai_unit_price: item.ai_unit_price,
+                    active_price_source: item.active_price_source,
+                    measurements: item.measurements,
                 },
                 isEditing: false,
                 isDirty: false

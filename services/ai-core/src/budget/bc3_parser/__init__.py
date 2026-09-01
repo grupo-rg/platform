@@ -33,6 +33,7 @@ from src.budget.bc3_parser.entities import (
     Bc3ConceptKind,
     Bc3Decomposition,
     Bc3Measurement,
+    Bc3MeasurementLine,
     Bc3Tree,
 )
 from src.budget.bc3_parser.parser import Bc3Parser
@@ -45,5 +46,6 @@ __all__ = [
     "Bc3ConceptKind",
     "Bc3Decomposition",
     "Bc3Measurement",
+    "Bc3MeasurementLine",
     "bc3_tree_to_restructured_items",
 ]

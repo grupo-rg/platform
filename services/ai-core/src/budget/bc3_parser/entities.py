@@ -56,18 +56,47 @@ class Bc3Decomposition:
 
 
 @dataclass
+class Bc3MeasurementLine:
+    """Una línea de medición parcial (el desglose del estado de mediciones).
+
+    FIEBDC-3 empaqueta cada línea del `~M` como 6 campos:
+    `TIPO \\ COMENTARIO \\ UNIDADES \\ LONGITUD \\ LATITUD \\ ALTURA`.
+    El subtotal = unidades × (longitud|1) × (latitud|1) × (altura|1).
+
+    Ejemplo real (SASHA, "Excavación", m³):
+      `\\Piscina\\1\\85\\\\2.75\\`  → comment="Piscina" units=1 length=85 height=2.75 subtotal=233.75
+
+    Las líneas sin cantidad (solo comentario) son encabezados de sección
+    (p.ej. "PLANTA BAJA") → `is_section=True`.
+    """
+
+    comment: str = ""            # estancia / ubicación / comentario
+    units: Optional[float] = None
+    length: Optional[float] = None   # longitud
+    width: Optional[float] = None    # latitud / anchura
+    height: Optional[float] = None   # altura
+    subtotal: Optional[float] = None
+    is_section: bool = False
+
+
+@dataclass
 class Bc3Measurement:
     """Record `~M|parent_code\\child_code|...|total_quantity|parciales_text|`.
 
     Mediciones aplicadas a una partida. El campo `total_quantity` es el
     número de unidades totales de la partida (autoritativo, escrito por el
-    medidor humano).
+    medidor humano). `lines` es el desglose estructurado (estado de mediciones).
     """
 
     parent_code: str
     code: str  # código de la partida medida
     total_quantity: float
     parciales_text: str = ""
+    lines: List[Bc3MeasurementLine] = field(default_factory=list)
+
+    def computed_total(self) -> float:
+        """Suma de los subtotales de las líneas (para validar contra total_quantity)."""
+        return sum(l.subtotal for l in self.lines if l.subtotal is not None)
 
 
 @dataclass

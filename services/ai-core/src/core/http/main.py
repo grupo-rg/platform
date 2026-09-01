@@ -323,6 +323,59 @@ async def process_vision_budget(
         "budgetId": budget_id_value,
     })
 
+@app.post("/api/v1/bc3/detect")
+async def detect_bc3(file: UploadFile = File(...)):
+    """Detección rápida de un BC3 (FIEBDC-3) para la tarjeta de importación del
+    chat: parsea el archivo y devuelve conteos (capítulos, partidas, con precio,
+    mediciones) + metadata. NO dispara el pipeline — es de milisegundos.
+    """
+    if not file.filename or not file.filename.lower().endswith(".bc3"):
+        raise HTTPException(status_code=400, detail="Only .bc3 files are allowed")
+    try:
+        raw = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read BC3: {e}")
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty BC3 body")
+
+    from src.budget.bc3_parser import Bc3Parser, bc3_tree_to_restructured_items
+
+    try:
+        tree = Bc3Parser().parse(raw)
+        # Usamos los RestructuredItem (misma proyección que entra al pipeline):
+        # así los conteos coinciden con lo que verá el usuario en el editor.
+        items = bc3_tree_to_restructured_items(tree)
+    except Exception as e:
+        logger.error(f"BC3 detect parse failed: {e}")
+        raise HTTPException(status_code=422, detail=f"No se pudo leer el BC3: {e}")
+
+    priced = sum(1 for it in items if it.bc3_unit_price is not None)
+    with_measurements = sum(1 for it in items if it.measurements)
+    distinct_chapters = len({it.chapter for it in items if it.chapter})
+
+    # Título = descripción de la raíz de DOCUMENTO (código con "##"), no de un
+    # capítulo. Si el BC3 no la trae, se deja vacío y la UI usa el nombre de archivo.
+    title = ""
+    for code in tree.root_codes:
+        c = tree.concepts.get(code)
+        if c and c.description and "##" in code:
+            title = c.description
+            break
+
+    return {
+        "filename": file.filename,
+        "version": tree.version,
+        "encoding": tree.encoding,
+        "currency": tree.currency,
+        "title": title,
+        "chapters": distinct_chapters,
+        "partidas": len(items),
+        "priced_partidas": priced,
+        "measurements": with_measurements,
+        "has_prices": priced > 0,
+    }
+
+
 @app.post("/api/v1/jobs/measurements")
 async def process_measurement_job(
     file: UploadFile = File(...),

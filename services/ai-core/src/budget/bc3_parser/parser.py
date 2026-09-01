@@ -10,6 +10,7 @@ from src.budget.bc3_parser.entities import (
     Bc3ConceptKind,
     Bc3Decomposition,
     Bc3Measurement,
+    Bc3MeasurementLine,
     Bc3Tree,
 )
 from src.budget.bc3_parser.tokenizer import (
@@ -223,7 +224,56 @@ class Bc3Parser:
             code=code,
             total_quantity=qty,
             parciales_text=parciales,
+            lines=self._parse_parciales(parciales),
         )
+
+    def _parse_parciales(self, text: str) -> list[Bc3MeasurementLine]:
+        """Parsea el string de parciales `~M` en líneas estructuradas.
+
+        Formato FIEBDC-3: grupos de 6 campos separados por `\\`:
+        `TIPO \\ COMENTARIO \\ UNIDADES \\ LONGITUD \\ LATITUD \\ ALTURA`.
+
+          - Líneas con UNIDADES/dimensiones numéricas → subtotal calculado
+            (unidades × longitud × latitud × altura, con 1 para las vacías).
+          - Líneas solo con comentario (sin magnitudes) → encabezado de
+            sección (p.ej. "PLANTA BAJA"), `is_section=True`.
+          - Grupos incompletos al final se ignoran (defensivo).
+        """
+        if not text:
+            return []
+        parts = text.split("\\")
+        lines: list[Bc3MeasurementLine] = []
+        for i in range(0, len(parts) - 5, 6):
+            _tipo, comment, uds, largo, ancho, alto = parts[i:i + 6]
+            comment = comment.strip()
+            u = _parse_spanish_float(uds)
+            l = _parse_spanish_float(largo)
+            w = _parse_spanish_float(ancho)
+            h = _parse_spanish_float(alto)
+
+            if u is None and l is None and w is None and h is None:
+                # Sin magnitudes: encabezado de sección (o línea vacía).
+                if comment:
+                    lines.append(Bc3MeasurementLine(comment=comment, is_section=True))
+                continue
+
+            subtotal = (
+                (u if u is not None else 1.0)
+                * (l if l is not None else 1.0)
+                * (w if w is not None else 1.0)
+                * (h if h is not None else 1.0)
+            )
+            lines.append(
+                Bc3MeasurementLine(
+                    comment=comment,
+                    units=u,
+                    length=l,
+                    width=w,
+                    height=h,
+                    subtotal=round(subtotal, 6),
+                )
+            )
+        return lines
 
     # --- post-processing ---------------------------------------------------
 

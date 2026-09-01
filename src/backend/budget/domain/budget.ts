@@ -18,6 +18,21 @@ export interface UnitConversionRecord {
   result: number;         // resultado de la conversión (en to_unit)
 }
 
+/**
+ * Línea del estado de mediciones de un BC3 (FIEBDC-3).
+ * Subtotal = units × (length|1) × (width|1) × (height|1).
+ * Las líneas de sección (`is_section`) son encabezados sin cantidad (p.ej. "PLANTA BAJA").
+ */
+export interface MeasurementLine {
+  comment: string;            // estancia / ubicación / comentario
+  units?: number | null;
+  length?: number | null;
+  width?: number | null;
+  height?: number | null;
+  subtotal?: number | null;
+  is_section?: boolean;
+}
+
 export interface BudgetPartida {
   type: 'PARTIDA';
   id: string;
@@ -28,6 +43,11 @@ export interface BudgetPartida {
   quantity: number;
   unitPrice: number; // Includes labor + materials
   totalPrice: number;
+  // BC3 — doble precio + mediciones estructuradas (Optional; ausentes salvo import BC3).
+  bc3_unit_price?: number | null;     // precio del propio archivo BC3
+  ai_unit_price?: number | null;      // estimación IA (catálogo + Vertex)
+  active_price_source?: 'bc3' | 'ai'; // fuente de precio activa (default: bc3 si existe)
+  measurements?: MeasurementLine[];   // estado de mediciones estructurado
   originalTask?: string; // The user intent that generated this
   note?: string;
   ai_justification?: string; // Telemetry logic from the Judge Agent

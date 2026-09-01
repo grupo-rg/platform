@@ -146,3 +146,71 @@ def test_encoding_latin1_handled():
     assert tree.version.startswith("FIEBDC-3"), (
         f"Encoding probablemente mal detectado — version={tree.version!r}"
     )
+
+
+def test_parciales_parsed_into_structured_lines():
+    """El desglose (~M parciales) se parsea en líneas estructuradas cuyo
+    subtotal suma (±2%) el total declarado en >=95% de las partidas con
+    desglose numérico. Validado sobre el golden set real."""
+    ok = with_lines = 0
+    for filename, *_ in GOLDEN_SET:
+        tree = Bc3Parser().parse((FIXTURES / filename).read_bytes())
+        for m in tree.measurements.values():
+            numeric = [l for l in m.lines if not l.is_section and l.subtotal is not None]
+            if not numeric:
+                continue
+            with_lines += 1
+            denom = abs(m.total_quantity) or 1.0
+            if abs(m.computed_total() - m.total_quantity) / denom <= 0.02:
+                ok += 1
+    assert with_lines > 0, "ninguna partida con parciales estructurados"
+    rate = ok / with_lines
+    assert rate >= 0.95, f"solo {rate:.1%} de partidas cuadran (esperado >=95%)"
+
+
+def test_restructured_carries_bc3_price_and_measurements():
+    """Un BC3 CON precios → el RestructuredItem lleva bc3_unit_price y measurements."""
+    bc3 = (
+        "~V|EMISOR|FIEBDC-3/2002|TEST|||ANSI||\r\n"
+        "~C|CAP01##|CAP|CAPITULO UNO|0|||\r\n"
+        "~C|P001|m3|Excavacion mecanica|54.00|||\r\n"
+        "~D|CAP01##|P001\\1\\1\\|\r\n"
+        "~M|CAP01##\\P001||10|\\Zona A\\1\\5\\\\2\\|\r\n"
+    ).encode("cp1252")
+    tree = Bc3Parser().parse(bc3)
+    items = bc3_tree_to_restructured_items(tree)
+
+    assert len(items) == 1
+    it = items[0]
+    assert it.code == "P001"
+    assert it.bc3_unit_price == pytest.approx(54.0)
+    assert it.measurements and len(it.measurements) == 1
+    assert it.measurements[0]["comment"] == "Zona A"
+    assert it.measurements[0]["subtotal"] == pytest.approx(10.0)  # 1 × 5 × 2
+
+
+def test_restructured_ciego_has_no_price_but_carries_measurements():
+    """Un BC3 ciego (fixture) → bc3_unit_price None, pero measurements poblado."""
+    tree = Bc3Parser().parse((FIXTURES / GOLDEN_SET[0][0]).read_bytes())
+    items = bc3_tree_to_restructured_items(tree)
+
+    assert all(it.bc3_unit_price is None for it in items), "el borrador ciego no trae precios"
+    assert any(it.measurements for it in items), "esperaba items con mediciones estructuradas"
+
+
+def test_quatre_cantons_measurement_breakdown():
+    """02EBPLSJ (Punto de luz simple, 33 ud) tiene desglose por estancia
+    agrupado en secciones (PLANTA BAJA, PLANTA PISO...) que suma 33."""
+    tree = Bc3Parser().parse((FIXTURES / GOLDEN_SET[0][0]).read_bytes())
+    m = tree.measurements["02EBPLSJ"]
+
+    assert m.lines, "sin líneas de medición estructuradas"
+    sections = [l for l in m.lines if l.is_section]
+    numeric = [l for l in m.lines if not l.is_section]
+    assert sections, "esperaba encabezados de sección (plantas)"
+    assert any(l.comment == "PLANTA BAJA" for l in sections)
+    assert numeric, "esperaba líneas con unidades por estancia"
+    # Todas las líneas numéricas de conteo tienen units y subtotal.
+    assert all(l.subtotal is not None for l in numeric)
+    assert m.computed_total() == pytest.approx(33.0)
+    assert m.total_quantity == pytest.approx(33.0)

@@ -55,6 +55,10 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
         setBreakdownOpen(true);
     };
 
+    // BC3 doble precio: mostramos "Precio BC3" + "Precio IA" solo si el presupuesto
+    // viene de un .bc3 con precios (alguna partida trae bc3_unit_price).
+    const hasDualPrice = state.items.some((i: any) => i.item?.bc3_unit_price != null);
+
     return (
         <div className="w-full bg-white dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden auto-cols-auto overflow-x-auto">
             {budgetId && (
@@ -73,7 +77,7 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                     focusedPartidaId={reconcileFocusedId}
                 />
             )}
-            <div className="flex flex-col min-w-[800px]">
+            <div className="flex flex-col" style={{ minWidth: hasDualPrice ? 900 : 800 }}>
                 {/* Header Grid */}
                 <div className="flex bg-slate-50/50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-sm font-medium text-slate-500">
                     <div className="w-[40px] shrink-0 p-3"></div>
@@ -81,7 +85,14 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                     <div className="flex-1 min-w-[300px] p-3">Descripción / Código</div>
                     <div className="w-[80px] shrink-0 text-center p-3">Ud</div>
                     <div className="w-[100px] shrink-0 text-right p-3">Cant.</div>
-                    <div className="w-[120px] shrink-0 text-right p-3">Precio</div>
+                    {hasDualPrice ? (
+                        <>
+                            <div className="w-[110px] shrink-0 text-right p-3">Precio BC3</div>
+                            <div className="w-[110px] shrink-0 text-right p-3">Precio IA</div>
+                        </>
+                    ) : (
+                        <div className="w-[120px] shrink-0 text-right p-3">Precio</div>
+                    )}
                     <div className="w-[120px] shrink-0 text-right p-3">Total</div>
                     <div className="w-[50px] shrink-0 p-3"></div>
                 </div>

@@ -1,4 +1,4 @@
-import { BudgetCostBreakdown, BudgetBreakdownComponent, MatchKind, UnitConversionRecord } from '@/backend/budget/domain/budget';
+import { BudgetCostBreakdown, BudgetBreakdownComponent, MatchKind, UnitConversionRecord, MeasurementLine } from '@/backend/budget/domain/budget';
 
 export interface LegacyBudgetLineItemDetails {
     quantity: number;
@@ -41,6 +41,11 @@ export interface EditableBudgetLineItem {
         last_reconciled_at?: string | null;
         reconciled_by?: string | null;
         original_unit_price_before_reconciliation?: number | null;
+        // BC3 — doble precio + mediciones estructuradas.
+        bc3_unit_price?: number | null;     // precio del propio archivo BC3
+        ai_unit_price?: number | null;      // estimación IA (catálogo + Vertex)
+        active_price_source?: 'bc3' | 'ai'; // fuente de precio activa
+        measurements?: MeasurementLine[];   // estado de mediciones estructurado
     };
 
     // Editor State
@@ -107,6 +112,7 @@ export type BudgetEditorAction =
     | { type: 'SET_EXECUTION_MODE'; payload: ExecutionMode }
     | { type: 'UPDATE_CONFIG'; payload: Partial<BudgetConfig> }
     | { type: 'APPLY_MARKUP'; payload: { scope: 'global' | 'chapter' | 'item'; targetId?: string; percentage: number } }
+    | { type: 'SET_PRICE_SOURCE'; payload: { id: string; source: 'bc3' | 'ai' } }
     | { type: 'SAVE_START' }
     | { type: 'SAVE_SUCCESS'; payload: Date }
     | { type: 'SAVE_ERROR' };

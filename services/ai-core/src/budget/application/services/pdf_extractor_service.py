@@ -314,6 +314,15 @@ class RestructuredItem(BaseModel):
         default=None,
         description='Puentes de conversión detectados en la descripción (ej. {"thickness_m": 0.10}).',
     )
+    # BC3 — campos que solo rellena el parser FIEBDC-3 (el extractor PDF los deja None).
+    bc3_unit_price: Optional[float] = Field(
+        default=None,
+        description='Precio unitario declarado en el propio BC3. None si es un BC3 ciego (sin precios).',
+    )
+    measurements: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description='Estado de mediciones estructurado: líneas {comment, units, length, width, height, subtotal, is_section}.',
+    )
 
 class RestructureChunkResult(BaseModel):
     items: List[RestructuredItem]

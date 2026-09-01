@@ -360,6 +360,59 @@ export function budgetEditorReducer(state: BudgetEditorState, action: BudgetEdit
             };
         }
 
+        case 'SET_PRICE_SOURCE': {
+            // BC3 doble precio: el usuario elige la fuente (Precio BC3 vs Precio IA)
+            // por partida. Fijamos el unitPrice a la fuente elegida, escalamos el
+            // descompuesto proporcionalmente (igual que una edición manual de precio)
+            // y recalculamos totales.
+            const { id, source } = action.payload;
+            const updatedItems = state.items.map(oldItem => {
+                if (oldItem.id !== id || !oldItem.item) return oldItem;
+                const it = oldItem.item;
+                const chosen = source === 'bc3'
+                    ? (it.bc3_unit_price ?? it.unitPrice)
+                    : (it.ai_unit_price ?? it.unitPrice);
+                const prevUnitPrice = Number(it.unitPrice || 0);
+                const newUnitPrice = Number(chosen || 0);
+
+                let newBreakdown = it.breakdown;
+                if (newBreakdown && prevUnitPrice > 0 && newUnitPrice !== prevUnitPrice) {
+                    const scaleFactor = newUnitPrice / prevUnitPrice;
+                    newBreakdown = newBreakdown.map(comp => {
+                        const newCompPrice = (comp.price || comp.unitPrice || 0) * scaleFactor;
+                        const qty = comp.yield || comp.quantity || 1;
+                        const newTotal = newCompPrice * qty;
+                        return { ...comp, price: newCompPrice, unitPrice: newCompPrice, total: newTotal, totalPrice: newTotal };
+                    });
+                }
+
+                const quantity = Number(it.quantity || 0);
+                return {
+                    ...oldItem,
+                    isDirty: true,
+                    item: {
+                        ...it,
+                        active_price_source: source,
+                        unitPrice: newUnitPrice,
+                        totalPrice: quantity * newUnitPrice,
+                        breakdown: newBreakdown,
+                    },
+                };
+            });
+
+            const breakdown = calculateBreakdown(updatedItems, state.config, state.executionMode, state.calibrationVersion, state.bakedConfig);
+            const newHistory = state.history.slice(0, state.historyIndex + 1);
+            newHistory.push({ items: updatedItems, timestamp: Date.now() });
+            return {
+                ...state,
+                items: updatedItems,
+                costBreakdown: breakdown,
+                history: newHistory,
+                historyIndex: newHistory.length - 1,
+                hasUnsavedChanges: true,
+            };
+        }
+
         case 'REORDER_ITEMS': {
             // Note: In grouped view, REORDER_ITEMS might receive a subset or the whole list.
             // If the UI passes ONLY the modified group, we need to merge.

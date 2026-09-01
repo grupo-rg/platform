@@ -14,6 +14,8 @@ import { cn } from '@/lib/utils';
 import { RequirementCard } from './RequirementCard';
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import { BudgetGenerationProgress, GenerationStep } from '@/components/budget/BudgetGenerationProgress';
+import { Bc3DetectCard } from './Bc3DetectCard';
+import { detectBc3Action, type Bc3DetectResult } from '@/actions/budget/detect-bc3.action';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useTranslations } from 'next-intl';
@@ -505,6 +507,27 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
 
     const [showRequirements, setShowRequirements] = useState(false);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+    // F7 — BC3: al preparar un .bc3, lo detectamos (parse rápido en ai-core) para
+    // mostrar la tarjeta con capítulos/partidas/con-precio antes de importar.
+    const [bc3Detect, setBc3Detect] = useState<{ file: string; loading?: boolean; error?: string; data?: Bc3DetectResult } | null>(null);
+    const bc3DetectedNameRef = useRef<string | null>(null);
+    useEffect(() => {
+        const bc3 = pendingFiles.find(f => f.name.toLowerCase().endsWith('.bc3'));
+        if (!bc3) { setBc3Detect(null); bc3DetectedNameRef.current = null; return; }
+        if (bc3DetectedNameRef.current === bc3.name) return; // ya detectado / en curso
+        bc3DetectedNameRef.current = bc3.name;
+        let cancelled = false;
+        setBc3Detect({ file: bc3.name, loading: true });
+        (async () => {
+            const fd = new FormData();
+            fd.append('file', bc3);
+            const res = await detectBc3Action(fd);
+            if (cancelled) return;
+            setBc3Detect(res.ok ? { file: bc3.name, data: res.data } : { file: bc3.name, error: res.error });
+        })();
+        return () => { cancelled = true; };
+    }, [pendingFiles]);
     const [isDragging, setIsDragging] = useState(false);
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -1678,6 +1701,13 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                             generationProgress.step !== 'idle' && generationProgress.step !== 'complete' && "opacity-50 pointer-events-none grayscale"
                         )}>
                             
+                            {/* BC3 detection card (F7) */}
+                            {bc3Detect && (
+                                <div className="px-3 pt-3">
+                                    <Bc3DetectCard loading={bc3Detect.loading} error={bc3Detect.error} result={bc3Detect.data} />
+                                </div>
+                            )}
+
                             {/* Pending Files Preview Area */}
                             {pendingFiles.length > 0 && (
                                 <div className="flex flex-wrap gap-2 px-3 pt-3 pb-1 animate-in fade-in slide-in-from-top-2 duration-300 ease-out">

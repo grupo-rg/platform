@@ -40,6 +40,8 @@ import { sileo } from 'sileo';
 import { generateBreakdownAction } from '@/actions/budget/smart-actions';
 import { ICLFeedbackModal } from './ICLFeedbackModal';
 import { BrainCircuit } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import { MeasurementsPanel } from './MeasurementsPanel';
 import { useBudgetEditorContext } from '../BudgetEditorContext';
 import {
     BudgetMode,
@@ -74,6 +76,16 @@ export const TableRowItem = React.memo(({
     const { state, budgetId } = useBudgetEditorContext();
     // Phase 17.4 — factor de display centralizado en `useMarkupFactor`.
     const { markupFactor, isMarkupBaked } = useMarkupFactor();
+
+    // BC3 doble precio: si el presupuesto viene de un .bc3 con precios, mostramos
+    // dos columnas (Precio BC3 vs Precio IA) y el usuario elige la fuente activa.
+    const hasDualPrice = state.items.some((i: any) => i.item?.bc3_unit_price != null);
+    const bc3Price: number | null | undefined = item.item?.bc3_unit_price;
+    const aiPrice = item.item?.ai_unit_price ?? item.item?.unitPrice ?? 0;
+    const activePriceSource = item.item?.active_price_source ?? (bc3Price != null ? 'bc3' : 'ai');
+    const priceDivergence = (bc3Price != null && bc3Price > 0 && item.item?.ai_unit_price != null)
+        ? Math.abs(item.item.ai_unit_price - bc3Price) / bc3Price
+        : 0;
 
     // Sprint 3 — S3-07 partial.
     //
@@ -150,6 +162,9 @@ export const TableRowItem = React.memo(({
     // AI Candidates Inline State
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
     const [isIclModalOpen, setIsIclModalOpen] = useState(false);
+    const [measOpen, setMeasOpen] = useState(false);
+    const measurements = item.item?.measurements;
+    const hasMeasurements = (measurements?.length ?? 0) > 0;
     const allCandidates = (item.item?.candidates || item.item?.alternativeCandidates || []);
     const hasCandidates = allCandidates.length > 0;
 
@@ -432,32 +447,89 @@ export const TableRowItem = React.memo(({
                     type="number"
                     className="text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full pr-2"
                 />
+                {hasMeasurements && (
+                    <button
+                        type="button"
+                        onClick={() => setMeasOpen(o => !o)}
+                        className="mt-1 ml-auto flex items-center gap-0.5 text-[10px] text-slate-400 hover:text-primary transition-colors"
+                        title="Ver estado de mediciones"
+                    >
+                        <ChevronDown className={cn("w-3 h-3 transition-transform", measOpen && "rotate-180")} />
+                        <span>mediciones</span>
+                    </button>
+                )}
             </div>
 
-            {/* Unit Price — mostrado all-in (raw × markupFactor). Edita en valor all-in y se guarda raw. */}
-            <div className="w-[120px] shrink-0 p-2 text-right pt-3">
-                <div className="relative group/price">
-                    <EditableCell
-                        value={displayUnitPrice}
-                        onChange={(val) => {
-                            // Phase 15 — el usuario edita en all-in; almacenamos raw PEM.
-                            // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
-                            handleUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } });
-                        }}
-                        onLiveChange={(val) => onUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } }, true)}
-                        type="currency"
-                        className={cn(
-                            "text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full",
-                            item.item?.unitPrice === 0 && "text-red-500 font-bold"
+            {hasDualPrice ? (
+                <>
+                    {/* Precio BC3 (del propio archivo) */}
+                    <div className="w-[110px] shrink-0 p-2 text-right pt-2.5">
+                        {bc3Price != null ? (
+                            <button
+                                type="button"
+                                onClick={() => onUpdate(item.id, { item: { ...item.item!, active_price_source: 'bc3', unitPrice: bc3Price } })}
+                                title="Usar el precio del BC3"
+                                className={cn(
+                                    "w-full text-right font-mono text-sm rounded-md px-2 py-1 transition-colors",
+                                    activePriceSource === 'bc3'
+                                        ? "bg-primary/15 border border-primary/40 text-slate-800 dark:text-white font-semibold"
+                                        : "text-slate-400 border border-transparent hover:bg-slate-100 dark:hover:bg-white/5"
+                                )}
+                            >
+                                {formatCurrency((bc3Price || 0) * markupFactor)}
+                            </button>
+                        ) : (
+                            <span className="block text-right text-slate-300 dark:text-slate-600 text-sm pr-2">—</span>
                         )}
-                    />
-                    {showGhostMode && item.originalState && (
-                        <div className="absolute -bottom-4 right-2 text-[10px] text-slate-400 line-through">
-                            {formatCurrency(item.originalState.unitPrice * markupFactor)}
-                        </div>
-                    )}
+                    </div>
+                    {/* Precio IA (estimación catálogo + Vertex) */}
+                    <div className="w-[110px] shrink-0 p-2 text-right pt-2.5">
+                        <button
+                            type="button"
+                            onClick={() => onUpdate(item.id, { item: { ...item.item!, active_price_source: 'ai', unitPrice: aiPrice } })}
+                            title="Usar la estimación de la IA"
+                            className={cn(
+                                "w-full text-right font-mono text-sm rounded-md px-2 py-1 transition-colors",
+                                activePriceSource === 'ai'
+                                    ? "bg-violet-500/15 border border-violet-500/40 text-slate-800 dark:text-white font-semibold"
+                                    : "text-slate-400 border border-transparent hover:bg-slate-100 dark:hover:bg-white/5"
+                            )}
+                        >
+                            {formatCurrency((aiPrice || 0) * markupFactor)}
+                        </button>
+                        {priceDivergence >= 0.08 && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5 pr-1" title="Divergencia entre el precio del BC3 y la estimación IA">
+                                ▲ {Math.round(priceDivergence * 100)}%
+                            </div>
+                        )}
+                    </div>
+                </>
+            ) : (
+                /* Unit Price — mostrado all-in (raw × markupFactor). Edita en valor all-in y se guarda raw. */
+                <div className="w-[120px] shrink-0 p-2 text-right pt-3">
+                    <div className="relative group/price">
+                        <EditableCell
+                            value={displayUnitPrice}
+                            onChange={(val) => {
+                                // Phase 15 — el usuario edita en all-in; almacenamos raw PEM.
+                                // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
+                                handleUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } });
+                            }}
+                            onLiveChange={(val) => onUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } }, true)}
+                            type="currency"
+                            className={cn(
+                                "text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full",
+                                item.item?.unitPrice === 0 && "text-red-500 font-bold"
+                            )}
+                        />
+                        {showGhostMode && item.originalState && (
+                            <div className="absolute -bottom-4 right-2 text-[10px] text-slate-400 line-through">
+                                {formatCurrency(item.originalState.unitPrice * markupFactor)}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Total Price */}
             <div className="w-[120px] shrink-0 p-2 text-right font-bold text-slate-700 dark:text-white font-mono bg-slate-50/30 dark:bg-white/5 pt-3">
@@ -598,6 +670,9 @@ export const TableRowItem = React.memo(({
                 />
             )}
         </div>
+        {measOpen && hasMeasurements && measurements && (
+            <MeasurementsPanel measurements={measurements} unit={item.item?.unit} total={item.item?.quantity} />
+        )}
         </Reorder.Item>
     );
 }, (prev, next) => {

@@ -71,6 +71,26 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
         else:
             description = short or code  # fallback: código si no hay nada
 
+        # BC3 con precio: importamos el precio del archivo. Un BC3 "ciego" trae
+        # price=0.0 → lo tratamos como "sin precio" (None) para el flujo híbrido.
+        bc3_price = concept.price if (concept.price and concept.price > 0) else None
+
+        # Estado de mediciones estructurado (serializado a dicts para el pipeline).
+        measurement_lines = None
+        if measurement.lines:
+            measurement_lines = [
+                {
+                    "comment": ln.comment,
+                    "units": ln.units,
+                    "length": ln.length,
+                    "width": ln.width,
+                    "height": ln.height,
+                    "subtotal": ln.subtotal,
+                    "is_section": ln.is_section,
+                }
+                for ln in measurement.lines
+            ]
+
         items.append(
             RestructuredItem(
                 code=code,
@@ -79,6 +99,8 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
                 unit=concept.unit or "ud",
                 chapter=find_chapter_path(code),
                 sub_chapter=None,  # BC3 no distingue sub-capítulo explícito
+                bc3_unit_price=bc3_price,
+                measurements=measurement_lines,
             )
         )
 

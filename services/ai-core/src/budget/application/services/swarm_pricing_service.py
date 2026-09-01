@@ -1818,14 +1818,25 @@ class SwarmPricingService:
                         else None
                     )
 
+                    # BC3 doble precio: si la partida trae precio del propio BC3,
+                    # ese es el precio ACTIVO por defecto (importar tal cual); la
+                    # estimación IA (final_price) queda guardada para comparar.
+                    _bc3_price = getattr(item, 'bc3_unit_price', None)
+                    _measurements = getattr(item, 'measurements', None)
+                    _active_source = 'bc3' if _bc3_price is not None else 'ai'
+                    _active_price = _bc3_price if _active_source == 'bc3' else final_price
+                    # La reconciliación (breakdown IA vs unitPrice) sólo aplica
+                    # cuando el precio activo ES el de la IA.
+                    _recon_active = (_active_source == 'ai') and recon.needs_review
+
                     partida = BudgetPartida(
                         id=str(uuid.uuid4()), order=global_order,
                         original_item=original_item_obj,
                         ai_resolution=ai_res_obj,
                         alternatives=alternatives,
                         code=safe_code, description=safe_description,
-                        unit=safe_unit, quantity=safe_quantity, unitPrice=final_price,
-                        totalPrice=final_price * safe_quantity,
+                        unit=safe_unit, quantity=safe_quantity, unitPrice=_active_price,
+                        totalPrice=_active_price * safe_quantity,
                         isRealCost=not needs_human_review,
                         matchConfidence=confidence,
                         reasoning=reasoning_for_trace,
@@ -1833,10 +1844,15 @@ class SwarmPricingService:
                         match_kind=val.match_kind,
                         unit_conversion_applied=conversion_payload,
                         applied_fragments=fragment_ids,
-                        # Phase 17 — flags de reconciliación.
-                        needs_reconciliation=recon.needs_review,
-                        divergence_pct=recon.divergence_pct if recon.needs_review else None,
-                        divergence_amount=recon.divergence_amount if recon.needs_review else None,
+                        # BC3 — doble precio + mediciones estructuradas.
+                        bc3_unit_price=_bc3_price,
+                        ai_unit_price=final_price,
+                        active_price_source=_active_source,
+                        measurements=_measurements,
+                        # Phase 17 — flags de reconciliación (sólo si el activo es IA).
+                        needs_reconciliation=_recon_active,
+                        divergence_pct=recon.divergence_pct if _recon_active else None,
+                        divergence_amount=recon.divergence_amount if _recon_active else None,
                     )
                     priced_partidas.append(partida)
 
