@@ -9,8 +9,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, ChevronUp, MoreHorizontal, Percent } from "lucide-react";
-import { Reorder } from "framer-motion";
+import { ChevronDown, ChevronUp, MoreHorizontal, Percent, FilePlus2 } from "lucide-react";
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { CHAPTER_DROPPABLE_PREFIX } from './reorder';
 import { TableRowItem } from './TableRowItem';
 import { useBudgetEditorContext } from '../BudgetEditorContext';
 import { useMarkupFactor } from '@/hooks/use-markup-factor';
@@ -23,6 +25,8 @@ interface ChapterSectionProps {
     onOpenMarkup: (chapterName: string) => void;
     /** Phase 17 — abre modal de reconciliación con foco en una partida. */
     onOpenReconciliation?: (partidaId: string) => void;
+    /** Abre el diálogo de alta manual preseleccionando este capítulo. */
+    onAddPartida?: (chapterName: string) => void;
 }
 
 export const ChapterSection = ({
@@ -32,11 +36,11 @@ export const ChapterSection = ({
     onOpenBreakdown,
     onOpenMarkup,
     onOpenReconciliation,
+    onAddPartida,
 }: ChapterSectionProps) => {
-    const { 
+    const {
         state,
-        reorderItems, 
-        renameChapter, 
+        renameChapter,
         removeChapter, 
         updateItem,
         removeItem,
@@ -49,6 +53,10 @@ export const ChapterSection = ({
     const [isExpanded, setIsExpanded] = useState(true);
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameDraft, setNameDraft] = useState(chapterName);
+
+    // Zona droppable del capítulo — permite soltar partidas en un capítulo vacío
+    // o al final de la lista (@dnd-kit). Se resalta cuando algo se arrastra encima.
+    const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `${CHAPTER_DROPPABLE_PREFIX}${chapterName}` });
 
     const handleRenameSubmit = () => {
         if (nameDraft.trim() && nameDraft !== chapterName) {
@@ -155,6 +163,12 @@ export const ChapterSection = ({
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                                {onAddPartida && (
+                                    <DropdownMenuItem onClick={() => onAddPartida(chapterName)}>
+                                        <FilePlus2 className="w-4 h-4 mr-2 text-slate-500" />
+                                        Añadir partida
+                                    </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={() => onOpenMarkup(chapterName)}>
                                     <Percent className="w-4 h-4 mr-2 text-slate-500" />
                                     Ajustar Precios de Capítulo
@@ -170,35 +184,39 @@ export const ChapterSection = ({
 
             {/* Draggable Items */}
             {isExpanded && (
-                <Reorder.Group
-                    as="div"
-                    axis="y"
-                    values={items}
-                    onReorder={reorderItems}
-                    className="flex flex-col"
-                >
-                    {items.map((item: any) => (
-                        <TableRowItem
-                            key={item.id}
-                            item={item}
-                            onUpdate={updateItem}
-                            onRemove={removeItem}
-                            onDuplicate={duplicateItem}
-                            showGhostMode={showGhostMode}
-                            executionMode={executionMode}
-                            onOpenBreakdown={onOpenBreakdown}
-                            onOpenMarkup={onOpenMarkup}
-                            onOpenReconciliation={onOpenReconciliation}
-                            isReadOnly={isReadOnly}
-                            leadId={leadId}
-                        />
-                    ))}
-                    {items.length === 0 && (
-                        <div className="text-center py-8 text-slate-400 border-dashed border-b w-full">
-                            Arrastra partidas aquí o añade nuevas desde la biblioteca
-                        </div>
-                    )}
-                </Reorder.Group>
+                <SortableContext items={items.map((i: any) => i.id)} strategy={verticalListSortingStrategy}>
+                    <div
+                        ref={setDropRef}
+                        className={`flex flex-col ${isOver ? 'bg-primary/5 ring-1 ring-inset ring-primary/30' : ''}`}
+                    >
+                        {items.map((item: any) => (
+                            <TableRowItem
+                                key={item.id}
+                                item={item}
+                                onUpdate={updateItem}
+                                onRemove={removeItem}
+                                onDuplicate={duplicateItem}
+                                showGhostMode={showGhostMode}
+                                executionMode={executionMode}
+                                onOpenBreakdown={onOpenBreakdown}
+                                onOpenMarkup={onOpenMarkup}
+                                onOpenReconciliation={onOpenReconciliation}
+                                isReadOnly={isReadOnly}
+                                leadId={leadId}
+                            />
+                        ))}
+                        {items.length === 0 && (
+                            <div className="flex flex-col items-center gap-2 py-8 text-slate-400 border-dashed border-b w-full">
+                                <span>Arrastra partidas aquí o añade nuevas desde la biblioteca</span>
+                                {onAddPartida && !isReadOnly && (
+                                    <Button variant="outline" size="sm" className="h-7 gap-1 border-dashed" onClick={() => onAddPartida(chapterName)}>
+                                        <FilePlus2 className="w-3.5 h-3.5" /> Añadir partida
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </SortableContext>
             )}
         </>
     );

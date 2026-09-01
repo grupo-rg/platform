@@ -15,6 +15,17 @@ import { EditableBudgetLineItem } from "@/types/budget-editor";
 import { AIReasoningSheet } from './table/AIReasoningSheet';
 import { ChapterSection } from './table/ChapterSection';
 import { ManualPartidaDialog } from './ManualPartidaDialog';
+import {
+    DndContext,
+    closestCorners,
+    PointerSensor,
+    KeyboardSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { reorderOnDragEnd } from './table/reorder';
 import { useBudgetEditorContext } from './BudgetEditorContext';
 import { ReconciliationBanner } from './ReconciliationBanner';
 import { ReconciliationDiffModal } from './ReconciliationDiffModal';
@@ -32,6 +43,7 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
         removeItem,
         duplicateItem,
         addItem,
+        setItemsOrder,
         addChapter,
         removeChapter,
         renameChapter,
@@ -48,6 +60,12 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
 
     // Alta manual de partida (con descompuestos escritos a teclado).
     const [manualPartidaOpen, setManualPartidaOpen] = useState(false);
+    const [manualInitialChapter, setManualInitialChapter] = useState<string | undefined>(undefined);
+
+    const openManualPartida = (chapter?: string) => {
+        setManualInitialChapter(chapter);
+        setManualPartidaOpen(true);
+    };
 
     // Phase 17 — modal per-partida (chip click → focus single)
     const [reconcileFocusedId, setReconcileFocusedId] = useState<string | null>(null);
@@ -63,6 +81,20 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
     // BC3 doble precio: mostramos "Precio BC3" + "Precio IA" solo si el presupuesto
     // viene de un .bc3 con precios (alguna partida trae bc3_unit_price).
     const hasDualPrice = state.items.some((i: any) => i.item?.bc3_unit_price != null);
+
+    // Drag-and-drop entre capítulos (@dnd-kit). El PointerSensor con umbral de 6px
+    // evita que un simple click en la fila dispare un arrastre.
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over) return;
+        const newItems = reorderOnDragEnd(state.items, state.chapters, String(active.id), String(over.id));
+        if (newItems) setItemsOrder(newItems);
+    };
 
     return (
         <div className="w-full bg-white dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden auto-cols-auto overflow-x-auto">
@@ -102,17 +134,20 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                     <div className="w-[50px] shrink-0 p-3"></div>
                 </div>
 
-                {state.chapters.map((chapterName: string) => (
-                        <ChapterSection
-                            key={chapterName}
-                            chapterName={chapterName}
-                            items={state.items.filter((i: any) => i.chapter === chapterName)}
-                            showGhostMode={showGhostMode}
-                            onOpenBreakdown={handleOpenBreakdown}
-                            onOpenMarkup={(chapterName: string) => setMarkupState({ open: true, scope: 'chapter', targetId: chapterName, percentage: 0 })}
-                            onOpenReconciliation={budgetId ? (partidaId: string) => setReconcileFocusedId(partidaId) : undefined}
-                        />
-                ))}
+                <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+                    {state.chapters.map((chapterName: string) => (
+                            <ChapterSection
+                                key={chapterName}
+                                chapterName={chapterName}
+                                items={state.items.filter((i: any) => i.chapter === chapterName)}
+                                showGhostMode={showGhostMode}
+                                onOpenBreakdown={handleOpenBreakdown}
+                                onOpenMarkup={(chapterName: string) => setMarkupState({ open: true, scope: 'chapter', targetId: chapterName, percentage: 0 })}
+                                onOpenReconciliation={budgetId ? (partidaId: string) => setReconcileFocusedId(partidaId) : undefined}
+                                onAddPartida={openManualPartida}
+                            />
+                    ))}
+                </DndContext>
             </div>
 
             {!isReadOnly && (
@@ -128,7 +163,7 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                     <Button
                         variant="outline"
                         className="border-dashed"
-                        onClick={() => setManualPartidaOpen(true)}
+                        onClick={() => openManualPartida(state.chapters[0])}
                     >
                         <FilePlus2 className="w-4 h-4 mr-2" />
                         Nueva Partida
@@ -139,6 +174,8 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                 open={manualPartidaOpen}
                 onOpenChange={setManualPartidaOpen}
                 chapters={state.chapters}
+                initialChapter={manualInitialChapter}
+                items={state.items}
                 onAdd={(item) => addItem(item)}
             />
             {/* AUDIT MASTER PANEL */}

@@ -413,6 +413,24 @@ export function budgetEditorReducer(state: BudgetEditorState, action: BudgetEdit
             };
         }
 
+        case 'SET_ITEMS_ORDER': {
+            // Reemplazo del array completo tras un drag-and-drop (posible cambio de
+            // capítulo). NO re-deriva capítulos (preserva capítulos vacíos) ni resetea
+            // el history — a diferencia de SET_ITEMS.
+            const orderedItems = action.payload;
+            const breakdown = calculateBreakdown(orderedItems, state.config, state.executionMode, state.calibrationVersion, state.bakedConfig);
+            const history = state.history.slice(0, state.historyIndex + 1);
+            history.push({ items: orderedItems, timestamp: Date.now() });
+            return {
+                ...state,
+                items: orderedItems,
+                costBreakdown: breakdown,
+                history,
+                historyIndex: history.length - 1,
+                hasUnsavedChanges: true,
+            };
+        }
+
         case 'REORDER_ITEMS': {
             // Note: In grouped view, REORDER_ITEMS might receive a subset or the whole list.
             // If the UI passes ONLY the modified group, we need to merge.
@@ -722,6 +740,15 @@ export function useBudgetEditor(
         dispatch({ type: 'REORDER_ITEMS', payload: reindexedItems });
     }, []);
 
+    /**
+     * Reemplaza el array completo de partidas tras un drag-and-drop entre
+     * capítulos (@dnd-kit). El caller ya entrega los ítems en el nuevo orden
+     * global con su `chapter`/`order` actualizados.
+     */
+    const setItemsOrder = useCallback((newItems: EditableBudgetLineItem[]) => {
+        dispatch({ type: 'SET_ITEMS_ORDER', payload: newItems });
+    }, []);
+
     const addItem = useCallback((item: Partial<EditableBudgetLineItem>) => {
         // Prepare item with defaults
         const newItem: EditableBudgetLineItem = {
@@ -767,6 +794,7 @@ export function useBudgetEditor(
         updateItem,
         addItem,
         reorderItems,
+        setItemsOrder,
         removeItem,
         duplicateItem, // Export
         undo,

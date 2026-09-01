@@ -103,6 +103,7 @@ export type BudgetEditorAction =
     | { type: 'DUPLICATE_ITEM'; payload: string }
     | { type: 'REMOVE_ITEM'; payload: string }
     | { type: 'REORDER_ITEMS'; payload: EditableBudgetLineItem[] }
+    | { type: 'SET_ITEMS_ORDER'; payload: EditableBudgetLineItem[] }
     | { type: 'ADD_CHAPTER'; payload: string }
     | { type: 'REMOVE_CHAPTER'; payload: string }
     | { type: 'RENAME_CHAPTER'; payload: { oldName: string; newName: string } }

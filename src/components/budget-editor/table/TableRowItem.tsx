@@ -32,7 +32,8 @@ import {
     Percent,
     Wand2
 } from "lucide-react";
-import { Reorder, useDragControls } from "framer-motion";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { EditableBudgetLineItem, ExecutionMode } from "@/types/budget-editor";
 import { EditableCell } from "../EditableCell"; // Adjust relative path
@@ -71,7 +72,21 @@ interface TableRowItemProps {
 export const TableRowItem = React.memo(({
     item, onUpdate, onRemove, onDuplicate, showGhostMode, executionMode, onOpenBreakdown, onOpenMarkup, onOpenReconciliation, isReadOnly, leadId
 }: TableRowItemProps) => {
-    const controls = useDragControls();
+    const {
+        attributes,
+        listeners,
+        setNodeRef: setSortableRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: item.id, disabled: isReadOnly });
+    const dragStyle: React.CSSProperties = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : undefined,
+        zIndex: isDragging ? 20 : undefined,
+        position: 'relative',
+    };
     const [isPending, startTransition] = useTransition();
     const { state, budgetId } = useBudgetEditorContext();
     // Phase 17.4 — factor de display centralizado en `useMarkupFactor`.
@@ -267,12 +282,9 @@ export const TableRowItem = React.memo(({
     const hasBreakdown = (item.item?.breakdown?.length ?? 0) > 0;
 
     return (
-        <Reorder.Item
-            value={item}
-            id={item.id}
-            as="div"
-            dragListener={false}
-            dragControls={controls}
+        <div
+            ref={setSortableRef}
+            style={dragStyle}
             className="flex flex-col group relative hover:bg-slate-50 dark:hover:bg-white/5 hover:text-foreground transition-all duration-300 border-b border-slate-100 dark:border-white/5 data-[state=selected]:bg-slate-100 font-sans"
         >
             <div className={cn(
@@ -288,7 +300,7 @@ export const TableRowItem = React.memo(({
                 {hasBreakdown && (
                     <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-purple-400 to-indigo-600 rounded-r-md opacity-80" />
                 )}
-                <div onPointerDown={(e) => controls.start(e)} className="cursor-grab active:cursor-grabbing flex justify-center mt-1.5 border-l-0">
+                <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing flex justify-center mt-1.5 border-l-0 touch-none" aria-label="Arrastrar partida">
                     <GripVertical className="w-4 h-4" />
                 </div>
             </div>
@@ -673,7 +685,7 @@ export const TableRowItem = React.memo(({
         {measOpen && hasMeasurements && measurements && (
             <MeasurementsPanel measurements={measurements} unit={item.item?.unit} total={item.item?.quantity} />
         )}
-        </Reorder.Item>
+        </div>
     );
 }, (prev, next) => {
     // Memoization deep-diff to avoid hundreds of useless re-renders on dragging and typing

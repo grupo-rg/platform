@@ -54,6 +54,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
         updateItem,
         addItem,
         reorderItems,
+        setItemsOrder,
         removeItem,
         duplicateItem,
         undo,
@@ -346,7 +347,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
     const isDemoLocked = !isAdmin && localPdfCount > 0;
 
     const editorContextValue = {
-        state, updateItem, addItem, reorderItems, removeItem, duplicateItem, undo, redo,
+        state, updateItem, addItem, reorderItems, setItemsOrder, removeItem, duplicateItem, undo, redo,
         saveStart, saveSuccess, saveError, canUndo, canRedo, addChapter, removeChapter,
         renameChapter, reorderChapters, setExecutionMode, updateConfig, applyMarkup,
         isAdmin, isReadOnly: isDemoLocked,
