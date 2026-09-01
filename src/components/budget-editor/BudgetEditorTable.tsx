@@ -10,10 +10,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FolderPlus } from "lucide-react";
+import { FolderPlus, FilePlus2 } from "lucide-react";
 import { EditableBudgetLineItem } from "@/types/budget-editor";
 import { AIReasoningSheet } from './table/AIReasoningSheet';
 import { ChapterSection } from './table/ChapterSection';
+import { ManualPartidaDialog } from './ManualPartidaDialog';
 import { useBudgetEditorContext } from './BudgetEditorContext';
 import { ReconciliationBanner } from './ReconciliationBanner';
 import { ReconciliationDiffModal } from './ReconciliationDiffModal';
@@ -30,6 +31,7 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
         updateItem,
         removeItem,
         duplicateItem,
+        addItem,
         addChapter,
         removeChapter,
         renameChapter,
@@ -43,6 +45,9 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
 
     const [breakdownItem, setBreakdownItem] = useState<EditableBudgetLineItem | null>(null);
     const [breakdownOpen, setBreakdownOpen] = useState(false);
+
+    // Alta manual de partida (con descompuestos escritos a teclado).
+    const [manualPartidaOpen, setManualPartidaOpen] = useState(false);
 
     // Phase 17 — modal per-partida (chip click → focus single)
     const [reconcileFocusedId, setReconcileFocusedId] = useState<string | null>(null);
@@ -120,8 +125,22 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                         <FolderPlus className="w-4 h-4 mr-2" />
                         Nuevo Capítulo
                     </Button>
+                    <Button
+                        variant="outline"
+                        className="border-dashed"
+                        onClick={() => setManualPartidaOpen(true)}
+                    >
+                        <FilePlus2 className="w-4 h-4 mr-2" />
+                        Nueva Partida
+                    </Button>
                 </div>
             )}
+            <ManualPartidaDialog
+                open={manualPartidaOpen}
+                onOpenChange={setManualPartidaOpen}
+                chapters={state.chapters}
+                onAdd={(item) => addItem(item)}
+            />
             {/* AUDIT MASTER PANEL */}
             <AIReasoningSheet
                 item={breakdownItem}
