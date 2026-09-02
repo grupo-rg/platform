@@ -40,6 +40,12 @@ from src.budget.application.use_cases.restructure_budget_uc import RestructureBu
 from src.budget.catalog.application.services.catalog_lookup_service import (
     CatalogLookupService,
 )
+from src.budget.catalog.infrastructure.adapters.firestore_material_catalog import (
+    FirestoreMaterialCatalogAdapter,
+)
+from src.budget.application.services.from_scratch_compositor import (
+    FromScratchCompositor,
+)
 from src.budget.catalog.domain.construction_dag import load_construction_dag
 from src.budget.catalog.infrastructure.adapters.firestore_catalog_repository import (
     FirestoreCatalogRepository,
@@ -102,6 +108,16 @@ _firestore_repository = FirestoreBudgetRepository()
 # Catalog (v005)
 _catalog_repo = FirestoreCatalogRepository(db=_db_client)
 _catalog_lookup = CatalogLookupService(repo=_catalog_repo)
+
+# Fase 2 — compositor de partidas from_scratch: valora labor (labor_rates) +
+# material (material_catalog OBRAMAT) con precios reales, sin inventar.
+_material_search = FirestoreMaterialCatalogAdapter(db=_db_client)
+_from_scratch_compositor = FromScratchCompositor(
+    llm=_llm_adapter,
+    embed_fn=_llm_adapter.get_embedding,
+    catalog_lookup=_catalog_lookup,
+    material_search=_material_search,
+)
 # Phase 17.8 — repo de price_book (kind='item' + kind='breakdown') usado para
 # heredar el descompuesto del catálogo en partidas 1:1.
 _price_book_repo = FirestorePriceBookRepository(db=_db_client)
@@ -246,6 +262,7 @@ _swarm_pricing = SwarmPricingService(
     hybrid_search=None,  # poblado al boot por bootstrap_hybrid_catalog_search()
     reranker=_bge_reranker_singleton,
     pricing_cache=_pricing_cache_singleton,
+    compositor=_from_scratch_compositor,
 )
 _architect = ArchitectService(llm_provider=_llm_adapter)
 _budget_metadata_extractor = BudgetMetadataExtractor(llm_provider=_llm_adapter)

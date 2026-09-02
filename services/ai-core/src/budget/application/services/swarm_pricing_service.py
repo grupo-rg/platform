@@ -18,6 +18,7 @@ from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem
 from src.budget.application.services.reconciliation import reconcile_breakdown
 from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
 from src.budget.application.services.pricing_cache import PricingCache
+from src.budget.application.services.from_scratch_compositor import FromScratchCompositor
 from src.budget.infrastructure.adapters.reranking.bge_reranker import (
     BgeReranker,
     is_enabled as _bge_is_enabled,
@@ -583,6 +584,7 @@ class SwarmPricingService:
         hybrid_search: Optional[HybridCatalogSearch] = None,
         reranker: Optional[BgeReranker] = None,
         pricing_cache: Optional[PricingCache] = None,
+        compositor: Optional[FromScratchCompositor] = None,
     ):
         self.llm = llm_provider
         self.vector_search = vector_search
@@ -612,6 +614,10 @@ class SwarmPricingService:
         # S1-A-04 — Caché de pricing por hash (descripción + unidad). Opcional;
         # cuando es None, el swarm no consulta ni persiste cache (camino legacy).
         self.pricing_cache = pricing_cache
+        # Fase 2 — compositor de partidas from_scratch (labor_rates +
+        # material_catalog). Opcional: cuando es None, from_scratch mantiene el
+        # precio estimado por el LLM (camino legacy).
+        self.compositor = compositor
 
     async def _rerank_candidates(
         self,
@@ -1629,6 +1635,30 @@ class SwarmPricingService:
                     reasoning_full = val.pensamiento_calculista
                     needs_human_review = val.needs_human_review
 
+                    # Fase 2 — from_scratch: reemplazar el precio ADIVINADO por el
+                    # LLM por una composición AUDITABLE (labor_rates +
+                    # material_catalog, precios reales). from_scratch va SIEMPRE a
+                    # review; el borrador compuesto es el punto de partida.
+                    composed_result = None
+                    if val.match_kind == "from_scratch" and self.compositor is not None:
+                        try:
+                            composed_result = await self.compositor.compose(
+                                description=safe_description, unit=safe_unit,
+                                quantity=safe_quantity,
+                            )
+                            if composed_result and composed_result.unit_price > 0:
+                                final_price = composed_result.unit_price
+                            needs_human_review = True
+                            self._emit(budget_id, "from_scratch_composed", {
+                                "code": safe_code,
+                                "unit_price": round(final_price, 2),
+                                "components": len(composed_result.breakdown) if composed_result else 0,
+                                "notes": composed_result.notes if composed_result else [],
+                            })
+                        except Exception as ce:
+                            logger.warning(f"[compositor] compose failed for {safe_code}: {ce}")
+                            composed_result = None
+
                     # Fase 9.1 — sanity guard post-hoc: si el precio total
                     # calculado supera 100K € Y la partida está en una unidad
                     # común (m², m³, ml, ud), forzamos review humano y emitimos
@@ -1667,7 +1697,7 @@ class SwarmPricingService:
                     # factor=result/value. Idempotente: si el LLM ya respetó la
                     # regla 14b del prompt, no tocamos. Si NO hay conversión pero
                     # hay divergencia >50% solo emitimos warning (no escalamos sin puente).
-                    if val.breakdown and final_price > 0:
+                    if val.breakdown and final_price > 0 and composed_result is None:
                         sum_total = sum((b.total or 0) for b in val.breakdown)
                         if sum_total > 0:
                             ratio = sum_total / final_price
@@ -1698,7 +1728,27 @@ class SwarmPricingService:
                                     "direction": "sum_above" if ratio > 1.5 else "sum_below",
                                 })
 
-                    if val.breakdown and len(val.breakdown) > 0:
+                    if composed_result is not None and composed_result.breakdown:
+                        # Fase 2 — breakdown compuesto (labor_rates + material_catalog).
+                        for b in composed_result.breakdown:
+                            is_pct = (b.get("code") == "%" or b.get("unit") == "%")
+                            # El entity no tiene `unit`; el aux '%' se aplana a
+                            # componente plano (price=importe, yield=1) para que
+                            # price×yield = total sin la convención '%'.
+                            b_price = b.get("total", 0.0) if is_pct else b.get("price", 0.0)
+                            b_yield = 1.0 if is_pct else (b.get("yield") or b.get("quantity") or 1.0)
+                            breakdown_domain.append(BudgetBreakdownComponent(
+                                code=b.get("code"),
+                                concept=b.get("concept", ""),
+                                type=b.get("type", "OTHER"),
+                                price=b_price,
+                                yield_amount=b_yield,
+                                total=b.get("total", 0.0),
+                                isSubstituted=False,
+                                alternativeComponents=[],
+                                is_variable=b.get("is_variable", False),
+                            ))
+                    elif val.breakdown and len(val.breakdown) > 0:
                         for b in val.breakdown:
                             alt_objs = [{"code": alt, "concept": "Similar Rechazado", "price": 0.0} for alt in b.alternativeComponents]
                             breakdown_domain.append(BudgetBreakdownComponent(
