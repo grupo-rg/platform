@@ -1653,6 +1653,8 @@ class SwarmPricingService:
                                 "code": safe_code,
                                 "unit_price": round(final_price, 2),
                                 "components": len(composed_result.breakdown) if composed_result else 0,
+                                "is_equipment": (composed_result.plan.is_equipment_supply if composed_result else False),
+                                "dimensions": (composed_result.plan.dimensions if composed_result else None),
                                 "notes": composed_result.notes if composed_result else [],
                             })
                         except Exception as ce:

@@ -50,10 +50,31 @@ class MaterialNeed(BaseModel):
     query: str = Field(description="Material a buscar en catálogo (ej. 'grava caliza 40-60mm')")
     quantity: float = Field(gt=0, description="Cantidad por unidad de partida")
     unit: Optional[str] = Field(default=None, description="Unidad del material (kg, m3, ud…)")
+    basis: Optional[str] = Field(
+        default=None,
+        description=(
+            "CÓMO se derivó la cantidad: de una DIMENSIÓN del enunciado "
+            "(ej. 'espesor 0.15m × 1m² = 0.15 m³') o de un rendimiento estándar "
+            "(ej. '12 bloques/m²'). Si no puedes justificarla, es que la estás "
+            "inventando — revísala."
+        ),
+    )
 
 
 class CompositionPlan(BaseModel):
     main_task: str = Field(description="Tarea principal en una frase")
+    dimensions: Optional[str] = Field(
+        default=None,
+        description="Dimensiones extraídas LITERALMENTE del enunciado (espesor, ancho, alto, largo, área…). Vacío si no hay.",
+    )
+    is_equipment_supply: bool = Field(
+        default=False,
+        description=(
+            "true si la partida es SUMINISTRO de un EQUIPO/máquina concreta "
+            "(bomba, equipo de nado contracorriente, electrolisis, descalcificador…) "
+            "que se compra entero — NO se compone de piezas sueltas."
+        ),
+    )
     labor: List[LaborNeed] = Field(default_factory=list)
     machinery: List[MachineryNeed] = Field(default_factory=list)
     materials: List[MaterialNeed] = Field(default_factory=list)
@@ -79,20 +100,29 @@ class FromScratchCompositor:
     _SYS = (
         "Eres un aparejador experto. Te dan una partida de obra SIN precio del "
         "catálogo. Tu trabajo es DESCOMPONERLA en sus recursos atómicos para "
-        "poder valorarla después: qué oficios y cuántas horas, qué maquinaria y "
-        "horas, qué materiales y cantidades (por UNA unidad de la partida), y el "
-        "% de medios auxiliares. PROHIBIDO estimar precios — solo recursos y "
-        "cantidades realistas según buena práctica de construcción.\n"
-        "Para la MANO DE OBRA usa SOLO estas categorías base del convenio (no "
-        "uses oficios especializados como 'fontanero' o 'electricista' — "
-        "exprésalos con su categoría base): 'Oficial 1ª', 'Oficial 2ª', "
+        "valorarla después. PROHIBIDO estimar precios — solo recursos y "
+        "cantidades.\n\n"
+        "PASO 1 — DIMENSIONES: extrae PRIMERO las dimensiones LITERALES del "
+        "enunciado (espesor, ancho, alto, largo, área, diámetro). Ponlas en "
+        "'dimensions'. Si no hay, déjalo vacío.\n\n"
+        "PASO 2 — CANTIDADES ATERRIZADAS (lo más importante): cada cantidad es "
+        "por UNA unidad de la partida y DEBE DERIVARSE de una dimensión del "
+        "enunciado o de un rendimiento estándar de construcción — NUNCA "
+        "inventada. Justifica CADA cantidad en 'basis' (ej. 'espesor 0.15m × "
+        "1 m² = 0.15 m³ de hormigón', '2 caras × 0.5m alto = 1 m²/ml de fábrica', "
+        "'12 bloques/m²'). Regla de oro: si NO puedes justificar una cantidad con "
+        "una dimensión o un rendimiento, está MAL — no la pongas a ojo. Sé "
+        "conservador: un punto de luz no lleva cientos de metros de cable.\n\n"
+        "PASO 3 — EQUIPOS: si la partida es SUMINISTRO de un EQUIPO/máquina "
+        "concreta (bomba, equipo de nado contracorriente, electrolisis, "
+        "descalcificador, grupo de presión…) que se COMPRA ENTERO, marca "
+        "is_equipment_supply=true y pon el EQUIPO COMPLETO como UN solo material "
+        "(query = nombre del equipo, quantity=1) + algo de mano de obra de "
+        "montaje. NO lo desarmes en tubos/válvulas/piezas sueltas.\n\n"
+        "MANO DE OBRA: usa SOLO categorías base del convenio (no 'fontanero' ni "
+        "'electricista' — su categoría base): 'Oficial 1ª', 'Oficial 2ª', "
         "'Oficial 3ª (Ayudante)', 'Peón especializado', 'Peón', 'Capataz', "
-        "'Encargado de Obra'.\n"
-        "CANTIDADES: son SIEMPRE por UNA sola unidad de la partida y deben ser "
-        "REALISTAS. Piensa cuánto material hace falta para 1 unidad y sé "
-        "conservador — un punto de luz NO lleva cientos de metros de cable; una "
-        "instalación puntual lleva metros, no cientos. Revisa cada cantidad "
-        "antes de emitirla: si te sale un número enorme, casi seguro está mal."
+        "'Encargado de Obra'."
     )
 
     def __init__(
