@@ -207,8 +207,11 @@ class HybridCatalogSearch:
         chapter_filter: Optional[str] = None,
         unit_dimension_filter: Optional[str] = None,
         limit: int = 30,
-    ) -> List[str]:
-        """Wrap del IVectorSearch para extraer solo los codes."""
+    ) -> List[Dict[str, Any]]:
+        """Wrap del IVectorSearch. Devuelve los resultados COMPLETOS (cada uno
+        con ``matchScore`` = coseno del adapter Firestore) para que el fusor
+        pueda usar el coseno como score final (Cambio #2), en vez de descartarlo
+        y quedarse solo con el score RRF."""
         chapter_filters = [chapter_filter] if chapter_filter else None
         try:
             res = self.vector_search.search_similar_items(
@@ -224,7 +227,7 @@ class HybridCatalogSearch:
         except Exception as e:
             logger.warning(f"[HybridCatalogSearch] vector_search failed: {e}")
             return []
-        return [r.get("code") or r.get("id") for r in results if r.get("id") or r.get("code")]
+        return results or []
 
     async def search(
         self,
@@ -321,13 +324,24 @@ class HybridCatalogSearch:
         )
 
         # 2. Vector candidates (I/O contra Firestore en producción).
-        vector_codes = await self._vector_search(
+        vector_results = await self._vector_search(
             query_vector,
             query_text=query,
             chapter_filter=chapter_filter,
             unit_dimension_filter=unit_dimension_filter,
             limit=self._PER_SOURCE_CANDIDATES,
         )
+        # Cambio #2 — guardamos el coseno por código para usarlo como score
+        # final (el vector es la señal fiable). Antes se descartaba.
+        vector_codes: List[str] = []
+        vector_cosine: Dict[str, float] = {}
+        for r in vector_results:
+            c = r.get("code") or r.get("id")
+            if not c:
+                continue
+            vector_codes.append(c)
+            if c not in vector_cosine:
+                vector_cosine[c] = float(r.get("matchScore") or 0.0)
 
         logger.debug(
             f"[HybridCatalogSearch] q={query[:60]!r} bm25={len(bm25_codes)} "
@@ -342,7 +356,7 @@ class HybridCatalogSearch:
         # 4. Re-aplicar filtros estructurales (defensivo) y materializar
         # los items con sus metadatos. Solo top_k.
         out: List[Dict[str, Any]] = []
-        for code, score in fused[:top_k]:
+        for code, rrf_score in fused[:top_k]:
             item = self._items_by_code.get(code)
             if item is None:
                 continue
@@ -354,6 +368,13 @@ class HybridCatalogSearch:
                 and item.unit_dimension != unit_dimension_filter
             ):
                 continue
+            # Cambio #2 — matchScore = COSENO del vector search (0..~1), no el
+            # RRF (~0.03). El RRF nunca superaba el umbral 0.85 del tier selector
+            # (→ siempre Pro) y no reflejaba la calidad real del match. Los
+            # candidatos que solo vinieron de BM25 (sin coseno) caen al score
+            # RRF, quedando por debajo de los matches vectoriales fuertes.
+            cosine = vector_cosine.get(code)
+            match_score = cosine if cosine is not None else rrf_score
             out.append({
                 "id": item.code,
                 "code": item.code,
@@ -364,11 +385,13 @@ class HybridCatalogSearch:
                 "chapter": item.chapter,
                 "section": item.section,
                 "priceTotal": item.priceTotal,
-                # matchScore: usamos el RRF score normalizado como proxy.
-                # Si Sprint 1 demuestra que esto degrada el tier selector,
-                # se reemplaza por el cross-encoder reranker (S1-A-03).
-                "matchScore": score,
-                "_hybrid_rrf_score": score,
+                "matchScore": match_score,
+                "_hybrid_rrf_score": rrf_score,
+                "_cosine": cosine,
             })
 
+        # Nota: NO reordenamos aquí — conservamos el orden RRF (BM25+vector) del
+        # pool. El ranking por coseno para el tier/juez lo hace aguas abajo el
+        # swarm (`_firestore_vector_swarm`), que ordena por `matchScore` (ahora
+        # coseno) tras fusionar los candidatos de todas las sub-queries.
         return out
