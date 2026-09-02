@@ -67,7 +67,7 @@ async def test_composes_labor_material_and_aux():
         llm=_FakeLLM(plan),
         embed_fn=_embed,
         catalog_lookup=_FakeCatalog({"peón": _rate("peon_ordinario", "Peón Suelto", 23.01)}),
-        material_search=_FakeMaterials({"grava": {"sku": "S1", "name": "Grava caliza", "price": 42.0, "unit": "m3"}}),
+        material_search=_FakeMaterials({"grava": {"sku": "S1", "name": "Grava caliza", "price": 42.0, "unit": "m3", "_cosine": 0.8}}),
     )
     res = await comp.compose(description="Acceso", unit="ud")
 
@@ -109,8 +109,36 @@ async def test_machinery_valued_from_catalog():
     comp = FromScratchCompositor(
         llm=_FakeLLM(plan), embed_fn=_embed,
         catalog_lookup=_FakeCatalog({}),
-        material_search=_FakeMaterials({"retro": {"sku": "M1", "name": "Retroexcavadora", "price": 55.0, "unit": "h"}}),
+        material_search=_FakeMaterials({"retro": {"sku": "M1", "name": "Retroexcavadora", "price": 55.0, "unit": "h", "_cosine": 0.8}}),
     )
     res = await comp.compose(description="Excavar", unit="m3")
     assert res.unit_price == pytest.approx(110.0, abs=0.01)  # 55 * 2h
     assert res.breakdown[0]["type"] == "MACHINERY"
+
+
+@pytest.mark.asyncio
+async def test_low_cosine_material_is_gated_and_marks_review():
+    # #2 — el mejor material tiene coseno 0.4 (< 0.6) → NO se usa (evita el
+    # material equivocado), price 0 y needs_review.
+    plan = CompositionPlan(main_task="X", materials=[MaterialNeed(query="equipo raro", quantity=1.0)], aux_pct=0.0)
+    comp = FromScratchCompositor(
+        llm=_FakeLLM(plan), embed_fn=_embed, catalog_lookup=_FakeCatalog({}),
+        material_search=_FakeMaterials({"equipo": {"sku": "W", "name": "Match equivocado", "price": 79.0, "_cosine": 0.4}}),
+    )
+    res = await comp.compose(description="X", unit="ud")
+    assert res.needs_human_review is True
+    assert res.breakdown[0]["total"] == 0.0          # no se valoró con el material malo
+    assert any("coseno 0.40" in n for n in res.notes)
+
+
+@pytest.mark.asyncio
+async def test_hallucinated_quantity_flags_review():
+    # #1 — cantidad enorme (350) → flag de review aunque el material matchee bien.
+    plan = CompositionPlan(main_task="X", materials=[MaterialNeed(query="cable", quantity=350.0)], aux_pct=0.0)
+    comp = FromScratchCompositor(
+        llm=_FakeLLM(plan), embed_fn=_embed, catalog_lookup=_FakeCatalog({}),
+        material_search=_FakeMaterials({"cable": {"sku": "C", "name": "Cable", "price": 9.6, "_cosine": 0.8}}),
+    )
+    res = await comp.compose(description="X", unit="ud")
+    assert res.needs_human_review is True
+    assert any("Revisar cantidad" in n for n in res.notes)

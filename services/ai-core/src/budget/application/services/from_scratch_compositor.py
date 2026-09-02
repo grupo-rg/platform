@@ -87,7 +87,12 @@ class FromScratchCompositor:
         "uses oficios especializados como 'fontanero' o 'electricista' — "
         "exprésalos con su categoría base): 'Oficial 1ª', 'Oficial 2ª', "
         "'Oficial 3ª (Ayudante)', 'Peón especializado', 'Peón', 'Capataz', "
-        "'Encargado de Obra'."
+        "'Encargado de Obra'.\n"
+        "CANTIDADES: son SIEMPRE por UNA sola unidad de la partida y deben ser "
+        "REALISTAS. Piensa cuánto material hace falta para 1 unidad y sé "
+        "conservador — un punto de luz NO lleva cientos de metros de cable; una "
+        "instalación puntual lleva metros, no cientos. Revisa cada cantidad "
+        "antes de emitirla: si te sale un número enorme, casi seguro está mal."
     )
 
     def __init__(
@@ -98,12 +103,22 @@ class FromScratchCompositor:
         material_search: IMaterialSearch,
         *,
         model: str = "gemini-2.5-flash",
+        min_material_score: float = 0.6,
+        dominance_threshold: float = 0.85,
     ) -> None:
         self.llm = llm
         self.embed_fn = embed_fn
         self.catalog = catalog_lookup
         self.materials = material_search
         self.model = model
+        # #2 — gate de calidad: por debajo de este coseno el material se
+        # considera "no encontrado con confianza" (evita usar un material
+        # equivocado como pasó con nado contracorriente → KIT OSMOSIS).
+        self.min_material_score = min_material_score
+        # #1 — safety net: si un componente NO-labor domina el precio directo
+        # por encima de este umbral, marcamos review (suele indicar una
+        # cantidad alucinada por el LLM, ej. 350× cable en "5 luces").
+        self.dominance_threshold = dominance_threshold
 
     async def compose(self, *, description: str, unit: str, quantity: float = 1.0) -> ComposedResult:
         plan = await self._decompose(description, unit)
@@ -143,10 +158,10 @@ class FromScratchCompositor:
 
         # Maquinaria → material_catalog (fallback simple; mq* dedicado en iteración futura)
         for m in plan.machinery:
-            cand = await self._top_material(m.query)
+            cand, cos = await self._top_material(m.query)
             if cand is None:
                 needs_review = True
-                notes.append(f"Sin precio de maquinaria para '{m.query}'")
+                notes.append(self._miss_note("Maquinaria", m.query, cos))
                 price = 0.0
             else:
                 price = float(cand.get("price") or 0.0)
@@ -158,10 +173,10 @@ class FromScratchCompositor:
 
         # Materiales → material_catalog
         for mat in plan.materials:
-            cand = await self._top_material(mat.query)
+            cand, cos = await self._top_material(mat.query)
             if cand is None:
                 needs_review = True
-                notes.append(f"Sin material en catálogo para '{mat.query}'")
+                notes.append(self._miss_note("Material", mat.query, cos))
                 price = 0.0
             else:
                 price = float(cand.get("price") or 0.0)
@@ -172,6 +187,20 @@ class FromScratchCompositor:
             ))
 
         direct_total = sum(r["total"] for r in breakdown)
+
+        # #1 safety net — cantidad alucinada: si un componente NO-labor lleva una
+        # cantidad enorme o domina el precio directo, casi seguro el LLM se
+        # equivocó en la cantidad (ej. 350× cable en "5 luces"). Marcamos review
+        # (no corregimos: en from_scratch no hay referencia fiable de cantidad).
+        non_labor = [r for r in breakdown if r["type"] in ("MATERIAL", "MACHINERY") and r["total"] > 0]
+        for r in non_labor:
+            share = (r["total"] / direct_total) if direct_total > 0 else 0.0
+            if r["quantity"] >= 40 or share >= self.dominance_threshold:
+                needs_review = True
+                notes.append(
+                    f"Revisar cantidad de '{r['concept'][:36]}' (cant={r['quantity']}, "
+                    f"{share * 100:.0f}% del directo) — posible sobre-estimación"
+                )
 
         # % medios auxiliares sobre el subtotal directo (convención unit='%')
         if plan.aux_pct and plan.aux_pct > 0 and direct_total > 0:
@@ -189,14 +218,29 @@ class FromScratchCompositor:
             needs_human_review=needs_review, notes=notes,
         )
 
-    async def _top_material(self, query: str) -> Optional[Dict[str, Any]]:
+    async def _top_material(self, query: str):
+        """Devuelve ``(candidato | None, coseno)``. #2 — gate de calidad: si el
+        coseno del mejor material está por debajo de ``min_material_score``,
+        devolvemos ``(None, coseno)`` para que el caller lo trate como 'no
+        encontrado con confianza' y marque review, en vez de usar un material
+        equivocado (como nado contracorriente → 'KIT OSMOSIS')."""
         try:
             vec = await self.embed_fn(query)
             cands = self.materials.search_materials(query_vector=vec, query_text=query, limit=1)
-            return cands[0] if cands else None
+            if not cands:
+                return None, 0.0
+            top = cands[0]
+            cos = float(top.get("_cosine") or top.get("matchScore") or 0.0)
+            return (top if cos >= self.min_material_score else None), cos
         except Exception as e:  # nunca rompe la composición
             logger.warning(f"[compositor] material lookup failed for {query!r}: {e}")
-            return None
+            return None, 0.0
+
+    @staticmethod
+    def _miss_note(kind: str, query: str, cosine: float) -> str:
+        if cosine > 0:
+            return f"{kind} '{query}' sin match fiable (mejor coseno {cosine:.2f}) — review"
+        return f"{kind} '{query}' no encontrado en catálogo — review"
 
     @staticmethod
     def _row(*, concept: str, type_: str, price: float, yield_: float,

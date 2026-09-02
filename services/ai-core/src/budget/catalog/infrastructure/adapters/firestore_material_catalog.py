@@ -84,6 +84,7 @@ class FirestoreMaterialCatalogAdapter(IMaterialSearch):
                     "price": data.get("price"),
                     "category": data.get("category"),
                     "matchScore": score,
+                    "_cosine": score,  # coseno crudo (sin boost léxico) — para gating de calidad
                 })
 
             # Reranking léxico: sube candidatos cuyo texto contiene keywords de la query.
