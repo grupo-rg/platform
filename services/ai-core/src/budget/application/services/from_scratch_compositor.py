@@ -25,6 +25,7 @@ se documentan para no olvidarlos).
 from __future__ import annotations
 
 import logging
+import unicodedata
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -35,6 +36,65 @@ from src.budget.catalog.application.services.catalog_lookup_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------
+# WS-5 — Herramienta de mano ≠ maquinaria de ALQUILER
+# --------------------------------------------------------------------------
+# El planificador LLM (``_decompose``) puede listar en ``plan.machinery`` una
+# HERRAMIENTA DE MANO (taladro percutor, radial, atornillador…). Eso NO es
+# maquinaria de ALQUILER €/h de ``machinery_rates_2025`` (los ~69 códigos mq*):
+# es utillaje amortizado en MEDIOS AUXILIARES. Como no tiene tarifa mq*, el
+# bucle la emitía como componente MACHINERY a 0,00 € y disparaba
+# ``needs_human_review`` — un FALSO POSITIVO que contaminaba la partida.
+#
+# Filtro DETERMINISTA: cuando un ítem SIN tarifa utilizable parece herramienta
+# de mano, NO se emite como componente MACHINERY y NO marca review; queda
+# implícitamente cubierto por el % de medios auxiliares (utillaje) que ya se
+# calcula sobre el subtotal directo. La maquinaria de ALQUILER real (con tarifa
+# mq*) se cotiza EXACTAMENTE igual que antes; un ítem que parece maquinaria de
+# verdad pero sin tarifa sigue marcando review (caso legítimo intacto).
+#
+# Las palabras clave se eligen para NO solapar con ninguno de los 69 labels
+# reales (que SÍ llevan tarifa: "Martillo neumático/eléctrico", "Lijadora…",
+# "Bandeja … de guiado manual", "Compresor portátil"…). Por eso NO usamos
+# términos ambiguos como "martillo", "manual", "lijadora" o "portátil".
+_HAND_TOOL_KEYWORDS: frozenset[str] = frozenset({
+    "taladro", "taladradora", "percutor", "atornillador", "destornillador",
+    "radial", "amoladora", "esmeriladora", "rozadora", "rotaflex",
+    "caladora", "ingletadora", "grapadora", "clavadora", "remachadora",
+    "pistola", "nivel laser", "flexometro", "escuadra", "alicate",
+    "herramienta manual", "herramientas manuales", "herramienta de mano",
+    "herramientas de mano", "herramienta menor", "utillaje",
+    "utiles manuales", "martillo de mano", "martillo manual",
+})
+
+# Raíces de maquinaria PESADA de alquiler: si el término las contiene NO lo
+# tratamos como herramienta de mano aunque casara alguna keyword (defensa en
+# profundidad; el caso legítimo "maquinaria real sin tarifa" sigue en review).
+_RENTAL_MACHINE_HINTS: frozenset[str] = frozenset({
+    "retro", "excavad", "camion", "dumper", "grua", "pala cargadora",
+    "rodillo", "compactador", "hormigonera", "cisterna", "motonivel",
+    "carretilla", "bandeja", "pison", "extendedora", "fratasadora",
+    "gunitadora", "central", "martinete", "tractor", "motocultor",
+    "desbrozadora", "motosierra",
+})
+
+
+def _strip_accents(text: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
+    )
+
+
+def _looks_like_hand_tool(query: str) -> bool:
+    """True si el término parece HERRAMIENTA DE MANO (utillaje), no maquinaria
+    de ALQUILER. Determinista e insensible a acentos. Se excluye si contiene
+    pistas de maquinaria pesada de alquiler (defensa en profundidad)."""
+    norm = _strip_accents((query or "").lower())
+    if any(hint in norm for hint in _RENTAL_MACHINE_HINTS):
+        return False
+    return any(kw in norm for kw in _HAND_TOOL_KEYWORDS)
 
 
 # --------------------------------------------------------------------------
@@ -197,6 +257,24 @@ class FromScratchCompositor:
         # — jamás caemos al precio de compra.
         for m in plan.machinery:
             rate = await self.catalog.get_machinery_rate(query=m.query)
+            usable = rate is not None and rate.has_rate
+
+            # WS-5 — herramienta de mano ≠ alquiler: si NO hay tarifa mq*
+            # utilizable y el término parece utillaje de mano, NO lo emitimos
+            # como MACHINERY ni marcamos review. Es utillaje amortizado, ya
+            # cubierto por el % de medios auxiliares sobre el subtotal directo.
+            # (La maquinaria real CON tarifa —incl. 'Martillo neumático'— entra
+            # por 'usable' y se cotiza normal; la maquinaria real SIN tarifa no
+            # casa como herramienta y sigue marcando review más abajo.)
+            if not usable and _looks_like_hand_tool(m.query):
+                notes.append(
+                    f"Herramienta de mano '{m.query}' — no es maquinaria de "
+                    f"alquiler (sin tarifa mq* en machinery_rates_2025); tratada "
+                    f"como utillaje amortizado en medios auxiliares (no facturada "
+                    f"como maquinaria, sin review)"
+                )
+                continue
+
             if rate is None:
                 needs_review = True
                 notes.append(
