@@ -5,6 +5,7 @@ import { useBudgetEditor } from '@/hooks/use-budget-editor';
 import { BudgetEditorTable } from './BudgetEditorTable';
 import { BudgetEditorToolbar } from './BudgetEditorToolbar';
 import { updateBudgetAction } from '@/actions/budget/update-budget.action';
+import { recordPriceCorrectionsAction } from '@/actions/calibration/record-price-corrections.action';
 import { rebakePartidasIfFactorChanged } from '@/lib/budget/markup-rebake';
 import { Budget, displayBudgetNumber } from '@/backend/budget/domain/budget';
 import { useRouter } from 'next/navigation';
@@ -278,6 +279,13 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
 
                 if (result.success) {
                     saveSuccess();
+                    // Learning loop (Increment C) — harvest raw-PEM price corrections
+                    // to calibrate the catalog→real factor. Fire-and-forget & non-fatal:
+                    // it runs on the just-saved budget and must never block or fail the
+                    // save. COEXISTS with the RLHF logCorrectionPairAction (per-blur).
+                    recordPriceCorrectionsAction(budget.id).catch((e) => {
+                        console.error('[calibration] recordPriceCorrections failed (non-fatal)', e);
+                    });
                     toast({
                         title: "Presupuesto guardado",
                         description: "Los cambios se han guardado correctamente.",
