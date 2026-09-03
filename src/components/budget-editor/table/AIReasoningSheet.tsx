@@ -20,7 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import {
     Sparkles, AlertTriangle, ListTree, FileText,
     TrendingUp, ChevronDown, ChevronUp, Bot, Send, Package, PlusCircle, Settings2, Trash2,
-    ChevronRight, Loader2, Wrench,
+    ChevronRight, Loader2, Wrench, Check, X, ArrowRight, Equal, Scale,
 } from "lucide-react";
 import { ComponentSubBreakdown } from './ComponentSubBreakdown';
 import { EditableBudgetLineItem } from "@/types/budget-editor";
@@ -32,6 +32,68 @@ import { useMarkupFactor } from '@/hooks/use-markup-factor';
 import { computeRepairedBreakdown, buildRepairPatch } from '@/lib/budget/repair-breakdown.client';
 import { getWinnerCatalogCode, hasZeroPricedComponent } from '@/lib/budget/reconciliation';
 import { EditableCell } from '../EditableCell';
+import { editBreakdownWithNlAction } from '@/actions/budget/edit-breakdown-nl.action';
+
+// ---------------------------------------------------------------------------
+// WS-C / WS-D helpers (module scope — puros, sin closures del componente).
+// ---------------------------------------------------------------------------
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const round4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
+
+/** Total efectivo de un componente (espeja `calculateCompTotal`: prefiere `total` stored). */
+function compEffectiveTotal(comp: any): number {
+    if (typeof comp.total === 'number' && comp.total > 0) return comp.total;
+    const cPrice = comp.price_unit ?? comp.unitPrice ?? comp.price ?? 0;
+    const cQuantity = comp.quantity ?? comp.yield ?? 1;
+    if (comp.unit === '%') return cPrice * (cQuantity / 100);
+    return cPrice * cQuantity;
+}
+
+/**
+ * WS-C — "Escalar rendimientos al precio oficial". Multiplica el rendimiento
+ * (`yield`/`quantity`) de cada componente por `oficial / Σ`, manteniendo los
+ * precios unitarios, de modo que Σ(total) == precio oficial (±0,01). El residuo
+ * de redondeo se absorbe en el componente de mayor peso. Devuelve copia nueva.
+ */
+function scaleYieldsToOfficialPrice(comps: any[], officialUnitPrice: number): any[] {
+    const totals = comps.map(compEffectiveTotal);
+    const sum = totals.reduce((a, b) => a + b, 0);
+    if (sum <= 0 || officialUnitPrice <= 0) return comps.map((c) => ({ ...c }));
+    const scale = officialUnitPrice / sum;
+
+    const scaled = totals.map((t) => round2(t * scale));
+    // Absorber el residuo de redondeo en el componente de mayor total → Σ exacta.
+    const roundedSum = scaled.reduce((a, b) => a + b, 0);
+    const residual = round2(officialUnitPrice - roundedSum);
+    if (residual !== 0 && scaled.length > 0) {
+        let maxIdx = 0;
+        for (let i = 1; i < scaled.length; i++) if (scaled[i] > scaled[maxIdx]) maxIdx = i;
+        scaled[maxIdx] = round2(scaled[maxIdx] + residual);
+    }
+
+    return comps.map((c, i) => {
+        const price = Number(c.price_unit ?? c.unitPrice ?? c.price ?? 0);
+        const newTotal = scaled[i];
+        let newYield: number;
+        if (price > 0) {
+            newYield = c.unit === '%' ? round4((newTotal / price) * 100) : round4(newTotal / price);
+        } else {
+            newYield = round4(Number(c.quantity ?? c.yield ?? 1) * scale);
+        }
+        return { ...c, yield: newYield, quantity: newYield, total: newTotal, totalPrice: newTotal };
+    });
+}
+
+/** Preview del copiloto NL (WS-D) antes de aplicar. */
+interface CopilotPreview {
+    before: any[];
+    after: any[];
+    oldUnitPrice: number;
+    newUnitPrice: number;
+    summary: string;
+    needsHumanReview: boolean;
+    confidence?: 'high' | 'medium' | 'low';
+}
 
 interface AIReasoningSheetProps {
     open: boolean;
@@ -72,6 +134,12 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
     const [captureOpen, setCaptureOpen] = useState(false);
     const aiProposedRef = useRef<{ itemId: string; snapshot: PriceOrUnitSnapshot } | null>(null);
     const lastSnapshotRef = useRef<PriceOrUnitSnapshot | undefined>(undefined);
+
+    // WS-D — Aparejador Copilot (edición NL del descompuesto).
+    const [copilotInstruction, setCopilotInstruction] = useState('');
+    const [copilotLoading, setCopilotLoading] = useState(false);
+    const [copilotError, setCopilotError] = useState<string | null>(null);
+    const [copilotPreview, setCopilotPreview] = useState<CopilotPreview | null>(null);
 
     // Reparación de descompuesto a 0 desde el catálogo COAATMCA.
     const [isRepairing, setIsRepairing] = useState(false);
@@ -360,6 +428,150 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
         sileo.success({ title: "Precio Aplicado Constatado", description: `Se ha inyectado el precio oficial manteniendo el texto normativo del PDF.` });
     };
 
+    // -----------------------------------------------------------------------
+    // WS-C — Resolución de la divergencia de sumatorios.
+    // -----------------------------------------------------------------------
+
+    /** "Adoptar la suma del descompuesto": unit_price = Σ(breakdown). */
+    const handleAdoptBreakdownSum = () => {
+        if (!item || !item.item) return;
+        const newUnitPrice = round2(breakdownTotal);
+        const qty = item.item.quantity || 1;
+        console.log('[Divergence] resolve', {
+            action: 'adopt_breakdown_sum',
+            itemId: item.id,
+            code: item.item.code,
+            fromUnitPrice: itemTotal,
+            toUnitPrice: newUnitPrice,
+            sumBreakdown: breakdownTotal,
+        });
+        onUpdate(item.id, {
+            item: {
+                ...item.item,
+                unitPrice: newUnitPrice,
+                totalPrice: round2(newUnitPrice * qty),
+            },
+            isDirty: true,
+        });
+        sileo.success({
+            title: 'Precio adoptado del descompuesto',
+            description: `El precio unitario ahora es ${formatCurrency(newUnitPrice * markupFactor)} (suma del descompuesto).`,
+        });
+    };
+
+    /** "Escalar rendimientos al precio oficial": ajusta los yield para que Σ == precio oficial. */
+    const handleScaleYieldsToOfficial = () => {
+        if (!item || !item.item) return;
+        const official = itemTotal; // precio unitario oficial (escala interna)
+        if (breakdownTotal <= 0 || official <= 0) {
+            sileo.error({ title: 'No se puede escalar', description: 'El descompuesto o el precio oficial es 0.' });
+            return;
+        }
+        const scaled = scaleYieldsToOfficialPrice(activeBreakdown, official);
+        const newSum = scaled.reduce((acc: number, c: any) => acc + compEffectiveTotal(c), 0);
+        console.log('[Divergence] resolve', {
+            action: 'scale_yields_to_official',
+            itemId: item.id,
+            code: item.item.code,
+            officialUnitPrice: official,
+            sumBefore: breakdownTotal,
+            sumAfter: newSum,
+        });
+        onUpdate(item.id, {
+            item: {
+                ...item.item,
+                breakdown: scaled,
+                unitPrice: round2(official),
+                totalPrice: round2(official * (item.item.quantity || 1)),
+            },
+            isDirty: true,
+        });
+        sileo.success({
+            title: 'Rendimientos escalados',
+            description: `El descompuesto ahora suma el precio oficial (${formatCurrency(official * markupFactor)}).`,
+        });
+    };
+
+    // -----------------------------------------------------------------------
+    // WS-D — Aparejador Copilot: edición del descompuesto en lenguaje natural.
+    // -----------------------------------------------------------------------
+
+    const handleRunCopilot = async () => {
+        if (!item || !item.item || !copilotInstruction.trim() || copilotLoading) return;
+        setCopilotLoading(true);
+        setCopilotError(null);
+        setCopilotPreview(null);
+        try {
+            const res = await editBreakdownWithNlAction({
+                code: item.item.code || '',
+                description: item.item.description || '',
+                unit: item.item.unit || 'ud',
+                unitPrice: item.item.unitPrice || 0,
+                breakdown: activeBreakdown,
+                instruction: copilotInstruction.trim(),
+            });
+            if (!res.success || !res.breakdown) {
+                setCopilotError(res.error || 'No se pudo procesar la instrucción.');
+                return;
+            }
+            const newUnitPrice = res.unitPrice ?? res.breakdown.reduce((acc: number, c: any) => acc + compEffectiveTotal(c), 0);
+            setCopilotPreview({
+                before: activeBreakdown,
+                after: res.breakdown,
+                oldUnitPrice: item.item.unitPrice || 0,
+                newUnitPrice,
+                summary: res.summary || '',
+                needsHumanReview: !!res.needsHumanReview,
+                confidence: res.confidence,
+            });
+        } catch (err) {
+            // No-fatal: el sheet no debe crashear.
+            console.error('[Copilot] handleRunCopilot failed', err);
+            setCopilotError('Error al ejecutar el copiloto. Inténtalo de nuevo en unos segundos.');
+        } finally {
+            setCopilotLoading(false);
+        }
+    };
+
+    const handleApplyCopilot = () => {
+        if (!item || !item.item || !copilotPreview) return;
+        const newBreakdown = copilotPreview.after;
+        const newUnitPrice = round2(copilotPreview.newUnitPrice);
+        const qty = item.item.quantity || 1;
+        console.log('[Copilot] apply', {
+            itemId: item.id,
+            code: item.item.code,
+            instruction: copilotInstruction,
+            oldUnitPrice: copilotPreview.oldUnitPrice,
+            newUnitPrice,
+            components: newBreakdown.length,
+            needsHumanReview: copilotPreview.needsHumanReview,
+        });
+        onUpdate(item.id, {
+            item: {
+                ...item.item,
+                breakdown: newBreakdown,
+                unitPrice: newUnitPrice,
+                totalPrice: round2(newUnitPrice * qty),
+                // Si el LLM/salvaguardas señalan incertidumbre, marcamos revisión humana.
+                ...(copilotPreview.needsHumanReview ? { needsHumanReview: true } : {}),
+            },
+            isDirty: true,
+        });
+        sileo.success({
+            title: 'Descompuesto actualizado',
+            description: copilotPreview.needsHumanReview
+                ? 'Cambios aplicados. Marcado para revisión humana por baja certeza.'
+                : 'Los cambios del copiloto se han aplicado.',
+        });
+        setCopilotPreview(null);
+        setCopilotInstruction('');
+    };
+
+    const handleDiscardCopilot = () => {
+        setCopilotPreview(null);
+    };
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent className="w-full sm:max-w-[600px] md:max-w-[750px] overflow-y-auto">
@@ -492,6 +704,31 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                             )}
                                         </div>
                                     </div>
+                                    {/* WS-C — dos acciones para RESOLVER la divergencia de sumatorios. */}
+                                    {isDeviated && (
+                                        <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={handleAdoptBreakdownSum}
+                                                title={`Fija el precio unitario = suma del descompuesto (${formatCurrency(breakdownTotal * markupFactor)})`}
+                                                className="h-7 border-amber-400 text-amber-900 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40 text-[11px] font-semibold gap-1.5"
+                                            >
+                                                <Equal className="w-3.5 h-3.5" />
+                                                Adoptar la suma del descompuesto
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={handleScaleYieldsToOfficial}
+                                                title={`Escala los rendimientos para que el descompuesto sume el precio oficial (${formatCurrency(itemTotal * markupFactor)})`}
+                                                className="h-7 border-amber-400 text-amber-900 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40 text-[11px] font-semibold gap-1.5"
+                                            >
+                                                <Scale className="w-3.5 h-3.5" />
+                                                Escalar rendimientos al precio oficial
+                                            </Button>
+                                        </div>
+                                    )}
                                     {/* Reparar desde catálogo: re-pobla los precios de los componentes
                                         desde COAATMCA y los escala al precio total validado. */}
                                     {canRepairFromCatalog && (
@@ -912,7 +1149,7 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                         </div>
                     )}
 
-                    {/* Copilot Interface Container - MOVED TO BOTTOM */}
+                    {/* Copilot Interface Container - MOVED TO BOTTOM (WS-D funcional) */}
                     {isAdmin && (
                         <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30 shadow-inner">
                             <div className="flex items-center gap-2 mb-3">
@@ -920,20 +1157,138 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                 <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">Aparejador Copilot</span>
                             </div>
                             <div className="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    placeholder="Ej: Suma un 10% a la mano de obra, Cambia los sacos de cemento..." 
-                                    className="flex-1 text-sm bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/50"
-                                    disabled
+                                <input
+                                    type="text"
+                                    value={copilotInstruction}
+                                    onChange={(e) => setCopilotInstruction(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !copilotLoading && copilotInstruction.trim()) {
+                                            e.preventDefault();
+                                            handleRunCopilot();
+                                        }
+                                    }}
+                                    placeholder="Ej: Suma un 10% a la mano de obra, Cambia los sacos de cemento..."
+                                    className="flex-1 text-sm bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-60"
+                                    disabled={copilotLoading}
                                 />
-                                <Button disabled variant="default" className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-sm">
-                                    <Send className="w-4 h-4 mr-2" />
+                                <Button
+                                    onClick={handleRunCopilot}
+                                    disabled={copilotLoading || !copilotInstruction.trim()}
+                                    variant="default"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 shadow-sm"
+                                >
+                                    {copilotLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
                                     Ejecutar
                                 </Button>
                             </div>
                             <p className="text-[10px] text-slate-500 mt-2 italic flex items-center gap-1">
-                                <Sparkles className="w-3 h-3" /> Escribe instrucciones en lenguaje natural para que la IA recalcule el desglose instantáneamente (Próximamente).
+                                <Sparkles className="w-3 h-3" /> Escribe instrucciones en lenguaje natural; la IA propone un nuevo desglose y lo aplicas tras revisar el diff.
                             </p>
+
+                            {/* Error no-fatal */}
+                            {copilotError && (
+                                <div className="mt-3 flex items-start gap-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 rounded-lg p-2.5">
+                                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                                    <span>{copilotError}</span>
+                                </div>
+                            )}
+
+                            {/* Preview / diff antes de aplicar */}
+                            {copilotPreview && (
+                                <div className="mt-3 bg-white dark:bg-black/40 border border-indigo-200 dark:border-indigo-900/50 rounded-lg overflow-hidden shadow-sm">
+                                    <div className="px-3 py-2 bg-indigo-50 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-900/40 flex items-center justify-between gap-2">
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                            <Sparkles className="w-3.5 h-3.5" /> Propuesta del copiloto
+                                        </span>
+                                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                                            {formatCurrency(copilotPreview.oldUnitPrice * markupFactor)}
+                                            <ArrowRight className="w-3 h-3" />
+                                            <span className="font-bold text-indigo-600 dark:text-indigo-300">{formatCurrency(copilotPreview.newUnitPrice * markupFactor)}</span>
+                                            <span className="opacity-60">/ud</span>
+                                        </span>
+                                    </div>
+
+                                    {copilotPreview.summary && (
+                                        <p className="px-3 pt-2.5 text-[11px] italic text-slate-600 dark:text-slate-300 leading-relaxed">
+                                            "{copilotPreview.summary}"
+                                        </p>
+                                    )}
+
+                                    {copilotPreview.needsHumanReview && (
+                                        <div className="mx-3 mt-2 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded p-2">
+                                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                            <span>Baja certeza — se marcará la partida para revisión humana al aplicar.</span>
+                                        </div>
+                                    )}
+
+                                    {/* Diff compacto de componentes */}
+                                    <div className="p-3 flex flex-col gap-1 max-h-64 overflow-y-auto">
+                                        {copilotPreview.after.map((c: any, idx: number) => {
+                                            const before = copilotPreview.before[idx];
+                                            const cTotal = compEffectiveTotal(c) * markupFactor;
+                                            const bTotal = before ? compEffectiveTotal(before) * markupFactor : null;
+                                            const cYield = c.yield ?? c.quantity ?? 1;
+                                            const cPrice = (c.price_unit ?? c.unitPrice ?? c.price ?? 0) * markupFactor;
+                                            const changed = !before
+                                                || Math.abs((bTotal ?? 0) - cTotal) > 0.01
+                                                || (before.code || '') !== (c.code || '')
+                                                || (before.concept ?? before.description ?? '') !== (c.concept ?? c.description ?? '');
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    className={cn(
+                                                        'flex items-center justify-between gap-2 text-[11px] rounded px-2 py-1.5',
+                                                        changed ? 'bg-indigo-50/70 dark:bg-indigo-950/30' : 'bg-transparent'
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <Badge variant="outline" className="font-mono text-[8px] bg-slate-50 dark:bg-black/40 text-slate-500 border-slate-200 dark:border-white/10 shrink-0">
+                                                            {c.code || 'S/C'}
+                                                        </Badge>
+                                                        <span className="truncate text-slate-700 dark:text-slate-300" title={c.concept ?? c.description ?? ''}>
+                                                            {c.concept ?? c.description ?? '—'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0 tabular-nums">
+                                                        <span className="text-slate-400 whitespace-nowrap">
+                                                            {formatNumberES(cYield, 3)} × {formatCurrency(cPrice)}
+                                                        </span>
+                                                        {bTotal !== null && Math.abs(bTotal - cTotal) > 0.01 && (
+                                                            <span className="text-slate-400 line-through whitespace-nowrap">{formatCurrency(bTotal)}</span>
+                                                        )}
+                                                        <span className={cn('font-semibold whitespace-nowrap', changed ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300')}>
+                                                            {formatCurrency(cTotal)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {copilotPreview.before.length > copilotPreview.after.length && (
+                                            <p className="text-[10px] text-red-500 italic px-2 pt-1">
+                                                {copilotPreview.before.length - copilotPreview.after.length} componente(s) eliminado(s) por la propuesta.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-2 p-3 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/20">
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={handleDiscardCopilot}
+                                            className="h-8 text-[11px] font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 gap-1.5"
+                                        >
+                                            <X className="w-3.5 h-3.5" /> Descartar
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={handleApplyCopilot}
+                                            className="h-8 text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 shadow-sm"
+                                        >
+                                            <Check className="w-3.5 h-3.5" /> Aplicar cambios
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
