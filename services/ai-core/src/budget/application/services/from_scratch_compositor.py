@@ -6,7 +6,11 @@ descompuesto auditable con precios REALES:
 
   - Mano de obra → ``labor_rates_2025`` (``CatalogLookupService.get_labor_rate``).
   - Material     → ``material_catalog`` (``IMaterialSearch``, ~29k OBRAMAT).
-  - Maquinaria   → ``material_catalog`` (fallback: no encontrado → 0, review).
+  - Maquinaria   → ``machinery_rates_2025`` (tarifa de ALQUILER €/h ×
+    horas, vía ``CatalogLookupService.get_machinery_rate``). NUNCA el precio de
+    COMPRA del catálogo de materiales — eso inflaba la partida. Si no hay
+    tarifa (o es placeholder pendiente), se marca ``needs_human_review`` con
+    nota explicativa; jamás se cae al precio de compra.
   - % medios aux → sobre el subtotal de costes directos.
 
 El LLM SOLO descompone (qué oficios/horas, qué materiales/cantidades) — **NO
@@ -186,19 +190,40 @@ class FromScratchCompositor:
                 code=(rate.id if rate else None),
             ))
 
-        # Maquinaria → material_catalog (fallback simple; mq* dedicado en iteración futura)
+        # Maquinaria → machinery_rates (tarifa de ALQUILER €/h × horas).
+        # DETERMINISTA, igual que la mano de obra. NUNCA usamos el precio de
+        # COMPRA del material_catalog (eso inflaba la partida). Si no hay tarifa
+        # real (o es placeholder pendiente), marcamos review y dejamos precio 0
+        # — jamás caemos al precio de compra.
         for m in plan.machinery:
-            cand, cos = await self._top_material(m.query)
-            if cand is None:
+            rate = await self.catalog.get_machinery_rate(query=m.query)
+            if rate is None:
                 needs_review = True
-                notes.append(self._miss_note("Maquinaria", m.query, cos))
+                notes.append(
+                    f"Sin tarifa de alquiler (€/h) para maquinaria '{m.query}' en "
+                    f"machinery_rates_2025 — marcado review (NO se usa precio de compra)"
+                )
                 price = 0.0
+                concept = m.query
+                code = None
+            elif not rate.has_rate:
+                needs_review = True
+                notes.append(
+                    f"Tarifa de alquiler PENDIENTE (placeholder) para maquinaria "
+                    f"'{rate.label_es}' (id={rate.id}) — rellenar €/h real en "
+                    f"machinery_rates_2025; marcado review"
+                )
+                price = 0.0
+                concept = rate.label_es
+                code = rate.id
             else:
-                price = float(cand.get("price") or 0.0)
+                price = float(rate.rate_eur_hour or 0.0)
+                concept = rate.label_es
+                code = rate.id
             breakdown.append(self._row(
-                concept=(cand.get("name") if cand else m.query), type_="MACHINERY",
+                concept=concept, type_="MACHINERY",
                 price=price, yield_=m.hours, unit="h",
-                code=(cand.get("sku") if cand else None),
+                code=code,
             ))
 
         # Materiales → material_catalog

@@ -14,11 +14,12 @@ import logging
 from typing import Any, Optional
 
 from src.budget.catalog.application.ports.catalog_repository import ICatalogRepository
-from src.budget.catalog.domain.entities import LaborRate
+from src.budget.catalog.domain.entities import LaborRate, MachineryRate
 
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "labor_rates_2025"
+MACHINERY_COLLECTION_NAME = "machinery_rates_2025"
 
 
 class FirestoreCatalogRepository(ICatalogRepository):
@@ -77,6 +78,62 @@ class FirestoreCatalogRepository(ICatalogRepository):
     async def save_labor_rates_batch(self, rates: list[LaborRate]) -> None:
         batch = self.db.batch()
         col = self.db.collection(COLLECTION_NAME)
+        for r in rates:
+            batch.set(col.document(r.id), r.model_dump())
+        batch.commit()
+
+    # ---- Maquinaria (colección `machinery_rates_2025`) --------------------
+
+    async def get_machinery_rate_by_id(self, id: str) -> Optional[MachineryRate]:
+        doc = self.db.collection(MACHINERY_COLLECTION_NAME).document(id).get()
+        if not getattr(doc, "exists", False):
+            return None
+        data = doc.to_dict()
+        if data is None:
+            return None
+        return MachineryRate.model_validate(data)
+
+    async def find_machinery_rates(
+        self,
+        query: str,
+        category: Optional[str] = None,
+        limit: int = 5,
+    ) -> list[MachineryRate]:
+        # Tabla pequeña (<100 docs): stream completo + fuzzy en memoria.
+        tokens = [t for t in (query or "").lower().split() if t]
+        all_rates: list[MachineryRate] = []
+        for snap in self.db.collection(MACHINERY_COLLECTION_NAME).stream():
+            data = snap.to_dict()
+            if data is None:
+                continue
+            try:
+                all_rates.append(MachineryRate.model_validate(data))
+            except Exception as e:
+                logger.warning(f"Skipping malformed machinery_rate doc: {e}")
+
+        scored: list[tuple[int, MachineryRate]] = []
+        for rate in all_rates:
+            if category is not None and rate.category != category:
+                continue
+            haystack = " ".join([
+                rate.category,
+                rate.label_es,
+                " ".join(rate.aliases),
+            ]).lower()
+            score = sum(1 for t in tokens if t in haystack)
+            if score > 0:
+                scored.append((score, rate))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [r for _, r in scored[:limit]]
+
+    async def save_machinery_rate(self, machinery_rate: MachineryRate) -> None:
+        doc_ref = self.db.collection(MACHINERY_COLLECTION_NAME).document(machinery_rate.id)
+        doc_ref.set(machinery_rate.model_dump())
+
+    async def save_machinery_rates_batch(self, rates: list[MachineryRate]) -> None:
+        batch = self.db.batch()
+        col = self.db.collection(MACHINERY_COLLECTION_NAME)
         for r in rates:
             batch.set(col.document(r.id), r.model_dump())
         batch.commit()

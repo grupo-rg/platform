@@ -20,7 +20,7 @@ import pytest
 from src.budget.catalog.application.services.catalog_lookup_service import (
     CatalogLookupService,
 )
-from src.budget.catalog.domain.entities import LaborRate
+from src.budget.catalog.domain.entities import LaborRate, MachineryRate
 from src.budget.catalog.domain.measurement import Measurement
 from src.budget.catalog.infrastructure.adapters.in_memory_catalog_repository import (
     InMemoryCatalogRepository,
@@ -98,6 +98,57 @@ class TestGetLaborRate:
         got = asyncio.run(svc.get_labor_rate(query="oficial 1"))
         assert got is not None
         assert got.category == "oficial_1a"
+
+
+def _seed_machinery(repo: InMemoryCatalogRepository) -> None:
+    rates = [
+        MachineryRate(
+            id="mq-retroexcavadora",
+            category="excavacion",
+            label_es="Retroexcavadora",
+            rate_eur_hour=45.0,
+            aliases=["retroexcavadora", "retro", "excavadora"],
+        ),
+        MachineryRate(
+            id="mq-pison-placeholder",
+            category="compactacion",
+            label_es="Pisón compactador",
+            rate_eur_hour=None,  # placeholder pendiente
+            is_placeholder=True,
+            aliases=["pison", "pisón", "compactador"],
+        ),
+    ]
+    asyncio.run(repo.save_machinery_rates_batch(rates))
+
+
+class TestGetMachineryRate:
+    """`get_machinery_rate` busca la tarifa de ALQUILER €/h (no precio de compra)."""
+
+    def test_returns_rate_with_hourly_rental(self) -> None:
+        repo = InMemoryCatalogRepository()
+        _seed_machinery(repo)
+        svc = CatalogLookupService(repo=repo)
+        got = asyncio.run(svc.get_machinery_rate(query="retroexcavadora"))
+        assert got is not None
+        assert got.id == "mq-retroexcavadora"
+        assert got.rate_eur_hour == pytest.approx(45.0)
+        assert got.has_rate is True
+
+    def test_placeholder_rate_reports_no_usable_rate(self) -> None:
+        repo = InMemoryCatalogRepository()
+        _seed_machinery(repo)
+        svc = CatalogLookupService(repo=repo)
+        got = asyncio.run(svc.get_machinery_rate(query="pison"))
+        assert got is not None
+        assert got.rate_eur_hour is None
+        assert got.has_rate is False  # el compositor lo tratará como review
+
+    def test_returns_none_when_no_match(self) -> None:
+        repo = InMemoryCatalogRepository()
+        _seed_machinery(repo)
+        svc = CatalogLookupService(repo=repo)
+        got = asyncio.run(svc.get_machinery_rate(query="nave espacial"))
+        assert got is None
 
 
 class TestConvertMeasurement:

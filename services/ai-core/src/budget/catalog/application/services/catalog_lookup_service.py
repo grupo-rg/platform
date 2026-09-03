@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Optional
 
 from src.budget.catalog.application.ports.catalog_repository import ICatalogRepository
-from src.budget.catalog.domain.entities import LaborRate
+from src.budget.catalog.domain.entities import LaborRate, MachineryRate
 from src.budget.catalog.domain.measurement import Measurement, UnitConverter
 
 
@@ -29,6 +29,17 @@ class CatalogLookupService:
         trade: Optional[str] = None,
     ) -> Optional[LaborRate]:
         results = await self.repo.find_labor_rates(query=query, trade=trade, limit=1)
+        return results[0] if results else None
+
+    async def get_machinery_rate(
+        self,
+        query: str,
+        category: Optional[str] = None,
+    ) -> Optional[MachineryRate]:
+        """Busca la tarifa de ALQUILER (€/h) de una máquina. Determinista,
+        contra la colección `machinery_rates_2025` — NUNCA el precio de compra
+        del catálogo de materiales. Devuelve None si no hay match."""
+        results = await self.repo.find_machinery_rates(query=query, category=category, limit=1)
         return results[0] if results else None
 
     def convert_measurement(

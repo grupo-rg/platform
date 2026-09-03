@@ -16,7 +16,7 @@ from src.budget.application.services.from_scratch_compositor import (
     MaterialNeed,
     MachineryNeed,
 )
-from src.budget.catalog.domain.entities import LaborRate
+from src.budget.catalog.domain.entities import LaborRate, MachineryRate
 
 
 class _FakeLLM:
@@ -28,11 +28,15 @@ class _FakeLLM:
 
 
 class _FakeCatalog:
-    def __init__(self, rates: dict):
+    def __init__(self, rates: dict, machinery: dict | None = None):
         self._rates = rates  # query.lower() -> LaborRate | None
+        self._machinery = machinery or {}  # query.lower() -> MachineryRate | None
 
     async def get_labor_rate(self, query: str, trade=None):
         return self._rates.get(query.lower())
+
+    async def get_machinery_rate(self, query: str, category=None):
+        return self._machinery.get(query.lower())
 
 
 class _FakeMaterials:
@@ -53,6 +57,11 @@ async def _embed(_text: str):
 def _rate(cat, label, eur):
     return LaborRate(id=f"labor-{cat}", category=cat, label_es=label,
                      rate_eur_hour=eur, source_book="COAATMCA_2025", source_page=10)
+
+
+def _mrate(id, label, eur=None, is_placeholder=False):
+    return MachineryRate(id=id, category="excavacion", label_es=label,
+                         rate_eur_hour=eur, is_placeholder=is_placeholder)
 
 
 @pytest.mark.asyncio
@@ -100,7 +109,41 @@ async def test_missing_labor_and_material_mark_review():
 
 
 @pytest.mark.asyncio
-async def test_machinery_valued_from_catalog():
+async def test_machinery_valued_from_rental_rate():
+    # Maquinaria se valora con la tarifa de ALQUILER (€/h) × horas, determinista
+    # contra machinery_rates — NO con el precio de compra del material_catalog.
+    # (Se añade algo de mano de obra para que la máquina no sea el 100% del
+    # directo y no dispare el safety-net de dominancia #1, ajeno a este caso.)
+    plan = CompositionPlan(
+        main_task="Excavar",
+        labor=[LaborNeed(role="Peón", hours=1.0)],
+        machinery=[MachineryNeed(query="retroexcavadora", hours=2.0)],
+        aux_pct=0.0,
+    )
+    comp = FromScratchCompositor(
+        llm=_FakeLLM(plan), embed_fn=_embed,
+        catalog_lookup=_FakeCatalog(
+            {"peón": _rate("peon_ordinario", "Peón Suelto", 23.01)},
+            machinery={"retroexcavadora": _mrate("mq-retro", "Retroexcavadora", eur=45.0)},
+        ),
+        # Aunque el material_catalog tuviera un match de COMPRA carísimo, NO debe usarse.
+        material_search=_FakeMaterials({"retro": {"sku": "M1", "name": "Retroexcavadora COMPRA", "price": 55000.0, "unit": "ud", "_cosine": 0.9}}),
+    )
+    res = await comp.compose(description="Excavar", unit="m3")
+    # labor 23.01 + maquinaria 45 €/h * 2h = 90 → directo 113.01
+    assert res.unit_price == pytest.approx(113.01, abs=0.01)
+    assert res.needs_human_review is False
+    mach = next(r for r in res.breakdown if r["type"] == "MACHINERY")
+    assert mach["price"] == pytest.approx(45.0, abs=0.01)  # €/h de alquiler
+    assert mach["total"] == pytest.approx(90.0, abs=0.01)  # 45 * 2h
+    assert mach["concept"] == "Retroexcavadora"
+    assert mach["code"] == "mq-retro"
+
+
+@pytest.mark.asyncio
+async def test_machinery_without_rate_flags_review_never_purchase_price():
+    # Sin tarifa de alquiler: aunque el material_catalog matchee un precio de
+    # COMPRA, el compositor NO lo usa — marca review y deja precio 0.
     plan = CompositionPlan(
         main_task="Excavar",
         machinery=[MachineryNeed(query="retroexcavadora", hours=2.0)],
@@ -108,12 +151,37 @@ async def test_machinery_valued_from_catalog():
     )
     comp = FromScratchCompositor(
         llm=_FakeLLM(plan), embed_fn=_embed,
-        catalog_lookup=_FakeCatalog({}),
-        material_search=_FakeMaterials({"retro": {"sku": "M1", "name": "Retroexcavadora", "price": 55.0, "unit": "h", "_cosine": 0.8}}),
+        catalog_lookup=_FakeCatalog({}, machinery={}),  # sin tarifa de alquiler
+        material_search=_FakeMaterials({"retro": {"sku": "M1", "name": "Retroexcavadora", "price": 55.0, "unit": "h", "_cosine": 0.9}}),
     )
     res = await comp.compose(description="Excavar", unit="m3")
-    assert res.unit_price == pytest.approx(110.0, abs=0.01)  # 55 * 2h
+    assert res.needs_human_review is True
+    assert res.unit_price == 0.0  # NO se usa el precio de compra (55*2=110)
     assert res.breakdown[0]["type"] == "MACHINERY"
+    assert res.breakdown[0]["total"] == 0.0
+    assert any("precio de compra" in n for n in res.notes)
+
+
+@pytest.mark.asyncio
+async def test_machinery_placeholder_rate_flags_review():
+    # Tarifa placeholder (rate=None, is_placeholder=True) → review, precio 0.
+    plan = CompositionPlan(
+        main_task="Excavar",
+        machinery=[MachineryNeed(query="retroexcavadora", hours=2.0)],
+        aux_pct=0.0,
+    )
+    comp = FromScratchCompositor(
+        llm=_FakeLLM(plan), embed_fn=_embed,
+        catalog_lookup=_FakeCatalog(
+            {},
+            machinery={"retroexcavadora": _mrate("mq-retro", "Retroexcavadora", eur=None, is_placeholder=True)},
+        ),
+        material_search=_FakeMaterials({}),
+    )
+    res = await comp.compose(description="Excavar", unit="m3")
+    assert res.needs_human_review is True
+    assert res.breakdown[0]["total"] == 0.0
+    assert any("placeholder" in n.lower() for n in res.notes)
 
 
 @pytest.mark.asyncio
