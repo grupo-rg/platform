@@ -22,6 +22,7 @@ from src.budget.application.services.architect_service import (
     ArchitectService,
     ArchitectStatus,
     DecomposedTask,
+    MAIN_CHAPTERS,
 )
 from src.budget.application.services.pdf_extractor_service import RestructuredItem
 from src.budget.application.services.swarm_pricing_service import SwarmPricingService
@@ -58,6 +59,26 @@ class AskingForClarificationError(Exception):
 _EXPLICIT_MATERIAL_RE = re.compile(
     r"\s*\[\s*MATERIAL\s+EXPL[IÍ]CITO\s*:\s*([^\]]*)\]", re.IGNORECASE
 )
+
+
+# --- Orden de presentación (capítulos canónicos COAATMCA + partidas por código) ---
+def _norm_chapter(name: str) -> str:
+    return " ".join((name or "").upper().split())
+
+
+_CANONICAL_CHAPTER_INDEX = {_norm_chapter(c): i for i, c in enumerate(MAIN_CHAPTERS)}
+
+
+def _chapter_order_key(name: str) -> int:
+    """Índice canónico del capítulo (los desconocidos van al final)."""
+    return _CANONICAL_CHAPTER_INDEX.get(_norm_chapter(name), len(MAIN_CHAPTERS) + 1)
+
+
+def _partida_code_key(partida) -> tuple:
+    """Orden por número de código (NL-1, NL-2, … NL-14); sin número → al final."""
+    code = getattr(partida, "code", "") or ""
+    m = re.search(r"(\d+)", code)
+    return (0, int(m.group(1))) if m else (1, code)
 
 
 def _extract_explicit_material(partida) -> None:
@@ -168,7 +189,10 @@ class GenerateBudgetFromNlUseCase:
         for p in partidas:
             _extract_explicit_material(p)
 
-        # Fase 3: Assembly
+        # Fase 3: Assembly — ORDEN DE PRESENTACIÓN. Los capítulos se emiten en el
+        # orden canónico COAATMCA (DEMOLICIONES → … → PINTURA), no en el orden en
+        # que el Swarm los fue tasando (paralelo). Dentro de cada capítulo las
+        # partidas van por número de código (NL-1, NL-2, …). Se reasigna `order`.
         chapters_dict: Dict[str, Dict] = {}
         for p in partidas:
             ch_name = (p.original_item.chapter if p.original_item and p.original_item.chapter else "VARIOS").strip()
@@ -176,14 +200,23 @@ class GenerateBudgetFromNlUseCase:
             bucket["items"].append(p)
             bucket["total"] += p.totalPrice
 
+        ordered_chapter_names = sorted(chapters_dict.keys(), key=_chapter_order_key)
+
         final_chapters: List[BudgetChapter] = []
-        for idx, (ch_name, data) in enumerate(chapters_dict.items(), start=1):
+        for idx, ch_name in enumerate(ordered_chapter_names, start=1):
+            data = chapters_dict[ch_name]
+            items = sorted(data["items"], key=_partida_code_key)
+            for pos, it in enumerate(items, start=1):
+                try:
+                    it.order = pos
+                except Exception:
+                    pass
             final_chapters.append(
                 BudgetChapter(
                     id=str(uuid.uuid4()),
                     name=ch_name,
                     order=idx,
-                    items=data["items"],
+                    items=items,
                     totalPrice=data["total"],  # raw PEM, será sobreescrito por bake_markup
                 )
             )
