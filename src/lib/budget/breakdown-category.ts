@@ -22,6 +22,10 @@ export type BreakdownCategory = (typeof BreakdownCategory)[keyof typeof Breakdow
 
 const _CODE_PREFIX_TO_CATEGORY: Record<string, BreakdownCategory> = {
     mo: BreakdownCategory.LABOR,
+    // `labor-*` — códigos de mano de obra de las partidas from_scratch (compositor).
+    // Se detecta por código, no solo por `type`, para que "Sólo mano de obra" sea
+    // robusto aunque el `type` del componente viniera mal.
+    labor: BreakdownCategory.LABOR,
     mt: BreakdownCategory.MATERIAL_FIXED,
     mq: BreakdownCategory.MACHINERY,
     ci: BreakdownCategory.INDIRECT,

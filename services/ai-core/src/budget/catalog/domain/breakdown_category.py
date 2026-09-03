@@ -38,6 +38,9 @@ class BreakdownCategory(str, Enum):
 
 _CODE_PREFIX_TO_CATEGORY: dict[str, BreakdownCategory] = {
     "mo": BreakdownCategory.LABOR,
+    # `labor-*` — mano de obra de las partidas from_scratch (compositor). Detectada
+    # por código, no solo por `type`, para robustecer "Sólo mano de obra".
+    "labor": BreakdownCategory.LABOR,
     "mt": BreakdownCategory.MATERIAL_FIXED,  # refinable a VARIABLE si is_variable=True
     "mq": BreakdownCategory.MACHINERY,
     "%": BreakdownCategory.INDIRECT,
