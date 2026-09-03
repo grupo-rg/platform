@@ -465,10 +465,10 @@ export const TableRowItem = React.memo(({
                         )}
                     </div>
 
-                    {/* WS-B — LÍNEA DE ACCIONES IA (revelada en hover, desktop).
-                        Todas estas acciones permanecen SIEMPRE accesibles en el menú ⋯
-                        (imprescindible en táctil, donde no hay hover). Acento unificado IA. */}
-                    <div className="hidden group-hover:flex items-center flex-wrap gap-1 mt-0.5">
+                    {/* LÍNEA DE ACCIONES IA — SIEMPRE visible, junto a los chips de estado
+                        (calibración / procedencia / alarmas). Imprescindible en táctil,
+                        donde no hay hover. Acento unificado IA. Espejo también en el menú ⋯. */}
+                    <div className="flex items-center flex-wrap gap-1 mt-0.5">
                         {/* Auditar & Detalles → abre el sheet (equivale a "Ver Detalles" del menú ⋯) */}
                         <Button
                             variant="ghost"

@@ -522,8 +522,10 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
 
     // De-dup: el mapa estructural (RequirementCard) ahora vive DENTRO del stream
     // del chat (no encima del input) para que el usuario lo revise inline y decida
-    // generar. Abierto por defecto; el botón Layers lo colapsa.
+    // generar. Presente por defecto (el botón Layers lo oculta), pero COLAPSADO:
+    // aparece como una cabecera compacta que no tapa el chat y se expande al pulsarla.
     const [showRequirements, setShowRequirements] = useState(true);
+    const [requirementsExpanded, setRequirementsExpanded] = useState(false);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
     // F7 — BC3: al preparar un .bc3, lo detectamos (parse rápido en ai-core) para
@@ -1666,7 +1668,8 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
 
                         {/* Mapa estructural del proyecto — DENTRO del stream, para revisar
                             y decidir generar. Movido aquí desde encima del input (de-dup).
-                            El botón Layers del input lo colapsa/expande. */}
+                            COLAPSADO por defecto: cabecera compacta que no tapa el chat;
+                            se expande al pulsarla. El botón Layers del input lo oculta del todo. */}
                         <AnimatePresence>
                             {(requirements.specs || requirements.detectedNeeds?.length) && showRequirements && generationProgress.step === 'idle' && (
                                 <motion.div
@@ -1674,9 +1677,47 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: 10, scale: 0.98 }}
                                     transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-                                    className="w-full max-w-3xl mx-auto mt-4 max-h-[55vh] overflow-y-auto custom-scrollbar rounded-2xl bg-[#1e1f20] border border-white/10 shadow-2xl"
+                                    className="w-full max-w-3xl mx-auto mt-4 rounded-2xl bg-[#1e1f20] border border-white/10 shadow-2xl overflow-hidden"
                                 >
-                                    <RequirementCard requirements={requirements} className="bg-transparent border-none shadow-none" />
+                                    {/* Cabecera compacta — clic para expandir/colapsar */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setRequirementsExpanded(v => !v)}
+                                        aria-expanded={requirementsExpanded}
+                                        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                                    >
+                                        <span className="flex items-center gap-2.5 min-w-0">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/15 border border-primary/20">
+                                                <Layers className="w-3.5 h-3.5 text-primary" />
+                                            </span>
+                                            <span className="flex flex-col min-w-0">
+                                                <span className="text-xs font-semibold text-white/90 truncate">Mapa Estructural del Proyecto</span>
+                                                <span className="text-[10px] text-white/40 truncate">
+                                                    {requirements.detectedNeeds?.length
+                                                        ? `${requirements.detectedNeeds.length} necesidades detectadas · toca para ${requirementsExpanded ? 'colapsar' : 'ver todo'}`
+                                                        : `Toca para ${requirementsExpanded ? 'colapsar' : 'ver la estructura'}`}
+                                                </span>
+                                            </span>
+                                        </span>
+                                        <ChevronDown className={cn("w-4 h-4 text-white/50 shrink-0 transition-transform duration-300", requirementsExpanded && "rotate-180")} />
+                                    </button>
+
+                                    {/* Contenido expandible */}
+                                    <AnimatePresence initial={false}>
+                                        {requirementsExpanded && (
+                                            <motion.div
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="max-h-[50vh] overflow-y-auto custom-scrollbar border-t border-white/10">
+                                                    <RequirementCard requirements={requirements} className="bg-transparent border-none shadow-none" />
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </motion.div>
                             )}
                         </AnimatePresence>

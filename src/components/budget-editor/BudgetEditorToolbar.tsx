@@ -225,7 +225,7 @@ export const BudgetEditorToolbar = ({
                                     variant="outline"
                                     size="sm"
                                     disabled={exportingMode !== null}
-                                    className="hidden md:flex shrink-0 bg-white hover:bg-slate-50 border-slate-200 text-slate-700 dark:bg-transparent dark:hover:bg-white/5 dark:border-white/10 dark:text-slate-200"
+                                    className="flex shrink-0 bg-white hover:bg-slate-50 border-slate-200 text-slate-700 dark:bg-transparent dark:hover:bg-white/5 dark:border-white/10 dark:text-slate-200"
                                     title="Exportar PDF según el modo (usa las ediciones sin guardar)"
                                 >
                                     {exportingMode !== null
