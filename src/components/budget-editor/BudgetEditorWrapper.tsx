@@ -15,6 +15,7 @@ import { BudgetRequestDetails } from './BudgetRequestDetails';
 import { BudgetEconomicSummary } from './BudgetEconomicSummary';
 import { pdf } from '@react-pdf/renderer';
 import { BudgetDocument } from '@/components/pdf/BudgetDocument';
+import { parseExplicitMaterial } from '@/lib/budget/explicit-material';
 import type { ExecutionMode } from '@/types/budget-editor';
 import { BudgetHealthWidget } from './BudgetHealthWidget';
 import { SemanticCatalogSidebar } from './SemanticCatalogSidebar';
@@ -196,6 +197,9 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
 
                         originalTask: editorItem.originalTask,
                         original_item: editorItem.original_item, // Preservar nodo OCR
+                        // Material solicitado por el cliente (auditoría). Se persiste como
+                        // campo dedicado para que sobreviva tras limpiar la marca del texto.
+                        explicitMaterial: (editorItem.item as any)?.explicitMaterial ?? null,
                         breakdown: editorItem.item?.breakdown, // <--- Key for AI Persistence
                         note: editorItem.item?.note,
                         isRealCost: editorItem.item?.isRealCost,
@@ -393,7 +397,8 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                         id: e.id, order: i + 1, type: e.type || 'PARTIDA', code: e.item?.code || '',
                         description: e.item?.description || e.originalTask || '', unit: e.item?.unit || 'ud',
                         quantity: e.item?.quantity || 1, unitPrice: e.item?.unitPrice || 0,
-                        totalPrice: e.item?.totalPrice || 0, originalTask: e.originalTask, breakdown: e.item?.breakdown
+                        totalPrice: e.item?.totalPrice || 0, originalTask: e.originalTask, breakdown: e.item?.breakdown,
+                        explicitMaterial: (e.item as any)?.explicitMaterial ?? null
                     }));
                     return { id: `chap-${index}`, name: chapterName, order: index + 1, items: chapterItems, totalPrice: chapterItems.reduce((acc: number, i: any) => acc + (i.totalPrice || 0), 0) };
                 });
@@ -738,15 +743,22 @@ export const BudgetEditorWrapper = ({ budget, isAdmin = false, traceData, initia
             if (item.item && !item.type) return { ...item, chapter: chapterName };
 
             // Map New Domain -> Legacy UI
+            // Limpiamos la marca "[MATERIAL EXPLÍCITO: X]" del texto visible (era un
+            // hint de generación para el Swarm; no debe verse en el editor ni en el
+            // PDF) y capturamos el material para mostrarlo como chip de auditoría.
+            const parsedTitle = parseExplicitMaterial(item.originalTask || item.description);
+            const parsedDesc = parseExplicitMaterial(item.description);
+            const explicitMaterial = parsedTitle.material || parsedDesc.material || item.explicitMaterial || null;
             return {
                 id: item.id,
                 order: item.order,
-                originalTask: item.originalTask || item.description,
+                originalTask: parsedTitle.clean,
                 original_item: item.original_item, // Extraer nodo original del PDF
                 type: item.type, // Pass the type (PARTIDA/MATERIAL)
                 chapter: chapterName,
                 item: {
-                    description: item.description,
+                    description: parsedDesc.clean,
+                    explicitMaterial, // material solicitado por el cliente (auditoría)
                     quantity: item.quantity,
                     unit: item.unit,
                     unitPrice: item.unitPrice,

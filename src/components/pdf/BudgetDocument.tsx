@@ -3,6 +3,7 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
 import { formatCurrency, formatNumberES } from '@/lib/utils';
+import { stripExplicitMaterialTag } from '@/lib/budget/explicit-material';
 import type { CompanyConfig } from '@/backend/platform/domain/company-config';
 
 const styles = StyleSheet.create({
@@ -459,8 +460,12 @@ export const BudgetDocument = ({
                                 : currentFactor;
                             const bTotalAllIn = bTotal * markupFactor;
 
-                            // Prevent duplicating title into description if they are implicitly the same 
-                            const showDescription = item.item?.description && item.item.description.trim() !== "" && item.item.description.trim() !== item.originalTask.trim();
+                            // Limpiamos la marca interna "[MATERIAL EXPLÍCITO: X]" (hint de
+                            // generación) para que no se entregue en el PDF al cliente.
+                            const cleanTitle = stripExplicitMaterialTag(item.originalTask);
+                            const cleanDescription = stripExplicitMaterialTag(item.item?.description);
+                            // Prevent duplicating title into description if they are implicitly the same
+                            const showDescription = cleanDescription && cleanDescription.trim() !== "" && cleanDescription.trim() !== cleanTitle.trim();
 
                             // Phase 16.C — precio unitario all-in (raw × markupFactor) para mostrar al cliente.
                             const unitPriceRaw = item.item?.unitPrice || 0;
@@ -472,9 +477,9 @@ export const BudgetDocument = ({
                                     <View style={styles.itemMainRow}>
                                         <Text style={styles.itemCode}>{item.item?.code || '-'}</Text>
                                         <View style={styles.itemTitleColumn}>
-                                            <Text style={styles.itemTitle}>{item.originalTask}</Text>
+                                            <Text style={styles.itemTitle}>{cleanTitle}</Text>
                                             {showDescription && (
-                                                <Text style={styles.itemDescription}>{item.item.description}</Text>
+                                                <Text style={styles.itemDescription}>{cleanDescription}</Text>
                                             )}
                                         </View>
                                         <Text style={styles.itemUnit}>{item.item?.unit || 'ud'}</Text>

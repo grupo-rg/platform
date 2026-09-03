@@ -3,6 +3,7 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 import { formatCurrency, formatNumberES } from '@/lib/utils';
+import { stripExplicitMaterialTag } from '@/lib/budget/explicit-material';
 
 const styles = StyleSheet.create({
     page: {
@@ -282,8 +283,12 @@ export const DemoBudgetDocument = ({
                             const bTotal = (item.item?.totalPrice || item.item?.price || 0);
                             const qTotal = (item.item?.quantity || 1);
 
-                            // Prevent duplicating title into description if they are implicitly the same 
-                            const showDescription = item.item?.description && item.item.description.trim() !== "" && item.item.description.trim() !== item.originalTask.trim();
+                            // Limpiamos la marca interna "[MATERIAL EXPLÍCITO: X]" (hint de
+                            // generación) para que no se entregue en el PDF.
+                            const cleanTitle = stripExplicitMaterialTag(item.originalTask);
+                            const cleanDescription = stripExplicitMaterialTag(item.item?.description);
+                            // Prevent duplicating title into description if they are implicitly the same
+                            const showDescription = cleanDescription && cleanDescription.trim() !== "" && cleanDescription.trim() !== cleanTitle.trim();
 
                             return (
                                 <View key={item.id || index} style={styles.itemContainer} wrap={false}>
@@ -292,9 +297,9 @@ export const DemoBudgetDocument = ({
                                         <Text style={styles.itemCode}>{item.item?.code || '-'}</Text>
                                         <Text style={styles.itemUnit}>{item.item?.unit || 'ud'}</Text>
                                         <View style={styles.itemTitleColumn}>
-                                            <Text style={styles.itemTitle}>{item.originalTask}</Text>
+                                            <Text style={styles.itemTitle}>{cleanTitle}</Text>
                                             {showDescription && (
-                                                <Text style={styles.itemDescription}>{item.item.description}</Text>
+                                                <Text style={styles.itemDescription}>{cleanDescription}</Text>
                                             )}
                                         </View>
                                         <Text style={styles.itemTotal}>{formatCurrency(bTotal)}</Text>

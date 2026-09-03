@@ -49,6 +49,14 @@ export interface BudgetPartida {
   active_price_source?: 'bc3' | 'ai'; // fuente de precio activa (default: bc3 si existe)
   measurements?: MeasurementLine[];   // estado de mediciones estructurado
   originalTask?: string; // The user intent that generated this
+  /**
+   * Material solicitado explícitamente por el cliente (p.ej. "cerámica",
+   * "resina antideslizante"). Se usa para la búsqueda/selección de la IA y como
+   * anotación de auditoría. NO se muestra en el PDF entregado (ya está reflejado
+   * en la descripción/descompuesto). Antes viajaba embebido en `description` como
+   * "[MATERIAL EXPLÍCITO: X]"; ahora es un campo dedicado.
+   */
+  explicitMaterial?: string | null;
   note?: string;
   ai_justification?: string; // Telemetry logic from the Judge Agent
   sourceDatabase?: string; // e.g. '2025_catalog'

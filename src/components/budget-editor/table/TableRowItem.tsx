@@ -388,6 +388,25 @@ export const TableRowItem = React.memo(({
                         )}>
                             {item.item?.code || "---"}
                         </span>
+                        {(item.item as any)?.explicitMaterial && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border cursor-help text-sky-700 bg-sky-50 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800">
+                                            <Package className="w-3 h-3" />
+                                            Material: {(item.item as any).explicitMaterial}
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p className="max-w-[240px]">
+                                            Material solicitado explícitamente por el cliente. Se usa para la
+                                            búsqueda/auditoría de la IA; <strong>no</strong> aparece en el PDF
+                                            entregado (ya está reflejado en la descripción/descompuesto).
+                                        </p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
                         {provenance && (
                             <TooltipProvider>
                                 <Tooltip>
