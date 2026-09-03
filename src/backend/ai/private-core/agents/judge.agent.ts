@@ -57,11 +57,17 @@ DEBES analizar detalladamente la propiedad "unit" del candidato seleccionado en 
 5. REGLA DE FLEXIBILIDAD (GENÉRICO VS ESPECÍFICO): Si la 'Tarea Original' pide un conjunto genérico (ej. "Aparatos sanitarios", "Mobiliario de cocina", "Instalación de fontanería") y el candidato es un elemento específico de ese conjunto (ej. "Inodoro", "Mueble bajo", "Punto de agua"), DEBES ACEPTARLO como partida representativa y ajustar la 'quantity'. NO LO RECHACES amparándote en que no cubre todo el conjunto.
 6. EXCEPCIÓN DE REQUERIMIENTO EXPLÍCITO: Si la variable isExplicitlyRequested de la tarea es VERDADERA (${task.isExplicitlyRequested}) y no hay buenos candidatos en el RAG, TIENES PROHIBIDO devolver selectedId: null. En su lugar, debes inventar/devolver un selectedId: "GENERIC-EXPLICIT" para forzar al sistema a incluir esta partida a determinar precio, demostrándole al usuario que lo escuchamos.
    - Si no es explícita (${task.isExplicitlyRequested}) y ninguno aplica mínimamente, selectedId debe ser null.
+7. PREFERENCIA DE MATERIAL PEDIDO (PRIORITARIO SOBRE EL ORDEN): Si existe un "Material Específico Pedido por el Cliente" (indicado arriba), tu prioridad #1 es elegir el candidato cuya "description" refleje ESE material.
+   - Si un candidato menciona el material pedido y otro NO, elige el del material pedido AUNQUE aparezca más abajo en la lista o su relevancia parezca menor. El orden de los candidatos es orientativo, no vinculante.
+   - PROHIBIDO seleccionar un candidato de un material DISTINTO (ej. "acrílico" cuando el cliente pidió "resina", "laminado" cuando pidió "roble") si existe cualquier alternativa que sí case con el material pedido. Elegir el material equivocado es un fallo grave.
+8. SANIDAD DE PRECIO (EVITA EL CARO INJUSTIFICADO): Cada candidato incluye su "price". Entre candidatos EQUIVALENTES (mismo material y misma unidad), prefiere el más barato.
+   - Desconfía del candidato con "price" claramente ATÍPICO (muy por encima del resto de candidatos de esta misma partida). NO lo elijas solo porque encabece la lista.
+   - Selecciona el candidato caro ÚNICAMENTE si es el único que casa con el material/técnica pedidos; si hay un equivalente más económico del MISMO material, elige el económico. Una sola línea no debe dispararse de precio si existe alternativa equivalente más barata.
 
 Devuelve SOLO un bloque JSON con este formato exacto:
 \`\`\`json
 {
-  "internal_reasoning": "Justifica en 1 línea por qué seleccionas este candidato, validando que la unidad métrica y la técnica coincidan.",
+  "internal_reasoning": "Justifica en 1 línea por qué seleccionas este candidato, validando que la unidad métrica y la técnica coincidan, que el material case con el pedido (si lo hay) y que su precio no sea un outlier injustificado frente a alternativas equivalentes.",
   "selectedId": "código_del_candidato_elegido_o_null_o_GENERIC-EXPLICIT",
   "quantity": cantidad_matemáticamente_adaptada,
   "note": "Nota explicativa para anexar el material específico (solo si is_variable es true) o null",

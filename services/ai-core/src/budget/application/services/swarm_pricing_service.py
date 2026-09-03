@@ -2,7 +2,10 @@ import logging
 import asyncio
 import json
 import os
+import re
+import statistics
 import time
+import unicodedata
 import uuid
 import inspect
 from typing import Awaitable, Callable, List, Dict, Any, Optional, Literal
@@ -197,6 +200,94 @@ TIER_FLASH_SCORE_THRESHOLD: float = 0.85
 # Modelos LLM. Mantenidos como constantes para evitar typos en strings sueltos.
 MODEL_FLASH: str = "gemini-2.5-flash"
 MODEL_PRO: str = "gemini-2.5-pro"
+
+# -------------------------------------------------------------------------------------------------
+# WS-3 — sesgo del material explícito + sanity de precio en el rerank/selección.
+# -------------------------------------------------------------------------------------------------
+# Cuando el usuario pide un material concreto, `_task_to_restructured`
+# (generate_budget_from_nl_uc.py) inyecta "[MATERIAL EXPLÍCITO: X]" DENTRO de
+# la descripción de la partida. Esa marca sigue presente en `item.description`
+# cuando llega al rerank (se limpia después, al ensamblar el PDF). Reusamos el
+# MISMO patrón que el use case para extraer X aquí. Tolera sin-tilde y espacios.
+_EXPLICIT_MATERIAL_RE = re.compile(
+    r"\[\s*MATERIAL\s+EXPL[IÍ]CITO\s*:\s*([^\]]*)\]", re.IGNORECASE
+)
+# Un candidato cuyo precio supera OUTLIER_FACTOR × la mediana de precios de los
+# candidatos de ESA misma partida se considera "caro atípico" y se relega —
+# salvo que sea justo el que casa con el material pedido.
+_PRICE_OUTLIER_FACTOR: float = 2.0
+# Mínimo de candidatos con precio para que la mediana sea fiable. Con < 3
+# precios la muestra es demasiado pequeña y el outlier-check se desactiva.
+_MIN_PRICED_FOR_OUTLIER: int = 3
+# Palabras que NO cualifican como "token de material" (cualificadores/relleno).
+_MATERIAL_STOPWORDS = frozenset({
+    "para", "con", "sin", "tipo", "alta", "baja", "gran", "modelo",
+    "acabado", "calidad", "color", "serie", "gama", "clase", "nivel",
+})
+
+
+def _fold_accents(text: str) -> str:
+    """minúsculas + sin tildes, para comparar material vs descripción."""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", text or "")
+        if unicodedata.category(c) != "Mn"
+    ).lower()
+
+
+def _extract_explicit_material_term(partida_description: Optional[str]) -> Optional[str]:
+    """Devuelve X de "[MATERIAL EXPLÍCITO: X]" si está presente; si no, None."""
+    if not partida_description:
+        return None
+    m = _EXPLICIT_MATERIAL_RE.search(partida_description)
+    if not m:
+        return None
+    term = (m.group(1) or "").strip()
+    return term or None
+
+
+def _material_matches_description(description: Optional[str], material: str) -> bool:
+    """True si `description` refleja el material pedido.
+
+    Estrategia conservadora para NO proteger por error al candidato equivocado:
+    - match si la FRASE completa del material aparece en la descripción, o
+    - match si el PRIMER token significativo (≥ 4 letras, no stopword) —el
+      sustantivo del material, p.ej. "resina" en "resina antideslizante"—
+      aparece en la descripción. Solo se evalúa ese primer token: así un
+      cualificador compartido (p.ej. "antideslizante") no marca como material
+      a un candidato de otro material.
+    """
+    if not description or not material:
+        return False
+    desc_n = _fold_accents(description)
+    mat_n = _fold_accents(material).strip()
+    if not mat_n:
+        return False
+    if mat_n in desc_n:
+        return True
+    for tok in re.findall(r"[a-z0-9]+", mat_n):
+        if len(tok) >= 4 and tok not in _MATERIAL_STOPWORDS:
+            return tok in desc_n
+    return False
+
+
+def _candidate_price(candidate: Dict[str, Any]) -> Optional[float]:
+    """Precio total del candidato (>0) o None. NUNCA usa el score de relevancia."""
+    for key in ("priceTotal", "price"):
+        val = candidate.get(key)
+        if isinstance(val, (int, float)) and val > 0:
+            return float(val)
+    return None
+
+
+def _candidate_score(candidate: Dict[str, Any]) -> float:
+    """Score de relevancia (matchScore/score) para desempatar rescates."""
+    val = candidate.get("matchScore")
+    if val is None:
+        val = candidate.get("score")
+    try:
+        return float(val or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 # S1-A-07 — concurrencia del swarm de pricing. Configurable vía
 # ``SWARM_CONCURRENCY`` (default 8). El valor previo era 4, que el incidente
@@ -661,7 +752,11 @@ class SwarmPricingService:
         IDs inventados por el LLM se descartan defensivamente.
         """
         if len(candidates) <= 3:
-            return candidates
+            # WS-3 — aun sin rerank, sesgamos hacia el material pedido y
+            # relegamos precios atípicos (no eliminamos: el evaluador los ve).
+            return self._apply_material_and_price_bias(
+                candidates, candidates, partida_description
+            )
 
         # S2-A-00 — kill-switch. Si BGE rerank está desactivado por env,
         # devolvemos los top-3 del hybrid search sin pasar por el LLM ni
@@ -671,7 +766,9 @@ class SwarmPricingService:
                 "[BgeReranker] disabled by ENABLE_BGE_RERANK=false; "
                 "returning top-3 from hybrid search"
             )
-            return candidates[:3]
+            return self._apply_material_and_price_bias(
+                candidates[:3], candidates, partida_description
+            )
 
         # S1-A-03 — cross-encoder local path.
         if self.reranker is not None:
@@ -685,7 +782,11 @@ class SwarmPricingService:
                 # la secuencia ordenada de candidatos. Si vino vacía, fallback.
                 reranked_cands = [c for c, _ in ranked]
                 if reranked_cands:
-                    return reranked_cands
+                    # WS-3 — rescate del material pedido + sanity de precio
+                    # sobre el top-N del cross-encoder (pasando el pool completo).
+                    return self._apply_material_and_price_bias(
+                        reranked_cands, candidates, partida_description
+                    )
             except Exception as e:
                 logger.warning(
                     f"[BgeReranker] rerank crashed ({type(e).__name__}: {e}); "
@@ -733,7 +834,116 @@ class SwarmPricingService:
         # Filtrar IDs inventados (defensivo) y respetar el orden devuelto.
         cand_by_id = {c.get("id"): c for c in candidates if c.get("id")}
         reordered = [cand_by_id[i] for i in res.selected_ids if i in cand_by_id]
-        return reordered if reordered else candidates
+        if not reordered:
+            return candidates
+        # WS-3 — sesgo de material + sanity de precio sobre el orden de Flash.
+        return self._apply_material_and_price_bias(
+            reordered, candidates, partida_description
+        )
+
+    def _apply_material_and_price_bias(
+        self,
+        reranked: List[Dict[str, Any]],
+        all_candidates: List[Dict[str, Any]],
+        partida_description: str,
+        max_output: int = 3,
+    ) -> List[Dict[str, Any]]:
+        """WS-3 — sesga la selección hacia el material pedido y sanea precios.
+
+        Se aplica sobre la lista ya reducida por el reranker (BGE/Flash) o el
+        passthrough, con `all_candidates` = pool completo pre-recorte:
+
+          1. MATERIAL EXPLÍCITO — si la partida trae "[MATERIAL EXPLÍCITO: X]",
+             (a) RESCATA de `all_candidates` el candidato cuya descripción case
+             con X aunque el reranker lo hubiera dejado fuera del top-N, y
+             (b) lo promociona al frente. Este sesgo DOMINA sobre pequeñas
+             diferencias de score vectorial (es un orden lexicográfico: material
+             primero, luego el resto).
+          2. PRECIO ATÍPICO — relega (NO elimina) candidatos cuyo precio supera
+             `_PRICE_OUTLIER_FACTOR` × la mediana de precios de la partida,
+             salvo que sean justo el material pedido. La penalización es SUAVE
+             (reordena): el evaluador LLM sigue viendo todos los candidatos y
+             puede revertir si el caro es realmente el correcto.
+
+        Defensivo: nunca lanza y nunca vacía la lista. Sin material explícito y
+        sin outliers, es un no-op que preserva el orden entrante.
+        """
+        try:
+            if not reranked:
+                return reranked
+
+            material = _extract_explicit_material_term(partida_description)
+
+            # Mediana sobre el POOL completo (más señal que solo el top-N).
+            prices = [
+                p for c in all_candidates
+                if (p := _candidate_price(c)) is not None
+            ]
+            median_price = (
+                statistics.median(prices)
+                if len(prices) >= _MIN_PRICED_FOR_OUTLIER
+                else None
+            )
+            outlier_cutoff = (
+                median_price * _PRICE_OUTLIER_FACTOR
+                if median_price is not None
+                else None
+            )
+
+            def is_material(c: Dict[str, Any]) -> bool:
+                return bool(material) and _material_matches_description(
+                    c.get("description"), material
+                )
+
+            def is_outlier(c: Dict[str, Any]) -> bool:
+                if outlier_cutoff is None:
+                    return False
+                p = _candidate_price(c)
+                return p is not None and p > outlier_cutoff
+
+            working = list(reranked)
+
+            # (1b) Rescate: el material pedido puede haber quedado fuera del
+            # top-N del reranker (score vectorial más bajo). Lo recuperamos.
+            if material:
+                present_ids = {c.get("id") for c in working}
+                rescued = [
+                    c for c in all_candidates
+                    if c.get("id") not in present_ids and is_material(c)
+                ]
+                if rescued:
+                    rescued.sort(key=_candidate_score, reverse=True)
+                    working = [rescued[0]] + working
+                    logger.info(
+                        "[WS-3] rescued explicit-material candidate id=%s "
+                        "(material=%r) into rerank top",
+                        rescued[0].get("id"), material,
+                    )
+
+            # (2) Re-orden estable lexicográfico:
+            #   material pedido primero → no-outliers → orden entrante.
+            base_order = {id(c): i for i, c in enumerate(working)}
+
+            def sort_key(c: Dict[str, Any]):
+                material_rank = 0 if is_material(c) else 1
+                outlier_rank = 1 if (is_outlier(c) and not is_material(c)) else 0
+                return (material_rank, outlier_rank, base_order[id(c)])
+
+            working.sort(key=sort_key)
+
+            # Solo recortamos si el rescate hizo crecer la lista por encima del
+            # tamaño de salida esperado; sin rescate, preservamos la longitud
+            # entrante (no truncamos lo que el reranker ya decidió devolver).
+            allowed = max(max_output, len(reranked))
+            if len(working) > allowed:
+                working = working[:allowed]
+            return working
+        except Exception as e:  # nunca romper el pipeline por el sesgo.
+            logger.warning(
+                "[WS-3] material/price bias skipped (%s: %s)",
+                type(e).__name__, e,
+            )
+            return reranked
 
     async def _find_relevant_fragments(
         self, partida: RestructuredItem
@@ -1289,6 +1499,12 @@ class SwarmPricingService:
                         reranked_cands = [c for c, _ in ranked] if ranked else original_cs[:3]
                         if not reranked_cands:
                             reranked_cands = original_cs[:3]
+                        # WS-3 — el batch path llama al cross-encoder directo
+                        # (sin pasar por _rerank_candidates), así que aplicamos
+                        # aquí el mismo rescate de material + sanity de precio.
+                        reranked_cands = self._apply_material_and_price_bias(
+                            reranked_cands, original_cs, it.description or ""
+                        )
                         self._emit(budget_id, 'rerank_applied', {
                             "code": it.code,
                             "input_size": len(original_cs),
