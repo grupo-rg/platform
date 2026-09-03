@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, RotateCcw, Save } from 'lucide-react';
+import { Info, Loader2, RotateCcw, Save } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,12 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import {
     CalibrationFactors,
@@ -46,6 +52,23 @@ function fmtDate(iso: string | undefined): string {
     if (!iso) return '—';
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/** Cabecera de tabla con tooltip explicativo (para columnas con jerga). */
+function HeadTip({ label, tip }: { label: string; tip: string }) {
+    return (
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 cursor-help">
+                        {label}
+                        <Info className="h-3 w-3 text-muted-foreground/60" />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent><p className="max-w-[260px]">{tip}</p></TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
 }
 
 interface CalibrationPanelProps {
@@ -210,6 +233,25 @@ export function CalibrationPanel({ initialFactors }: CalibrationPanelProps) {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                    {/* Cómo funciona — banner explicativo */}
+                    <div className="flex gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <div className="space-y-1.5 text-muted-foreground">
+                            <p className="font-medium text-foreground">Cómo funciona</p>
+                            <p>
+                                El motor parte del precio de <strong>catálogo</strong> (COAATMCA/BC3) y lo multiplica por este
+                                factor para acercarlo a tu precio real, <strong>a nivel PEM</strong> (antes de GG+BI e IVA):{' '}
+                                <code className="rounded bg-muted px-1 py-0.5 text-xs">PVP = catálogo × calibración × (GG+BI) × IVA</code>.
+                            </p>
+                            <p>
+                                Arranca con una <strong>semilla</strong> (global 1,36) y <strong>aprende solo</strong>: cada
+                                corrección de precio que haces en el editor ajusta el factor <em>aprendido</em> de ese capítulo
+                                (mediana robusta). Por debajo de las <strong>muestras mínimas</strong> se usa tu valor
+                                manual/semilla; al alcanzarlas, el aprendido. Puedes fijar cualquier capítulo con el <strong>candado</strong>.
+                            </p>
+                        </div>
+                    </div>
+
                     {/* Global default */}
                     <div className="rounded-lg border p-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -254,10 +296,10 @@ export function CalibrationPanel({ initialFactors }: CalibrationPanelProps) {
                                 <TableRow>
                                     <TableHead>Capítulo</TableHead>
                                     <TableHead>Factor efectivo (×)</TableHead>
-                                    <TableHead>Origen</TableHead>
-                                    <TableHead>Confianza</TableHead>
-                                    <TableHead>Aprendido / Manual</TableHead>
-                                    <TableHead>Bloqueo</TableHead>
+                                    <TableHead><HeadTip label="Origen" tip="De dónde sale el factor: seed (semilla inicial), manual (lo fijaste tú) o learned (aprendido de tus correcciones)." /></TableHead>
+                                    <TableHead><HeadTip label="Confianza" tip="Cuántas correcciones se han acumulado para este capítulo. Bajo el umbral de muestras mínimas se usa el valor manual/semilla; al alcanzarlo, se aplica el aprendido." /></TableHead>
+                                    <TableHead><HeadTip label="Aprendido / Manual" tip="apr. = factor que la IA aprendió de tus correcciones (mediana). man. = el valor que fijaste tú. El «Factor efectivo» de la izquierda es el que realmente se aplica." /></TableHead>
+                                    <TableHead><HeadTip label="Bloqueo" tip="Si lo activas, siempre se aplica tu valor manual aunque haya suficientes muestras aprendidas (el aprendido se sigue calculando pero no se aplica)." /></TableHead>
                                     <TableHead className="text-right">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>

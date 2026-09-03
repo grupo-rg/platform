@@ -27,6 +27,8 @@ import {
     CalendarDays,
     Activity,
     FileSearch,
+    SlidersHorizontal,
+    BrainCircuit,
 } from 'lucide-react';
 import Image from 'next/image';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -112,6 +114,8 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                 { href: '/dashboard/settings/company', label: 'Empresa', icon: Building2 },
                 { href: '/dashboard/admin/prices', label: t.dashboard.nav.priceBook, icon: Briefcase },
                 { href: '/dashboard/admin/prices?view=catalog', label: 'Catálogo', icon: Package },
+                { href: '/dashboard/settings/budget', label: 'Calibración', icon: SlidersHorizontal },
+                { href: '/dashboard/admin/models', label: 'Registro de modelos', icon: BrainCircuit },
                 { href: '/dashboard/settings', label: t.dashboard.nav.settings, icon: Settings },
             ]
         }
