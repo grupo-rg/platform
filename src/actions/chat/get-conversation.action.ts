@@ -22,6 +22,8 @@ export async function getConversationAction(leadId: string) {
         return {
             success: true,
             conversationId: conversation.id,
+            // Snapshot de requirements persistido (mapa estructural) para sobrevivir a reload.
+            requirements: (conversation.metadata as any)?.requirements || {},
             messages: messages.map(m => ({
                 id: m.id,
                 content: m.content,

@@ -75,6 +75,10 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
                             attachments: (m.attachments || []).map((a: any) => typeof a === 'string' ? a : a.url)
                         })));
                     }
+                    // Rehidratar el mapa estructural persistido (sobrevive a reload).
+                    if ((result as any).requirements) {
+                        setRequirements((result as any).requirements);
+                    }
                 }
             }
         } catch (error) {
@@ -97,14 +101,21 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
             const { getConversationHistoryAction } = await import('@/actions/chat/get-conversation-history.action');
             const result = await getConversationHistoryAction(id);
 
-            if (result.success && result.messages) {
-                setMessages(result.messages.map((m: any) => ({
-                    id: m.id,
-                    role: m.role,
-                    content: m.content,
-                    createdAt: new Date(m.createdAt),
-                    attachments: (m.attachments || []).map((a: any) => typeof a === 'string' ? a : a.url)
-                })));
+            if (result.success) {
+                if (result.messages) {
+                    setMessages(result.messages.map((m: any) => ({
+                        id: m.id,
+                        role: m.role,
+                        content: m.content,
+                        createdAt: new Date(m.createdAt),
+                        attachments: (m.attachments || []).map((a: any) => typeof a === 'string' ? a : a.url)
+                    })));
+                }
+                // Rehidratar el mapa estructural persistido (capítulos/specs/estructura)
+                // para que la conversación se pueda continuar tras un reload.
+                if ((result as any).requirements) {
+                    setRequirements((result as any).requirements);
+                }
             }
         } catch (error) {
             console.error("Error switching conversation:", error);
@@ -321,6 +332,14 @@ export const useBudgetWizard = (isAdmin: boolean = false) => {
                 const { sendMessageAction } = await import('@/actions/chat/send-message.action');
                 await sendMessageAction(conversationId, result.data.response, 'assistant', 'system');
 
+                // Persistir el snapshot de requirements (mapa estructural) para sobrevivir a reload.
+                try {
+                    const { persistConversationRequirementsAction } = await import('@/actions/chat/persist-conversation-requirements.action');
+                    await persistConversationRequirementsAction(conversationId, result.data.updatedRequirements);
+                } catch (e) {
+                    console.warn('[wizard] failed to persist requirements', e);
+                }
+
                 const data = result.data as any;
 
                 if (data.isLimitReached) {
@@ -509,6 +528,14 @@ async function streamAssistantResponse(args: {
         await sendMessageAction(conversationId, finalReply, 'assistant', 'system');
     } catch (e) {
         console.error('[wizard] failed to persist streamed assistant msg', e);
+    }
+
+    // Persistir el snapshot de requirements (mapa estructural) para sobrevivir a reload.
+    try {
+        const { persistConversationRequirementsAction } = await import('@/actions/chat/persist-conversation-requirements.action');
+        await persistConversationRequirementsAction(conversationId, finalRequirements);
+    } catch (e) {
+        console.warn('[wizard] failed to persist streamed requirements', e);
     }
 
     if (finalRequirements?.isReadyForGeneration) {
