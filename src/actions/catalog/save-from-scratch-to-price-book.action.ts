@@ -47,37 +47,40 @@ export async function saveFromScratchToPriceBookAction(input: SaveFromScratchInp
         const unit = partida.unit || 'ud';
         const chapter = chapterInput || partida.original_item?.chapter || partida.chapter || undefined;
 
-        // Precio RAW (PEM sin markup). En phase17-markup-baked el snapshot raw vive
-        // en ai_resolution.calculated_unit_price_raw; si falta, caemos al unitPrice.
-        const rawUnitPrice = Number(
-            partida.ai_resolution?.calculated_unit_price_raw
-            ?? partida.aiResolution?.calculated_unit_price_raw
-            ?? partida.unitPrice
-            ?? 0
-        );
+        // Descompuesto → PriceBookComponent[]. Preferimos `price`/`unitPrice` (que el
+        // editor almacena YA en RAW, sin markup) sobre `rawPrice` (snapshot que no se
+        // actualiza al editar), para que lo guardado refleje las ediciones del sheet.
+        const srcBreakdown: any[] = Array.isArray(partida.breakdown) ? partida.breakdown : [];
+        const compPrice = (b: any) => Number(b.price ?? b.unitPrice ?? b.rawPrice ?? 0);
+        const compQty = (b: any) => Number(b.yield ?? b.quantity ?? 1);
+        const breakdown: PriceBookComponent[] = srcBreakdown.map((b: any) => ({
+            code: b.code || undefined,
+            description: b.concept || b.description || '',
+            unit: b.unit || undefined,
+            quantity: compQty(b),
+            price: compPrice(b),
+            is_variable: b.is_variable ?? (b.type === 'MATERIAL'),
+        } as PriceBookComponent));
+
+        // Precio unitario RAW = suma del descompuesto (refleja ediciones); si no hay
+        // descompuesto, caemos al snapshot del pricer o al unitPrice.
+        const bdSum = srcBreakdown.reduce((acc: number, b: any) => acc + compPrice(b) * compQty(b), 0);
+        const rawUnitPrice = bdSum > 0
+            ? Math.round(bdSum * 100) / 100
+            : Number(
+                partida.ai_resolution?.calculated_unit_price_raw
+                ?? partida.aiResolution?.calculated_unit_price_raw
+                ?? partida.unitPrice
+                ?? 0
+            );
         if (!rawUnitPrice || rawUnitPrice <= 0) {
             return { success: false, error: 'La partida no tiene un precio válido para guardar' };
         }
 
-        // Descompuesto → PriceBookComponent[], usando precios RAW por componente.
-        const srcBreakdown: any[] = Array.isArray(partida.breakdown) ? partida.breakdown : [];
-        const breakdown: PriceBookComponent[] = srcBreakdown.map((b: any) => {
-            const price = Number(b.rawPrice ?? b.price ?? b.unitPrice ?? 0);
-            const quantity = Number(b.yield ?? b.quantity ?? 1);
-            return {
-                code: b.code || undefined,
-                description: b.concept || b.description || '',
-                unit: b.unit || undefined,
-                quantity,
-                price,
-                is_variable: b.is_variable ?? (b.type === 'MATERIAL'),
-            } as PriceBookComponent;
-        });
-
         // Subtotales por tipo (raw) para priceLabor/priceMaterial.
         const sumByType = (type: string) => srcBreakdown
             .filter((b: any) => b.type === type)
-            .reduce((acc: number, b: any) => acc + Number(b.rawTotal ?? b.total ?? 0), 0);
+            .reduce((acc: number, b: any) => acc + compPrice(b) * compQty(b), 0);
         const priceLabor = Math.round(sumByType('LABOR') * 100) / 100 || undefined;
         const priceMaterial = Math.round(sumByType('MATERIAL') * 100) / 100 || undefined;
 

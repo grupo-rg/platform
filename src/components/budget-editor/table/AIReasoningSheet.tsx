@@ -20,7 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import {
     Sparkles, AlertTriangle, ListTree, FileText,
     TrendingUp, ChevronDown, ChevronUp, Bot, Send, Package, PlusCircle, Settings2, Trash2,
-    ChevronRight, Loader2, Wrench, Check, X, ArrowRight, Equal, Scale,
+    ChevronRight, Loader2, Wrench, Check, X, ArrowRight, Equal, Scale, BookMarked,
 } from "lucide-react";
 import { ComponentSubBreakdown } from './ComponentSubBreakdown';
 import { EditableBudgetLineItem } from "@/types/budget-editor";
@@ -33,6 +33,7 @@ import { computeRepairedBreakdown, buildRepairPatch } from '@/lib/budget/repair-
 import { getWinnerCatalogCode, hasZeroPricedComponent } from '@/lib/budget/reconciliation';
 import { EditableCell } from '../EditableCell';
 import { editBreakdownWithNlAction } from '@/actions/budget/edit-breakdown-nl.action';
+import { useBudgetEditorContext } from '../BudgetEditorContext';
 
 // ---------------------------------------------------------------------------
 // WS-C / WS-D helpers (module scope — puros, sin closures del componente).
@@ -107,6 +108,13 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
     const [selectedVariableIndex, setSelectedVariableIndex] = useState<number | null>(null);
     const [isAddingNewBreakdown, setIsAddingNewBreakdown] = useState<boolean>(false);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
+    // Contexto del editor (budgetId/leadId) para guardar en el libro de precios.
+    const { budgetId, leadId } = useBudgetEditorContext();
+    const matchKind = item?.item?.match_kind;
+    const isFromScratch = matchKind === 'from_scratch';
+    const [savingToBook, setSavingToBook] = useState(false);
+    const [savedToBook, setSavedToBook] = useState(false);
 
     // Phase 17.4 — factor de display version-aware. Phase17 con live-edit GG/BI:
     // los componentes baked se ajustan visualmente. Phase15 legacy: factor = currentFactor
@@ -313,12 +321,24 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
 
     const handleRemoveBreakdownRow = (idx: number) => {
         if (!item || !item.item) return;
-        
+
+        // Validación: una partida debe conservar al menos un componente.
+        if (activeBreakdown.length <= 1) {
+            sileo.error({ title: 'No se puede eliminar', description: 'La partida debe conservar al menos un componente del descompuesto.' });
+            return;
+        }
+        // Validación: confirmar (acción destructiva; recalcula el precio).
+        const comp = activeBreakdown[idx];
+        const label = String(comp?.concept ?? comp?.description ?? 'este componente').slice(0, 60);
+        if (!window.confirm(`¿Eliminar "${label}" del descompuesto?\n\nEl precio de la partida se recalculará con los componentes restantes.`)) {
+            return;
+        }
+
         const newBreakdown = [...activeBreakdown];
         newBreakdown.splice(idx, 1);
-        
+
         const newUnitPrice = newBreakdown.reduce((acc: number, c: any) => acc + calculateCompTotal(c), 0);
-        
+
         onUpdate(item.id, {
             item: {
                 ...item.item,
@@ -327,6 +347,65 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
             },
             isDirty: true
         });
+        sileo.success({ title: 'Componente eliminado', description: `Nuevo precio de la partida: ${formatCurrency(newUnitPrice * safeFactor)}` });
+    };
+
+    // Guardar esta partida from_scratch en el libro de precios del constructor.
+    // Gate de calidad (WS-4): sin componentes a 0 €, con precio > 0, y from_scratch.
+    // Guarda el estado ACTUAL (con las ediciones del sheet), no la composición original.
+    const handleSaveToPriceBook = async () => {
+        if (!item?.item || !budgetId || savingToBook || savedToBook) return;
+        const bd: any[] = Array.isArray(item.item.breakdown) ? item.item.breakdown : [];
+        if (bd.length === 0) {
+            sileo.error({ title: 'No se puede guardar', description: 'La partida no tiene descompuesto que guardar.' });
+            return;
+        }
+        // Validación: ningún componente a 0 € (excepto medios auxiliares '%').
+        const zero = bd.find((b: any) => {
+            const isPct = String(b.code || '').trim() === '%';
+            const t = typeof b.total === 'number' && b.total > 0
+                ? b.total
+                : Number(b.price ?? b.unitPrice ?? 0) * Number(b.yield ?? b.quantity ?? 1);
+            return !isPct && !(t > 0);
+        });
+        if (zero) {
+            sileo.error({
+                title: 'Revisa el descompuesto antes de guardar',
+                description: `Hay componentes a 0 € (p.ej. "${String(zero.concept ?? zero.description ?? '').slice(0, 40)}"). Corrígelos o elimínalos para guardar una partida de calidad en tu libro.`,
+            });
+            return;
+        }
+        if (!(Number(item.item.unitPrice ?? 0) > 0)) {
+            sileo.error({ title: 'Precio inválido', description: 'La partida no tiene un precio válido.' });
+            return;
+        }
+
+        setSavingToBook(true);
+        sileo.show({
+            title: 'Guardando en tu libro de precios…',
+            description: 'Indexando la partida para reutilizarla.',
+            icon: <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />,
+        });
+        try {
+            const { saveFromScratchToPriceBookAction } = await import('@/actions/catalog/save-from-scratch-to-price-book.action');
+            const res = await saveFromScratchToPriceBookAction({
+                budgetId,
+                partida: item.item,
+                originalTask: item.originalTask,
+                chapter: item.chapter,
+                userId: leadId || undefined,
+            });
+            if (res.success) {
+                setSavedToBook(true);
+                sileo.success({ title: 'Guardada en tu libro de precios', description: `Etiquetada como IA · ${res.code}` });
+            } else {
+                sileo.error({ title: 'No se pudo guardar', description: res.error || 'Inténtalo de nuevo.' });
+            }
+        } catch (e: any) {
+            sileo.error({ title: 'Error al guardar', description: e?.message || 'Inténtalo de nuevo.' });
+        } finally {
+            setSavingToBook(false);
+        }
     };
 
     const handleSelectMaterialSearchDropdown = (sidebarResult: Partial<EditableBudgetLineItem>) => {
@@ -911,10 +990,35 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
                                     })}
                                 </div>
                                 <div className="p-3 bg-slate-50 dark:bg-black/40 border-t border-slate-100 dark:border-white/5 flex flex-col gap-2">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
                                         <Button onClick={handleAddBreakdownRowClick} variant="outline" size="sm" className="h-8 uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 hover:border-emerald-500 border-dashed text-xs shadow-sm w-full md:w-auto">
                                             <PlusCircle className="w-4 h-4 mr-2" /> Buscar Partidas y Materiales
                                         </Button>
+                                        {/* Guardar en el libro de precios → SOLO from_scratch. Guarda el estado
+                                            ACTUAL (con las ediciones) etiquetado como IA; valida que no queden
+                                            componentes a 0 € antes de indexarlo en el RAG. */}
+                                        {isFromScratch && (
+                                            <Button
+                                                onClick={handleSaveToPriceBook}
+                                                disabled={savingToBook || savedToBook}
+                                                variant="outline"
+                                                size="sm"
+                                                title={savedToBook
+                                                    ? 'Ya guardada en tu libro de precios'
+                                                    : 'Guardar esta partida (con tus ediciones) en tu libro de precios, etiquetada como IA, para reutilizarla'}
+                                                className={cn(
+                                                    'h-8 uppercase tracking-wider font-bold text-xs shadow-sm w-full md:w-auto',
+                                                    savedToBook
+                                                        ? 'text-emerald-700 bg-emerald-50 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800 disabled:opacity-100'
+                                                        : 'text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800/70 dark:hover:bg-emerald-900/20'
+                                                )}
+                                            >
+                                                {savingToBook
+                                                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                    : savedToBook ? <Check className="w-4 h-4 mr-2" /> : <BookMarked className="w-4 h-4 mr-2" />}
+                                                {savedToBook ? 'En tu libro' : 'Guardar en mi libro'}
+                                            </Button>
+                                        )}
                                     </div>
                                     <span className="text-[10px] text-slate-500 flex items-start gap-1.5 leading-relaxed bg-white/50 dark:bg-black/20 p-2 rounded border border-slate-100 dark:border-white/5">
                                         <Settings2 className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5"/> 
