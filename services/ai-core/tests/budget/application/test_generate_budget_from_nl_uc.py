@@ -133,7 +133,9 @@ def test_execute_happy_path_builds_budget_with_chapters_and_totals():
     assert budget.id == "bid-1"
     assert budget.leadId == "lead-1"
     assert budget.costBreakdown.materialExecutionPrice == pytest.approx(3000.0)
-    assert budget.totalEstimated == pytest.approx(4319.7, abs=0.01)
+    # PEM 3000 → +GG 10% +BI 15% (=25% markup) = PEC 3750 → ×1.21 IVA = 4537.5.
+    # (Los factores viven en markup_distributor.DEFAULT_GG_PCT/DEFAULT_BI_PCT.)
+    assert budget.totalEstimated == pytest.approx(4537.5, abs=0.01)
     chapter_names = {c.name for c in budget.chapters}
     assert "DEMOLICIONES" in chapter_names
     assert "FONTANERIA Y GAS" in chapter_names
