@@ -34,8 +34,7 @@ import { getCompanyConfigAction } from '@/actions/platform/company-config.action
 import type { CompanyConfig } from '@/backend/platform/domain/company-config';
 import { DEFAULT_COMPANY_CONFIG } from '@/backend/platform/domain/company-config';
 import { BudgetEditorProvider } from './BudgetEditorContext';
-import { cn } from '@/lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
+import { cn, formatMoneyEUR } from '@/lib/utils';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 
 interface BudgetEditorWrapperProps {
@@ -98,7 +97,10 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
     const [isGhostMode, setIsGhostMode] = React.useState(false);
     const [localPdfCount, setLocalPdfCount] = React.useState((budget as any).demoPdfsDownloaded || 0);
     const [isMobileSummaryOpen, setIsMobileSummaryOpen] = React.useState(false);
-    const [isDesktopSummaryOpen, setIsDesktopSummaryOpen] = React.useState(true); // Toggle for economic summary
+    // WS-A — el Resumen Económico ya NO es una columna fija. Por defecto colapsado
+    // (la tabla ocupa el ancho completo); se abre como Sheet lateral en desktop
+    // desde la mini-barra del Total. `false` = colapsado.
+    const [isDesktopSummaryOpen, setIsDesktopSummaryOpen] = React.useState(false);
     const [isAddPartidaOpen, setIsAddPartidaOpen] = React.useState(false);
 
     // PDF Config State
@@ -560,12 +562,29 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                         </div>
                     </div>
 
-                    <div className="flex flex-col lg:flex-row items-start gap-8">
-                        {/* LEFT COLUMN: Main Content Area (Tabs) */}
-                        <motion.div 
-                            layout
-                            className="min-w-0 flex-1 transition-all duration-300"
+                    {/* WS-A — Mini-barra del Total (siempre visible en desktop). La tabla
+                        pasa a ancho completo; el Resumen Económico deja de ser una columna
+                        fija y se abre bajo demanda como Sheet lateral desde aquí. */}
+                    <div className="hidden lg:flex items-center justify-between gap-4 mb-4 sticky top-0 z-30 rounded-xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-zinc-950/90 backdrop-blur px-4 py-2.5 shadow-sm">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                            <span className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-zinc-400">Total</span>
+                            <span className="font-mono font-bold text-lg text-primary dark:text-amber-400 truncate">
+                                {formatMoneyEUR(state.costBreakdown.total)}
+                            </span>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 gap-1.5 h-9"
+                            onClick={() => setIsDesktopSummaryOpen(true)}
                         >
+                            <FileText className="w-4 h-4" />
+                            Resumen
+                        </Button>
+                    </div>
+
+                    {/* Main Content Area (Tabs) — ancho completo */}
+                    <div className="w-full min-w-0">
                             <Tabs defaultValue="editor" className="space-y-6">
                                 {(isAdmin || traceData) && (
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 -mb-2 md:pb-0 md:mb-0">
@@ -617,15 +636,6 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                                             </Dialog>
                                         )}
                                         <BudgetHealthWidget items={state.items} variant="compact" />
-                                        <Button 
-                                            variant="outline" 
-                                            size="sm" 
-                                            className="hidden lg:flex gap-1.5 h-9" 
-                                            onClick={() => setIsDesktopSummaryOpen(!isDesktopSummaryOpen)}
-                                        >
-                                            <FileText className="w-4 h-4" />
-                                            {isDesktopSummaryOpen ? 'Ocultar Resumen' : 'Mostrar Resumen'}
-                                        </Button>
                                     </div>
                                 </div>
                                 )}
@@ -676,53 +686,41 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                                     <RenovationGallery budgetId={budget.id} renders={budget.renders} />
                                 </TabsContent>
                             </Tabs>
-                        </motion.div>
-
-                        {/* RIGHT COLUMN: Summary - DESKTOP ONLY */}
-                        <AnimatePresence>
-                        {isDesktopSummaryOpen && (
-                        <motion.div 
-                            layout
-                            initial={{ opacity: 0, x: 20, width: 0 }}
-                            animate={{ opacity: 1, x: 0, width: 350 }}
-                            exit={{ opacity: 0, x: 20, width: 0 }}
-                            transition={{ duration: 0.3, ease: 'easeInOut' }}
-                            className="hidden lg:block sticky top-6 space-y-6"
-                        >
-                            <div className="w-[350px] border border-slate-200 dark:border-white/10 rounded-xl bg-white dark:bg-white/5 overflow-hidden shadow-sm">
-                                <div className="p-4 border-b border-slate-100 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 flex items-center justify-between">
-                                    <h3 className="font-bold text-slate-800 dark:text-white">Resumen Económico</h3>
-                                </div>
-                                <div className="p-4 flex-1 flex flex-col">
-                                    <BudgetEconomicSummary
-                                        costBreakdown={state.costBreakdown}
-                                        budgetConfig={state.config}
-                                        calibrationVersion={state.calibrationVersion}
-                                        bakedConfig={state.bakedConfig}
-                                        onUpdateConfig={updateConfig}
-                                        applyMarkup={applyMarkup}
-                                        isReadOnly={isDemoLocked}
-                                        items={state.items}
-                                        chapters={state.chapters}
-                                        clientName={budget.clientSnapshot?.name || 'Cliente'}
-                                        budgetNumber={budgetNumber}
-                                        executionMode={state.executionMode}
-                                        onPdfDownloaded={handlePdfDownloaded}
-                                        initialPdfMeta={pdfMeta}
-                                        onSavePdfSettings={handleSavePdfSettings}
-                                        renders={budget.renders}
-                                        company={companyConfig}
-                                        budgetId={budget.id}
-                                        budgetStatus={budget.status}
-                                        clientEmail={budget.clientSnapshot?.email}
-                                        clientAddress={budget.clientSnapshot?.address}
-                                    />
-                                </div>
-                            </div>
-                        </motion.div>
-                        )}
-                        </AnimatePresence>
                     </div>
+
+                    {/* WS-A — Resumen Económico como Sheet lateral en desktop (antes era
+                        una columna fija de ~350px que estrechaba la tabla). Se abre desde
+                        la mini-barra del Total. En móvil se sigue usando el Sheet de arriba. */}
+                    <Sheet open={isDesktopSummaryOpen} onOpenChange={setIsDesktopSummaryOpen}>
+                        <SheetContent side="right" className="w-full sm:w-[440px] sm:max-w-none overflow-y-auto p-4">
+                            <SheetTitle className="sr-only">Resumen Económico</SheetTitle>
+                            <div className="mt-6">
+                                <BudgetEconomicSummary
+                                    costBreakdown={state.costBreakdown}
+                                    budgetConfig={state.config}
+                                    calibrationVersion={state.calibrationVersion}
+                                    bakedConfig={state.bakedConfig}
+                                    onUpdateConfig={updateConfig}
+                                    applyMarkup={applyMarkup}
+                                    isReadOnly={isDemoLocked}
+                                    items={state.items}
+                                    chapters={state.chapters}
+                                    clientName={budget.clientSnapshot?.name || 'Cliente'}
+                                    budgetNumber={budgetNumber}
+                                    executionMode={state.executionMode}
+                                    onPdfDownloaded={handlePdfDownloaded}
+                                    initialPdfMeta={pdfMeta}
+                                    onSavePdfSettings={handleSavePdfSettings}
+                                    renders={budget.renders}
+                                    company={companyConfig}
+                                    budgetId={budget.id}
+                                    budgetStatus={budget.status}
+                                    clientEmail={budget.clientSnapshot?.email}
+                                    clientAddress={budget.clientSnapshot?.address}
+                                />
+                            </div>
+                        </SheetContent>
+                    </Sheet>
                 </div>
             </main>
         </div>
