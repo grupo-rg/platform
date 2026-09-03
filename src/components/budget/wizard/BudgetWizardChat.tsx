@@ -1548,7 +1548,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                     className="flex w-full min-w-0 max-w-3xl mx-auto justify-start items-start gap-2 mt-2"
                                 >
                                     {/* Avatar del bot, igual patrón que ChatBubble */}
-                                    <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center border shadow-sm bg-primary/15 dark:bg-primary/20 border-primary/30 text-primary">
+                                    <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center border shadow-sm bg-primary border-primary/40 text-primary-foreground">
                                         <Bot className="w-4 h-4" />
                                     </div>
                                     <BudgetGenerationProgress
@@ -1977,7 +1977,7 @@ function ChatBubble({ message, isGenerating }: { message: Message, isGenerating?
                         "shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center border shadow-sm",
                         isSystem
                             ? "bg-slate-200 dark:bg-slate-700/40 border-slate-300/60 dark:border-white/10 text-slate-600 dark:text-slate-300"
-                            : "bg-primary/15 dark:bg-primary/20 border-primary/30 text-primary"
+                            : "bg-primary border-primary/40 text-primary-foreground"
                     )}
                     title={agentLabel}
                 >
@@ -2076,7 +2076,7 @@ function ChatBubble({ message, isGenerating }: { message: Message, isGenerating?
                     {message.extractedInfo && message.extractedInfo.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-black/5 dark:border-white/5">
                             {message.extractedInfo.map((info, idx) => (
-                                <div key={idx} className="flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide border border-primary/20 shadow-sm backdrop-blur-md">
+                                <div key={idx} className="flex items-center gap-1.5 bg-primary/10 text-amber-700 dark:text-primary px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide border border-primary/20 shadow-sm backdrop-blur-md">
                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                     {info}
                                 </div>
@@ -2096,7 +2096,7 @@ function ChatBubble({ message, isGenerating }: { message: Message, isGenerating?
                                 "px-1.5 py-0.5 rounded-md font-semibold uppercase tracking-widest text-[9px] border",
                                 isSystem
                                     ? "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
-                                    : "bg-primary/10 text-primary border-primary/20"
+                                    : "bg-primary/10 text-amber-700 dark:text-primary border-primary/20"
                             )}
                         >
                             {agentLabel}
