@@ -17,6 +17,15 @@ export const PriceBookItemSchema = z.object({
     searchKeywords: z.array(z.string()).optional(),
     createdAt: z.date().optional(),
     updatedAt: z.date().optional(),
+    // Procedencia / etiquetado. El catálogo COAATMCA no marca `source` (ausente =
+    // catálogo oficial). Las partidas guardadas por el constructor desde el editor
+    // se etiquetan `ai_generated` para distinguirlas y auditarlas, conservando la
+    // traza al presupuesto/partida de origen.
+    source: z.enum(['ai_generated', 'coaatmca', 'manual']).optional(),
+    matchKind: z.enum(['1:1', '1:N', 'from_scratch']).optional(),
+    originBudgetId: z.string().optional(),
+    originPartidaCode: z.string().optional(),
+    savedByUserId: z.string().optional(),
 });
 
 /**

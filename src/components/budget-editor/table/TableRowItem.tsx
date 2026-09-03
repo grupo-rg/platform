@@ -32,7 +32,9 @@ import {
     AlertTriangle,
     Loader2,
     Percent,
-    Wand2
+    Wand2,
+    BookMarked,
+    Check
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -181,7 +183,7 @@ export const TableRowItem = React.memo(({
     // no añadir ruido. El dato ya viaja en item.item.match_kind desde el backend.
     const matchKind = item.item?.match_kind;
     const provenance = matchKind === 'from_scratch'
-        ? { label: 'Compuesta', tip: 'Partida compuesta desde cero (mano de obra + materiales + medios auxiliares). Revisa rendimientos y precios.', cls: 'text-violet-700 bg-violet-50 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' }
+        ? { label: 'IA · desde cero', tip: 'Partida generada íntegramente por IA (from scratch): no existe en el catálogo, se compuso desde cero (mano de obra + materiales + medios auxiliares). Revisa rendimientos y precios; puedes guardarla en tu libro de precios para reutilizarla.', cls: 'text-violet-700 bg-violet-50 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' }
         : matchKind === '1:N'
             ? { label: 'Combinada', tip: 'Combinada a partir de varias partidas del catálogo.', cls: 'text-sky-700 bg-sky-50 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800' }
             : null;
@@ -197,6 +199,9 @@ export const TableRowItem = React.memo(({
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
     const [isIclModalOpen, setIsIclModalOpen] = useState(false);
     const [measOpen, setMeasOpen] = useState(false);
+    // Guardado de partida from_scratch en el libro de precios del constructor.
+    const [savingToBook, setSavingToBook] = useState(false);
+    const [savedToBook, setSavedToBook] = useState(false);
     const measurements = item.item?.measurements;
     const hasMeasurements = (measurements?.length ?? 0) > 0;
     const allCandidates = (item.item?.candidates || item.item?.alternativeCandidates || []);
@@ -249,6 +254,39 @@ export const TableRowItem = React.memo(({
     };
 
     const unitPriceAllInToRaw = (val: string | number) => Number(val) / (markupFactor || 1);
+
+    // Guarda esta partida (from_scratch) en el libro de precios del constructor,
+    // etiquetada como generada por IA. Entra en el RAG para reutilizarse en futuros
+    // presupuestos. Idempotente (doc-id determinista en el backend).
+    const handleSaveToPriceBook = async () => {
+        if (!budgetId || savingToBook || isReadOnly) return;
+        setSavingToBook(true);
+        sileo.show({
+            title: "Guardando en tu libro de precios...",
+            description: "Indexando la partida para reutilizarla.",
+            icon: <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />,
+        });
+        try {
+            const { saveFromScratchToPriceBookAction } = await import('@/actions/catalog/save-from-scratch-to-price-book.action');
+            const res = await saveFromScratchToPriceBookAction({
+                budgetId,
+                partida: item.item,
+                originalTask: item.originalTask,
+                chapter: item.chapter,
+                userId: leadId || undefined,
+            });
+            if (res.success) {
+                setSavedToBook(true);
+                sileo.success({ title: "Guardada en tu libro de precios", description: `Etiquetada como IA · ${res.code}` });
+            } else {
+                sileo.error({ title: "No se pudo guardar", description: res.error || "Inténtalo de nuevo." });
+            }
+        } catch (e: any) {
+            sileo.error({ title: "Error al guardar", description: e?.message || "Inténtalo de nuevo." });
+        } finally {
+            setSavingToBook(false);
+        }
+    };
 
     const handleGenerateBreakdown = (forceShowCandidates: boolean = false) => {
         if (!item.originalTask) return;
@@ -510,6 +548,32 @@ export const TableRowItem = React.memo(({
                             >
                                 <Search className="w-3 h-3" />
                                 Buscar similares
+                            </Button>
+                        )}
+
+                        {/* Guardar en libro de precios → SOLO partidas from_scratch (generadas
+                            íntegramente por IA). Se guarda etiquetada como IA y entra en el RAG
+                            para reutilizarse en futuros presupuestos (histórico del constructor). */}
+                        {matchKind === 'from_scratch' && !isReadOnly && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleSaveToPriceBook}
+                                disabled={savingToBook || savedToBook}
+                                title={savedToBook
+                                    ? "Ya guardada en tu libro de precios"
+                                    : "Guardar esta partida generada por IA en tu libro de precios para reutilizarla en futuros presupuestos"}
+                                className={cn(
+                                    "h-6 px-2 text-[10px] font-semibold rounded-md flex items-center gap-1 shadow-sm transition-colors border",
+                                    savedToBook
+                                        ? "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800 disabled:opacity-100 cursor-default"
+                                        : "text-emerald-700 bg-emerald-50/60 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800/60"
+                                )}
+                            >
+                                {savingToBook
+                                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                                    : savedToBook ? <Check className="w-3 h-3" /> : <BookMarked className="w-3 h-3" />}
+                                {savedToBook ? "En tu libro" : "Guardar en mi libro"}
                             </Button>
                         )}
 

@@ -764,6 +764,9 @@ export const BudgetEditorWrapper = ({ budget, isAdmin = false, traceData, initia
                     unitPrice: item.unitPrice,
                     totalPrice: item.totalPrice,
                     code: item.code || item.sku,
+                    // Procedencia (1:1 / 1:N / from_scratch). Sin esto el chip de
+                    // procedencia y el guardado en libro de precios no funcionan.
+                    match_kind: item.match_kind,
                     aiResolution: item.ai_resolution || item.aiResolution,
                     alternativeCandidates: item.alternativeCandidates || item.alternatives || [],
                     needsHumanReview: item.ai_resolution?.needs_human_review || item.needsHumanReview || false,
