@@ -1,0 +1,983 @@
+{
+  "_meta": {
+    "source_book": "GENERADOR_PRECIOS_2025",
+    "collection_target": "machinery_rates_2025",
+    "rate_meaning": "Coste horario de maquinaria (€/h), sin operario. El maquinista se valora aparte contra labor_rates_2025.",
+    "_review_status": "DERIVED_FROM_PRICE_BOOK",
+    "_source_file": "docs/2025_variable_final.json (componentes mq* con unit='h')",
+    "_notes": [
+      "Extraído automáticamente de los breakdowns del libro de precios: componentes cuyo código empieza por 'mq' y unidad 'h'.",
+      "El precio es el coste horario del componente mq (price_unit), que NO incluye operario.",
+      "El owner puede editar cualquier tarifa en Firestore/UI cuando desee.",
+      "Se omitieron los mq con unidad u/t/m (no encajan en €/h × horas)."
+    ],
+    "count": 69
+  },
+  "machinery_rates": [
+    {
+      "id": "mq04dua020b",
+      "category": "transporte",
+      "label_es": "Dumper de descarga frontal de 2 t de carga útil.",
+      "rate_eur_hour": 17.99,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "dumper",
+        "dumper descarga"
+      ]
+    },
+    {
+      "id": "mq05mai030",
+      "category": "demolicion",
+      "label_es": "Martillo neumático.",
+      "rate_eur_hour": 4.7,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "martillo",
+        "martillo neumatico"
+      ]
+    },
+    {
+      "id": "mq01exn020a",
+      "category": "excavacion",
+      "label_es": "Retroexcavadora hidráulica sobre neumáticos, de 105 kW.",
+      "rate_eur_hour": 55.77,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "retroexcavadora",
+        "retroexcavadora hidraulica"
+      ]
+    },
+    {
+      "id": "mq08sol020",
+      "category": "soldadura",
+      "label_es": "Equipo y elementos auxiliares para soldadura eléctrica.",
+      "rate_eur_hour": 4.93,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "equipo",
+        "equipo elementos"
+      ]
+    },
+    {
+      "id": "mq05pdm110",
+      "category": "auxiliar",
+      "label_es": "Compresor portátil diesel media presión 10 m³/min.",
+      "rate_eur_hour": 7.97,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "compresor",
+        "compresor portatil"
+      ]
+    },
+    {
+      "id": "mq07gte010c",
+      "category": "elevacion",
+      "label_es": "Grúa autopropulsada de brazo telescópico con una capacidad de elevación de 30 t y 27 m de altura máx",
+      "rate_eur_hour": 74.22,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "grua",
+        "grua autopropulsada"
+      ]
+    },
+    {
+      "id": "mq08sol010",
+      "category": "corte_perforacion",
+      "label_es": "Equipo de oxicorte, con acetileno como combustible y oxígeno como comburente.",
+      "rate_eur_hour": 8.48,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "equipo",
+        "equipo oxicorte"
+      ]
+    },
+    {
+      "id": "mq06vib020",
+      "category": "compactacion",
+      "label_es": "Regla vibrante de 3 m.",
+      "rate_eur_hour": 5.35,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "regla",
+        "regla vibrante"
+      ]
+    },
+    {
+      "id": "mq02cia020j",
+      "category": "transporte",
+      "label_es": "Camión cisterna de 8 m³ de capacidad.",
+      "rate_eur_hour": 61.68,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion cisterna"
+      ]
+    },
+    {
+      "id": "mq05per010",
+      "category": "corte_perforacion",
+      "label_es": "Perforadora con corona diamantada y soporte, por vía húmeda.",
+      "rate_eur_hour": 25.64,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "perforadora",
+        "perforadora corona"
+      ]
+    },
+    {
+      "id": "mq06cor020",
+      "category": "corte_perforacion",
+      "label_es": "Equipo para corte de juntas en soleras de hormigón.",
+      "rate_eur_hour": 10.49,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "equipo",
+        "equipo corte"
+      ]
+    },
+    {
+      "id": "mq01pan010a",
+      "category": "excavacion",
+      "label_es": "Pala cargadora sobre neumáticos de 120 kW/1,9 m³.",
+      "rate_eur_hour": 55.77,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "pala",
+        "pala cargadora"
+      ]
+    },
+    {
+      "id": "mq04cag010b",
+      "category": "transporte",
+      "label_es": "Camión con grúa de hasta 10 t.",
+      "rate_eur_hour": 61.68,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion grua"
+      ]
+    },
+    {
+      "id": "mq01ret020b",
+      "category": "excavacion",
+      "label_es": "Retrocargadora sobre neumáticos, de 70 kW.",
+      "rate_eur_hour": 55.77,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "retrocargadora",
+        "retrocargadora neumaticos"
+      ]
+    },
+    {
+      "id": "mq02rod010d",
+      "category": "compactacion",
+      "label_es": "Bandeja vibrante de guiado manual, de 300 kg, anchura de trabajo 70 cm, reversible.",
+      "rate_eur_hour": 10.23,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "bandeja",
+        "bandeja vibrante"
+      ]
+    },
+    {
+      "id": "mq05pdm010a",
+      "category": "auxiliar",
+      "label_es": "Compresor portátil eléctrico 2 m³/min de caudal.",
+      "rate_eur_hour": 4.39,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "compresor",
+        "compresor portatil"
+      ]
+    },
+    {
+      "id": "mq04cag010a",
+      "category": "transporte",
+      "label_es": "Camión con grúa de hasta 6 t.",
+      "rate_eur_hour": 56.54,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion grua"
+      ]
+    },
+    {
+      "id": "mq08war160",
+      "category": "compactacion",
+      "label_es": "Lijadora de aplicación en pavimentos de madera, equipada con rodillos para lija y sistema de aspirac",
+      "rate_eur_hour": 4.63,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "lijadora",
+        "lijadora aplicacion"
+      ]
+    },
+    {
+      "id": "mq01exn050c",
+      "category": "excavacion",
+      "label_es": "Retroexcavadora sobre neumáticos, de 85 kW, con martillo rompedor.",
+      "rate_eur_hour": 74.84,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "retroexcavadora",
+        "retroexcavadora neumaticos"
+      ]
+    },
+    {
+      "id": "mq06bhe010",
+      "category": "transporte",
+      "label_es": "Camión bomba estacionado en obra, para bombeo de hormigón. Incluso p/p de desplazamiento.",
+      "rate_eur_hour": 174.48,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion bomba"
+      ]
+    },
+    {
+      "id": "mq11ext030",
+      "category": "hormigonado",
+      "label_es": "Extendedora asfáltica de cadenas, de 81 kW.",
+      "rate_eur_hour": 92.52,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "extendedora",
+        "extendedora asfaltica"
+      ]
+    },
+    {
+      "id": "mq11com010",
+      "category": "compactacion",
+      "label_es": "Compactador de neumáticos autopropulsado, de 12/22 t.",
+      "rate_eur_hour": 66.82,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "compactador",
+        "compactador neumaticos"
+      ]
+    },
+    {
+      "id": "mq06hor010",
+      "category": "hormigonado",
+      "label_es": "Hormigonera.",
+      "rate_eur_hour": 2.11,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "hormigonera"
+      ]
+    },
+    {
+      "id": "mq02rov010i",
+      "category": "compactacion",
+      "label_es": "Compactador monocilíndrico vibrante autopropulsado, de 129 kW, de 16,2 t, anchura de trabajo 213,4 c",
+      "rate_eur_hour": 63.94,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "compactador",
+        "compactador monocilindrico"
+      ]
+    },
+    {
+      "id": "mq09sie010",
+      "category": "corte_perforacion",
+      "label_es": "Motosierra a gasolina, de 50 cm de espada y 2 kW de potencia.",
+      "rate_eur_hour": 4.37,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "motosierra",
+        "motosierra gasolina"
+      ]
+    },
+    {
+      "id": "mq08lch040",
+      "category": "maquinaria",
+      "label_es": "Hidrolimpiadora a presión.",
+      "rate_eur_hour": 5.65,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "hidrolimpiadora",
+        "hidrolimpiadora presion"
+      ]
+    },
+    {
+      "id": "mq01mot010b",
+      "category": "maquinaria",
+      "label_es": "Motoniveladora de 154 kW.",
+      "rate_eur_hour": 80.44,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "motoniveladora",
+        "motoniveladora 154"
+      ]
+    },
+    {
+      "id": "mq02ron010a",
+      "category": "compactacion",
+      "label_es": "Rodillo vibrante tándem autopropulsado, de 24,8 kW, de 2450 kg, anchura de trabajo 100 cm.",
+      "rate_eur_hour": 19.02,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "rodillo",
+        "rodillo vibrante"
+      ]
+    },
+    {
+      "id": "mq04cab010c",
+      "category": "transporte",
+      "label_es": "Camión basculante de 12 t de carga, de 162 kW.",
+      "rate_eur_hour": 61.68,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion basculante"
+      ]
+    },
+    {
+      "id": "mq06gun010",
+      "category": "maquinaria",
+      "label_es": "Gunitadora de hormigón por vía húmeda 33 kW.",
+      "rate_eur_hour": 15.63,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "gunitadora",
+        "gunitadora hormigon"
+      ]
+    },
+    {
+      "id": "mq08mpa030",
+      "category": "maquinaria",
+      "label_es": "Maquinaria para proyección de productos aislantes.",
+      "rate_eur_hour": 22.72,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "maquinaria",
+        "maquinaria proyeccion"
+      ]
+    },
+    {
+      "id": "mq06pym010b",
+      "category": "maquinaria",
+      "label_es": "Mezcladora-bombeadora para pinturas",
+      "rate_eur_hour": 10.23,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "mezcladora",
+        "mezcladora bombeadora"
+      ]
+    },
+    {
+      "id": "mq06pym020",
+      "category": "maquinaria",
+      "label_es": "Mezcladora-bombeadora para morteros autonivelantes.",
+      "rate_eur_hour": 12.44,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "mezcladora",
+        "mezcladora bombeadora"
+      ]
+    },
+    {
+      "id": "mq11eqc010",
+      "category": "corte_perforacion",
+      "label_es": "Cortadora de pavimento con arranque, desplazamiento y regulación del disco de corte manuales.",
+      "rate_eur_hour": 46.26,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "cortadora",
+        "cortadora pavimento"
+      ]
+    },
+    {
+      "id": "mq01ret010",
+      "category": "excavacion",
+      "label_es": "Miniretrocargadora sobre neumáticos de 15 kW.",
+      "rate_eur_hour": 47.14,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "miniretrocargadora",
+        "miniretrocargadora neumaticos"
+      ]
+    },
+    {
+      "id": "mq02rop020",
+      "category": "compactacion",
+      "label_es": "Pisón vibrante de guiado manual, de 80 kg, con placa de 30x30 cm, tipo rana.",
+      "rate_eur_hour": 4.37,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "pison",
+        "pison vibrante"
+      ]
+    },
+    {
+      "id": "mq02rod010a",
+      "category": "compactacion",
+      "label_es": "Bandeja vibrante de guiado manual, de 170 kg, anchura de trabajo 50 cm, reversible.",
+      "rate_eur_hour": 5.35,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "bandeja",
+        "bandeja vibrante"
+      ]
+    },
+    {
+      "id": "mq04tkt010",
+      "category": "maquinaria",
+      "label_es": "t·kmTransporte de áridos.",
+      "rate_eur_hour": 0.12,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "t",
+        "t kmtransporte"
+      ]
+    },
+    {
+      "id": "mq04cab010d",
+      "category": "transporte",
+      "label_es": "Camión basculante de 14 t de carga, de 184 kW.",
+      "rate_eur_hour": 66.82,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion basculante"
+      ]
+    },
+    {
+      "id": "mq02cia020f",
+      "category": "transporte",
+      "label_es": "Camión cisterna equipado para riego, de 8 m³ de capacidad.",
+      "rate_eur_hour": 51.4,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion cisterna"
+      ]
+    },
+    {
+      "id": "mq11bar010",
+      "category": "maquinaria",
+      "label_es": "Barredora remolcada con motor auxiliar.",
+      "rate_eur_hour": 14.8,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "barredora",
+        "barredora remolcada"
+      ]
+    },
+    {
+      "id": "mq10mbc010",
+      "category": "maquinaria",
+      "label_es": "Central asfáltica continua para fabricación de mezcla bituminosa en caliente, de 200 t/h.",
+      "rate_eur_hour": 330.19,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "central",
+        "central asfaltica"
+      ]
+    },
+    {
+      "id": "mq04tkt020",
+      "category": "maquinaria",
+      "label_es": "t·kmTransporte de aglomerado.",
+      "rate_eur_hour": 0.12,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "t",
+        "t kmtransporte"
+      ]
+    },
+    {
+      "id": "mq02rot030b",
+      "category": "compactacion",
+      "label_es": "Compactador tándem autopropulsado, de 63 kW, de 9,65 t, anchura de trabajo 168 cm.",
+      "rate_eur_hour": 42.08,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "compactador",
+        "compactador tandem"
+      ]
+    },
+    {
+      "id": "mq05pdm010b",
+      "category": "auxiliar",
+      "label_es": "Compresor portátil eléctrico 5 m³/min de caudal.",
+      "rate_eur_hour": 8.13,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "compresor",
+        "compresor portatil"
+      ]
+    },
+    {
+      "id": "mq03pii105a",
+      "category": "auxiliar",
+      "label_es": "Equipo completo para perforación de pilote de extracción con camisa perdida, CPI-5.",
+      "rate_eur_hour": 179.13,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "equipo",
+        "equipo completo"
+      ]
+    },
+    {
+      "id": "mq01exn010i",
+      "category": "excavacion",
+      "label_es": "Miniretroexcavadora sobre neumáticos, de 37,5 kW.",
+      "rate_eur_hour": 46.87,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "miniretroexcavadora",
+        "miniretroexcavadora neumaticos"
+      ]
+    },
+    {
+      "id": "mq09rod010",
+      "category": "compactacion",
+      "label_es": "Rodillo ligero.",
+      "rate_eur_hour": 3.59,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "rodillo",
+        "rodillo ligero"
+      ]
+    },
+    {
+      "id": "mq09mot010",
+      "category": "maquinaria",
+      "label_es": "Motocultor 60/80 cm.",
+      "rate_eur_hour": 2.78,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "motocultor",
+        "motocultor 60"
+      ]
+    },
+    {
+      "id": "mq01exn020b",
+      "category": "excavacion",
+      "label_es": "Retroexcavadora hidráulica sobre neumáticos, de 115 kW.",
+      "rate_eur_hour": 61.55,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "retroexcavadora",
+        "retroexcavadora hidraulica"
+      ]
+    },
+    {
+      "id": "mq08war155",
+      "category": "maquinaria",
+      "label_es": "Abrillantadora para el cristalizado o el abrillantado de pavimentos de piedra natural o de terrazo,",
+      "rate_eur_hour": 3.39,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "abrillantadora",
+        "abrillantadora cristalizado"
+      ]
+    },
+    {
+      "id": "mq04cag010c",
+      "category": "transporte",
+      "label_es": "Camión con grúa de hasta 12 t.",
+      "rate_eur_hour": 66.82,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion grua"
+      ]
+    },
+    {
+      "id": "mq04cap020hb",
+      "category": "transporte",
+      "label_es": "Camión de transporte de 12 t con una capacidad de 10 m³ y 3 ejes.",
+      "rate_eur_hour": 46.26,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion transporte"
+      ]
+    },
+    {
+      "id": "mq01mot010a",
+      "category": "maquinaria",
+      "label_es": "Motoniveladora de 141 kW.",
+      "rate_eur_hour": 78.77,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "motoniveladora",
+        "motoniveladora 141"
+      ]
+    },
+    {
+      "id": "mq10csc010",
+      "category": "maquinaria",
+      "label_es": "Central discontinua para tratamiento de materiales con cemento, de 160 t/h.",
+      "rate_eur_hour": 90.88,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "central",
+        "central discontinua"
+      ]
+    },
+    {
+      "id": "mq07cel010",
+      "category": "elevacion",
+      "label_es": "Carretilla elevadora diesel de doble tracción de 8 t.",
+      "rate_eur_hour": 35.98,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "carretilla",
+        "carretilla elevadora"
+      ]
+    },
+    {
+      "id": "mq06fra010",
+      "category": "maquinaria",
+      "label_es": "Fratasadora mecánica de hormigón.",
+      "rate_eur_hour": 6.37,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "fratasadora",
+        "fratasadora mecanica"
+      ]
+    },
+    {
+      "id": "mq03pii102a",
+      "category": "auxiliar",
+      "label_es": "Equipo completo para perforación de pilote de desplazamiento con azuche, CPI-2.",
+      "rate_eur_hour": 129.53,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "equipo",
+        "equipo completo"
+      ]
+    },
+    {
+      "id": "mq03pii104a",
+      "category": "auxiliar",
+      "label_es": "Equipo completo para perforación de pilote de extracción con entubación recuperable, CPI-4.",
+      "rate_eur_hour": 310.66,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "equipo",
+        "equipo completo"
+      ]
+    },
+    {
+      "id": "mq05pdm010c",
+      "category": "auxiliar",
+      "label_es": "Compresor portátil eléctrico 9 m³/min de caudal.",
+      "rate_eur_hour": 12.57,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "compresor",
+        "compresor portatil"
+      ]
+    },
+    {
+      "id": "mq03pva020",
+      "category": "auxiliar",
+      "label_es": "Equipo para inyecciones profundas, con bomba de baja presión y carro de perforación.",
+      "rate_eur_hour": 246.93,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "equipo",
+        "equipo inyecciones"
+      ]
+    },
+    {
+      "id": "mq05mai040",
+      "category": "demolicion",
+      "label_es": "Martillo eléctrico.",
+      "rate_eur_hour": 2.87,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "martillo",
+        "martillo electrico"
+      ]
+    },
+    {
+      "id": "mq03pip050a",
+      "category": "maquinaria",
+      "label_es": "Martinete hidráulico, de 5 t, para hinca de pilotes prefabricados.",
+      "rate_eur_hour": 74.53,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "martinete",
+        "martinete hidraulico"
+      ]
+    },
+    {
+      "id": "mq09bro010",
+      "category": "corte_perforacion",
+      "label_es": "Desbrozadora equipada con disco de dientes de sierra o con hilo de corte, de 0,42 kW de potencia.",
+      "rate_eur_hour": 4.3,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "desbrozadora",
+        "desbrozadora equipada"
+      ]
+    },
+    {
+      "id": "mq09tra010",
+      "category": "maquinaria",
+      "label_es": "Tractor agrícola, de 37 kW, equipado con rotovator.",
+      "rate_eur_hour": 16.26,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "tractor",
+        "tractor agricola"
+      ]
+    },
+    {
+      "id": "mq07cce010a",
+      "category": "transporte",
+      "label_es": "Camión con cesta elevadora de brazo articulado de 16 m de altura máxima de trabajo y 260 kg de carga",
+      "rate_eur_hour": 46.26,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion cesta"
+      ]
+    },
+    {
+      "id": "mq02roa010a",
+      "category": "compactacion",
+      "label_es": "Rodillo vibrante de guiado manual, de 700 kg, anchura de trabajo 70 cm.",
+      "rate_eur_hour": 10.49,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "rodillo",
+        "rodillo vibrante"
+      ]
+    },
+    {
+      "id": "mq04cab010e",
+      "category": "transporte",
+      "label_es": "Camión basculante de 20 t de carga, de 213 kW.",
+      "rate_eur_hour": 66.82,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "camion",
+        "camion basculante"
+      ]
+    },
+    {
+      "id": "mq08war150",
+      "category": "maquinaria",
+      "label_es": "Pulidora para pavimentos de piedra natural o de terrazo, compuesta por platos giratorios a los que s",
+      "rate_eur_hour": 4.93,
+      "unit": "h",
+      "is_placeholder": false,
+      "source_book": "GENERADOR_PRECIOS_2025",
+      "source_page": null,
+      "aliases": [
+        "pulidora",
+        "pulidora pavimentos"
+      ]
+    }
+  ]
+}

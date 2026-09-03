@@ -55,7 +55,7 @@ from src.budget.catalog.infrastructure.adapters.in_memory_catalog_repository imp
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-JSON_PATH = ROOT / "data" / "machinery_rates_2025_placeholder.json"
+JSON_PATH = ROOT / "data" / "machinery_rates_2025.json"
 
 
 def _init_firebase_admin() -> None:
