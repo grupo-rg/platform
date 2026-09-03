@@ -55,8 +55,14 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
         reorderItems
     } = useBudgetEditorContext();
 
-    const [breakdownItem, setBreakdownItem] = useState<EditableBudgetLineItem | null>(null);
+    const [breakdownItemId, setBreakdownItemId] = useState<string | null>(null);
     const [breakdownOpen, setBreakdownOpen] = useState(false);
+    // Item VIVO desde state.items (no un snapshot congelado al abrir): así los
+    // borrados/ediciones del descompuesto dentro del sheet se reflejan al instante
+    // (antes se re-renderizaba el item viejo y la fila borrada no desaparecía).
+    const breakdownItem = breakdownItemId
+        ? (state.items.find((i) => i.id === breakdownItemId) ?? null)
+        : null;
 
     // Alta manual de partida (con descompuestos escritos a teclado).
     const [manualPartidaOpen, setManualPartidaOpen] = useState(false);
@@ -74,7 +80,7 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
     const [markupState, setMarkupState] = useState<{ open: boolean; scope: 'global' | 'chapter' | 'item'; targetId?: string; percentage: number }>({ open: false, scope: 'global', percentage: 0 });
 
     const handleOpenBreakdown = (item: EditableBudgetLineItem) => {
-        setBreakdownItem(item);
+        setBreakdownItemId(item.id);
         setBreakdownOpen(true);
     };
 

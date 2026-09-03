@@ -304,12 +304,14 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
         newBreakdown[idx] = { ...newBreakdown[idx], [field]: newValue };
 
         const newUnitPrice = newBreakdown.reduce((acc: number, c: any) => acc + calculateCompTotal(c), 0);
-        
+        const newQty = Number(item.item.quantity ?? 1);
+
         onUpdate(item.id, {
             item: {
                 ...item.item,
                 breakdown: newBreakdown,
-                unitPrice: newUnitPrice
+                unitPrice: newUnitPrice,
+                totalPrice: newUnitPrice * newQty, // recálculo del total de la partida
             },
             isDirty: true
         });
@@ -338,12 +340,14 @@ export function AIReasoningSheet({ open, onOpenChange, item, onUpdate, isAdmin =
         newBreakdown.splice(idx, 1);
 
         const newUnitPrice = newBreakdown.reduce((acc: number, c: any) => acc + calculateCompTotal(c), 0);
+        const newQty = Number(item.item.quantity ?? 1);
 
         onUpdate(item.id, {
             item: {
                 ...item.item,
                 breakdown: newBreakdown,
-                unitPrice: newUnitPrice
+                unitPrice: newUnitPrice,
+                totalPrice: newUnitPrice * newQty, // recálculo del total de la partida
             },
             isDirty: true
         });

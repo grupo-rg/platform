@@ -1,6 +1,7 @@
 import { useReducer, useCallback, useEffect, useState } from 'react';
 import { BudgetLineItem, BudgetCostBreakdown } from '@/backend/budget/domain/budget';
 import { BudgetEditorState, BudgetEditorAction, EditableBudgetLineItem, BudgetConfig, ExecutionMode } from '@/types/budget-editor';
+import { categorizeComponent, BreakdownCategory } from '@/lib/budget/breakdown-category';
 
 // Simple ID generator
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -36,7 +37,9 @@ const calculateBreakdown = (
         const laborCosts = items.reduce((sum, item) => {
             if (!item.item?.breakdown) return sum;
             const moCost = item.item.breakdown
-                .filter((comp: any) => comp.code && String(comp.code).toLowerCase().startsWith('mo'))
+                // Mano de obra por categoría (code mo*/labor-* + fallback type=LABOR),
+                // no solo por prefijo 'mo' — así las from_scratch (labor-*) cuentan.
+                .filter((comp: any) => categorizeComponent(comp.code, comp.type, comp.is_variable ?? comp.isVariable) === BreakdownCategory.LABOR)
                 .reduce((acc: number, comp: any) => {
                     const cPrice = comp.unitPrice || comp.price || 0;
                     const cQuantity = comp.quantity || comp.yield || 1;
