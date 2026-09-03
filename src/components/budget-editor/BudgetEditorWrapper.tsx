@@ -13,6 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BudgetRequestDetails } from './BudgetRequestDetails';
 import { BudgetEconomicSummary } from './BudgetEconomicSummary';
+import { pdf } from '@react-pdf/renderer';
+import { BudgetDocument } from '@/components/pdf/BudgetDocument';
+import type { ExecutionMode } from '@/types/budget-editor';
 import { BudgetHealthWidget } from './BudgetHealthWidget';
 import { SemanticCatalogSidebar } from './SemanticCatalogSidebar';
 import { saveTrainingDeltaAction } from '@/actions/budget/save-training-delta.action';
@@ -309,6 +312,64 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
         }
     };
 
+    // WS-F — Exporta el PDF por modo desde el estado EN MEMORIA actual (con las
+    // ediciones sin guardar), sin requerir guardar antes. Reutiliza el mismo
+    // componente `BudgetDocument` del envío al cliente, pasando el modo elegido.
+    const handleExportPdf = async (mode: ExecutionMode) => {
+        const modeLabels: Record<ExecutionMode, string> = {
+            complete: 'Presupuesto completo',
+            execution: 'Mano de obra + materiales fijos',
+            labor: 'Solo mano de obra',
+        };
+        const modeFileLabels: Record<ExecutionMode, string> = {
+            complete: 'Completo',
+            execution: 'MO-y-Materiales-Fijos',
+            labor: 'Solo-Mano-de-Obra',
+        };
+        try {
+            const blob = await pdf(
+                <BudgetDocument
+                    budgetNumber={budgetNumber}
+                    clientName={budget.clientSnapshot?.name || 'Cliente'}
+                    clientEmail={budget.clientSnapshot?.email || ''}
+                    clientAddress={budget.clientSnapshot?.address || ''}
+                    notes={pdfMeta?.notes}
+                    items={state.items}
+                    costBreakdown={state.costBreakdown}
+                    date={new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    budgetConfig={state.config}
+                    calibrationVersion={state.calibrationVersion}
+                    bakedConfig={state.bakedConfig}
+                    executionMode={mode}
+                    renders={budget.renders}
+                    company={companyConfig}
+                    includeBreakdown={true}
+                />
+            ).toBlob();
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Presupuesto-${budgetNumber}-${modeFileLabels[mode]}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            toast({
+                title: 'PDF generado',
+                description: `Modo: ${modeLabels[mode]} (incluye cambios sin guardar).`,
+            });
+        } catch (err: any) {
+            console.error('[BudgetEditorWrapper] export pdf failed', err);
+            toast({
+                title: 'Error al exportar',
+                description: err?.message || 'No se pudo generar el PDF.',
+                variant: 'destructive',
+            });
+        }
+    };
+
     const handlePdfDownloaded = async () => {
         if (!isAdmin && budget.id) { // In demo mode, budget.id is actually the traceId
             try {
@@ -392,6 +453,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                 isStandaloneMode={!isAdmin || !!traceData}
                 applyMarkup={applyMarkup}
                 onOpenSummary={() => setIsMobileSummaryOpen(true)}
+                onExportPdf={handleExportPdf}
             />
 
             <main className="flex-1 w-full p-4 md:p-6 space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-24 md:pb-6 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20">

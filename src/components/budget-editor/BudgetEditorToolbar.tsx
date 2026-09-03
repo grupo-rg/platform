@@ -80,6 +80,13 @@ interface BudgetEditorToolbarProps {
     applyMarkup?: (scope: 'global' | 'chapter' | 'item', percentage: number, targetId?: string) => void;
     isReadOnly?: boolean;
     onOpenSummary?: () => void;
+    /**
+     * WS-F — Exporta el PDF del estado EN MEMORIA actual (con ediciones sin
+     * guardar) para el modo indicado, sin requerir guardar antes. La generación
+     * se delega al wrapper (que tiene company/calibrationVersion/bakedConfig
+     * para fidelidad de precios). Devuelve una promesa para el estado de carga.
+     */
+    onExportPdf?: (mode: ExecutionMode) => void | Promise<void>;
 }
 
 export const BudgetEditorToolbar = ({
@@ -105,10 +112,23 @@ export const BudgetEditorToolbar = ({
     onUpdateConfig,
     applyMarkup,
     isReadOnly,
-    onOpenSummary
+    onOpenSummary,
+    onExportPdf
 }: BudgetEditorToolbarProps) => {
     // Determine status text
     const [isTracing, setIsTracing] = useState(false); // Added isTracing state
+    // WS-F — estado de carga del export por modo (PDF en memoria).
+    const [exportingMode, setExportingMode] = useState<ExecutionMode | null>(null);
+
+    const handleExport = async (mode: ExecutionMode) => {
+        if (!onExportPdf) return;
+        setExportingMode(mode);
+        try {
+            await onExportPdf(mode);
+        } finally {
+            setExportingMode(null);
+        }
+    };
 
     // RAG Validation: Check if any item has breakdowns with variable materials
     const hasVariableCosts = React.useMemo(() => {
@@ -196,6 +216,51 @@ export const BudgetEditorToolbar = ({
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    {/* WS-F — Exportar PDF por modo (estado en memoria, sin guardar) */}
+                    {onExportPdf && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={exportingMode !== null}
+                                    className="hidden md:flex shrink-0 bg-white hover:bg-slate-50 border-slate-200 text-slate-700 dark:bg-transparent dark:hover:bg-white/5 dark:border-white/10 dark:text-slate-200"
+                                    title="Exportar PDF según el modo (usa las ediciones sin guardar)"
+                                >
+                                    {exportingMode !== null
+                                        ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        : <FileDown className="w-4 h-4 mr-2 text-indigo-500" />}
+                                    Exportar
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-72">
+                                <DropdownMenuLabel>Exportar PDF (sin guardar)</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleExport('labor')} disabled={exportingMode !== null || !hasAnyBreakdown}>
+                                    <Wrench className="w-4 h-4 mr-2 text-blue-600" />
+                                    <div className="flex flex-col">
+                                        <span>Solo mano de obra</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">{hasAnyBreakdown ? 'Solo componentes mo*' : 'Sin descompuestos disponibles'}</span>
+                                    </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport('execution')} disabled={exportingMode !== null || !hasVariableCosts}>
+                                    <Wrench className="w-4 h-4 mr-2 text-amber-600" />
+                                    <div className="flex flex-col">
+                                        <span>Mano de obra + materiales fijos</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">{hasVariableCosts ? 'Excluye materiales variables' : 'Sin materiales variables detectados'}</span>
+                                    </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport('complete')} disabled={exportingMode !== null}>
+                                    <Layers className="w-4 h-4 mr-2 text-indigo-500" />
+                                    <div className="flex flex-col">
+                                        <span>Presupuesto completo</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">Todos los componentes</span>
+                                    </div>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
 
                     {/* Mobile Menu */}
                     {!isReadOnly && (

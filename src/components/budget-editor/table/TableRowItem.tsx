@@ -48,7 +48,7 @@ import { MeasurementsPanel } from './MeasurementsPanel';
 import { useBudgetEditorContext } from '../BudgetEditorContext';
 import {
     BudgetMode,
-    computePartidaTotalForMode,
+    computePartidaTotalForModeDetailed,
     executionModeToBudgetMode,
 } from '@/lib/budget/budget-mode-calculator';
 import { detectDivergence } from '@/lib/budget/reconciliation';
@@ -208,15 +208,21 @@ export const TableRowItem = React.memo(({
 
     // Fase 11.D — modo de presupuesto centralizado en helper puro.
     // Mapea executionMode legacy ('complete'|'execution'|'labor') a BudgetMode
-    // y delega la suma a `computePartidaTotalForMode`. Misma semántica que el
-    // código previo, ahora con doble señal (code prefix + is_variable + type).
+    // y delega la suma a `computePartidaTotalForModeDetailed`, que además marca
+    // `isApproximate` (WS-F) cuando el reparto no puede ser exacto en cliente.
     const budgetMode: BudgetMode = executionModeToBudgetMode(executionMode);
-    const totalPriceFromBreakdown = computePartidaTotalForMode(
+    const modeTotal = computePartidaTotalForModeDetailed(
         item.item?.breakdown,
         item.item?.unitPrice ?? 0,
         item.item?.quantity ?? 0,
         budgetMode,
     );
+    const totalPriceFromBreakdown = modeTotal.total;
+    // Fase 11.D (WS-F) — en modos parciales el reparto puede ser aproximado
+    // (partidas compuestas cuyo sub-descompuesto no es visible en cliente, o
+    // agregados sin descompuesto). Mostramos un indicador para no infravalorar
+    // en silencio. COMPLETE nunca es aproximado.
+    const isApproximateMode = budgetMode !== BudgetMode.COMPLETE && modeTotal.isApproximate;
     const activePrice = budgetMode === BudgetMode.COMPLETE
         ? (item.item?.totalPrice || 0)
         : totalPriceFromBreakdown;
@@ -608,6 +614,24 @@ export const TableRowItem = React.memo(({
                     type="currency"
                     className="text-right bg-transparent border-transparent w-full"
                 />
+                {isApproximateMode && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="mt-0.5 ml-auto flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                    <AlertTriangle className="h-2.5 w-2.5" />
+                                    Aprox.
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-[240px] text-xs">
+                                Reparto aproximado: esta partida contiene componentes compuestos
+                                (partidas dentro del descompuesto) cuyo desglose de mano de obra/materiales
+                                no es visible aquí, o no tiene descompuesto. El total del modo parcial puede
+                                no ser exacto.
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
             </div>
 
             {/* Actions */}

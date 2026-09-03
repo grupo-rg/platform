@@ -9,7 +9,9 @@ import {
 import {
     BudgetMode,
     computePartidaTotalForMode,
+    computePartidaTotalForModeDetailed,
     computeUnitPriceForMode,
+    computeUnitPriceForModeDetailed,
     executionModeToBudgetMode,
 } from './budget-mode-calculator';
 
@@ -85,6 +87,74 @@ describe('computePartidaTotalForMode', () => {
     it('multiplica unit_price por quantity', () => {
         const total = computePartidaTotalForMode(REPRESENTATIVE_BREAKDOWN, 170, 10, BudgetMode.LABOR_ONLY);
         expect(total).toBe(500);
+    });
+});
+
+describe('unidad % (medios auxiliares) — ×qty/100', () => {
+    it('sin total guardado, unit "%" aplica price × qty/100', () => {
+        // % medios auxiliares → categoría INDIRECT (incluida en COMPLETE y LABOR_AND_FIXED).
+        const breakdown = [
+            { code: 'mo112', total: 100, type: 'LABOR', is_variable: false },
+            { code: '%0201', unit: '%', price: 100, quantity: 3, type: 'OTHER' }, // 100 × 3/100 = 3
+        ];
+        // LABOR_AND_FIXED incluye INDIRECT → 100 + 3 = 103 (NO 100 + 300).
+        expect(computeUnitPriceForMode(breakdown, 999, BudgetMode.LABOR_AND_FIXED)).toBe(103);
+    });
+
+    it('unit "%" con total guardado usa el total (autoritativo, sin /100)', () => {
+        const breakdown = [
+            { code: '%0201', unit: '%', price: 100, quantity: 3, total: 2.5, type: 'OTHER' },
+        ];
+        expect(computeUnitPriceForMode(breakdown, 999, BudgetMode.COMPLETE)).toBe(2.5);
+    });
+
+    it('sin unit "%" mantiene price × qty', () => {
+        const breakdown = [{ code: 'mt51', price: 10, quantity: 3, type: 'MATERIAL', is_variable: false }];
+        expect(computeUnitPriceForMode(breakdown, 999, BudgetMode.LABOR_AND_FIXED)).toBe(30);
+    });
+});
+
+describe('isApproximate — nunca infravalorar en silencio', () => {
+    const BASIC_ONLY = [
+        { code: 'mo112', type: 'LABOR', total: 50, is_variable: false },
+        { code: 'mt51', type: 'MATERIAL', total: 100, is_variable: false },
+    ];
+    // Partida compuesta (DRA010) sin prefijo básico y type OTHER → categoría OTHER.
+    const WITH_COMPOSITE = [
+        { code: 'mo112', type: 'LABOR', total: 50, is_variable: false },
+        { code: 'DRA010', type: 'OTHER', total: 200 },
+    ];
+
+    it('descompuesto de básicos NO es aproximado en modos parciales', () => {
+        expect(computeUnitPriceForModeDetailed(BASIC_ONLY, 150, BudgetMode.LABOR_ONLY).isApproximate).toBe(false);
+        expect(computeUnitPriceForModeDetailed(BASIC_ONLY, 150, BudgetMode.LABOR_AND_FIXED).isApproximate).toBe(false);
+    });
+
+    it('COMPLETE nunca es aproximado (suma todo)', () => {
+        expect(computeUnitPriceForModeDetailed(WITH_COMPOSITE, 250, BudgetMode.COMPLETE).isApproximate).toBe(false);
+    });
+
+    it('partida compuesta (OTHER) marca aproximado en modos parciales', () => {
+        expect(computeUnitPriceForModeDetailed(WITH_COMPOSITE, 250, BudgetMode.LABOR_ONLY).isApproximate).toBe(true);
+        expect(computeUnitPriceForModeDetailed(WITH_COMPOSITE, 250, BudgetMode.LABOR_AND_FIXED).isApproximate).toBe(true);
+    });
+
+    it('compuesta con mano de obra un nivel abajo: LABOR_ONLY no da 0 silencioso → aproximado', () => {
+        const detailed = computePartidaTotalForModeDetailed(WITH_COMPOSITE, 250, 2, BudgetMode.LABOR_ONLY);
+        // Solo el mo112 (50) se cuenta; el compuesto queda fuera pero se marca aproximado.
+        expect(detailed.total).toBe(100); // 50 × 2
+        expect(detailed.isApproximate).toBe(true);
+    });
+
+    it('sin descompuesto + modo parcial + precio real → aproximado (agregado no desglosable)', () => {
+        expect(computeUnitPriceForModeDetailed(null, 300, BudgetMode.LABOR_ONLY).isApproximate).toBe(true);
+        expect(computeUnitPriceForModeDetailed([], 300, BudgetMode.LABOR_AND_FIXED).isApproximate).toBe(true);
+    });
+
+    it('sin descompuesto + COMPLETE → exacto (fallbackUnitPrice)', () => {
+        const detailed = computePartidaTotalForModeDetailed(null, 300, 2, BudgetMode.COMPLETE);
+        expect(detailed.total).toBe(600);
+        expect(detailed.isApproximate).toBe(false);
     });
 });
 
