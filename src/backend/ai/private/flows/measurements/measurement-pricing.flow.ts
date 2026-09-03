@@ -82,7 +82,11 @@ async function processBatch(items: any[], useDeepSearch: boolean = true): Promis
             // CRITICAL: Strip any [IA Dimensional: ...] or other bracketed reasoning injected by earlier extractors.
             // Embedding English reasoning about "base formation" or "thickness" will completely poison the semantic vector space.
             const cleanQuery = item.description.replace(/\[IA Dimensional:.*?\]/g, '').replace(/\[.*?\]/g, '').trim();
-            const results = await catalogService.search(cleanQuery, 3, item.chapter, 'LABOR'); // 3 top PriceBook matches
+            // Nota: el CatalogSearchService unificado actual solo acepta (query, limitPerSource).
+            // El contexto de capítulo (item.chapter) y el sesgo de tipo ('LABOR') que antes se
+            // pasaban aquí ya no están soportados por su firma; pendiente re-introducirlos como
+            // enhancement si se quiere recuperar el boost semántico por capítulo.
+            const results = await catalogService.search(cleanQuery, 3); // 3 top PriceBook matches
 
             // 2. Select Best Match
             let bestMatch: UnifiedCatalogItem | null = null;
