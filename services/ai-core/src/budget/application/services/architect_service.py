@@ -121,6 +121,12 @@ REGLAS CRÍTICAS - PREVENCIÓN DE ASUNCIONES LÓGICAS ERRÓNEAS:
 8. RESTRICCIONES ESPACIALES: Si el cliente dice "acceso complicado" o "sin maquinaria pesada", especifica "medios manuales o miniexcavadoras" en las tareas correspondientes.
 9. FIDELIDAD DE MATERIAL: Si el cliente exige un material concreto (ej. "pared de piedra", "encimera de granito"), OBLIGATORIO rellenar `userSpecificMaterial` con ese valor.
 10. REGLA DE DEMOLICIÓN PREVIA: Si pide reformar/alicatar/cambiar pavimentos sobre superficie existente, añade primero una tarea de demolición del acabado antiguo.
+11. REGLA DE OMISIONES CRÍTICAS EN ZONA HÚMEDA (solo reforma INTEGRAL / renovación COMPLETA): Si el alcance es una reforma integral o renovación completa de una zona húmeda (baño, aseo, ducha, cocina, o vivienda entera que las incluya) — NO una intervención puntual —, incluye PROACTIVAMENTE, aunque el cliente no las mencione, las partidas estándar imprescindibles que el oficio da por hechas y cuya omisión provoca fallos garantizados:
+   (a) IMPERMEABILIZACIÓN de la zona de ducha/plato y suelo húmedo, ANTES de solar/alicatar (superficie del suelo del baño + faldón de la ducha; unidad m²). Clasifícala en "AISLAMIENTOS" salvo que el catálogo ofrezca un capítulo de impermeabilizaciones más específico.
+   (b) ELECTRICIDAD básica de la estancia húmeda: como mínimo un punto de luz y un punto para extractor/ventilación (en cocina, además, tomas de fuerza para electrodomésticos). Capítulo "ELECTRICIDAD Y TELECOMUNICACIONES", unidad "ud"/"puntos". NO añadas cuadro general ni red de tierra completos por una sola estancia (eso solo aplica a vivienda entera / obra mayor).
+   Marca estas tareas inferidas con `isExplicitlyRequested=false` y justifica en `reasoning` que se añaden por buenas prácticas al tratarse de una reforma integral de zona húmeda.
+   EXCLUSIÓN EXPLÍCITA: si el brief da un motivo real para NO incluir alguna (el cliente la excluyó expresamente, o no existe ducha/zona húmeda que impermeabilizar), NO generes esa tarea, pero DECLARA la exclusión de forma explícita y visible en el `reasoning` de la tarea relacionada más cercana (p.ej. el alicatado, el solado o el saneamiento), indicando qué se excluye y por qué, para que la omisión sea auditable y no un olvido silencioso.
+   NUNCA apliques esta regla a intervenciones parciales/puntuales (sustituir solo un sanitario, repintar, cambiar grifería, retejar): mantén ahí el comportamiento estricto de generar solo lo pedido.
 
 CATÁLOGO JERÁRQUICO DE CAPÍTULOS:
 {catalog_json}
@@ -141,11 +147,12 @@ REGLAS DE ESTIMACIÓN PARAMÉTRICA:
 - Fontanería: ~4-6 puntos de agua por baño/cocina; unidad "ud" o "puntos".
 - Superficies: no multipliques por número de tareas en una sola planta.
 - Revestimientos de paredes en baño/cocina: multiplica la huella en planta x 2.5 para estimar m² de pared.
+- Impermeabilización de zona húmeda (reforma integral de baño/ducha): m² = superficie del suelo del baño + faldón de la ducha (aprox. huella del plato + zócalo perimetral); unidad m².
 - Sanitarios/mobiliario: desglose atómico (inodoro, lavabo, ducha cada uno en su propia tarea).
 
 ECOSISTEMAS OBLIGATORIOS:
-- Baño: demolición alicatado + saneamiento + fontanería + aparatos atómicos + grifería + alicatados paredes (huella x 2.5).
-- Cocina: fontanería + electricidad + alicatados paredes (huella x 2.5) + mobiliario (ml) + encimera (ml).
+- Baño (reforma integral): demolición alicatado + saneamiento + IMPERMEABILIZACIÓN de ducha/suelo húmedo (m²) + fontanería + ELECTRICIDAD mínima (punto de luz + punto de extractor) + aparatos atómicos + grifería + alicatados paredes (huella x 2.5). La impermeabilización y la electricidad son OBLIGATORIAS aunque el cliente no las mencione (ver regla 11); si se excluyen, decláralo en el `reasoning`.
+- Cocina (reforma integral): fontanería + ELECTRICIDAD (puntos de luz + tomas de fuerza para electrodomésticos) + alicatados paredes (huella x 2.5) + mobiliario (ml) + encimera (ml). Si hay zona húmeda de fregadero/lavavajillas, considera impermeabilización puntual.
 - Electricidad: 3 tareas separadas — cuadro general (1 ud), puntos eléctricos (~40/100m²), red de tierra (1 ud).
 - Climatización: si piden suelo radiante añade generador (aerotermia/caldera, 1 ud).
 - Obra Mayor Envolvente: acondicionamiento terreno → cimentación → estructura → fachada → aislamiento → revestimiento interior.

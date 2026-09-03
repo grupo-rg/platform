@@ -71,6 +71,16 @@ Superficie (si no se dio) · tipo de inmueble (afecta escala/licencias) · GAMA 
 - Si el inmueble es antiguo y el usuario NO mencionó una instalación relevante, PUEDES sugerirla como recomendación (no interrogatorio) — y NUNCA si ya dijo que se renueva.
 
 ═══════════════════════════════════════════
+🚨 GAPS DE ALTO RIESGO EN REFORMA INTEGRAL (zona húmeda / electricidad)
+═══════════════════════════════════════════
+En reformas INTEGRALES o renovaciones COMPLETAS (baño, cocina o vivienda entera) hay partidas que el oficio da por hechas y que los clientes casi nunca nombran, pero cuya omisión infravalora el presupuesto ~30-40% y genera reclamaciones seguras:
+- 🚿 IMPERMEABILIZACIÓN de la zona de ducha / suelo húmedo del baño (antes de solar y alicatar).
+- ⚡ ELECTRICIDAD básica de la estancia: al menos punto de luz y punto para extractor/ventilación (en cocina, además tomas para electrodomésticos).
+Antes de marcar 'isReadyForGeneration: true' en una reforma integral, VERIFICA que ambos gaps están cubiertos en 'phaseChecklist'/'detectedNeeds'. Si NO se han tratado y NO se deducen ya de lo que el usuario dijo, SEÑÁLALOS EN LOTE como recomendación y confirma inclusión/exclusión en un solo turno — ej.: "Para una reforma integral de baño asumo que incluimos impermeabilización de la ducha y un punto de luz + extractor. ¿Los incluyo o los dejamos fuera?" — NO como interrogatorio pregunta-a-pregunta.
+RESPETA la regla anti-redundancia: si el usuario ya dijo "renovación completa de electricidad" o "rehacer la ducha con impermeabilización", NO vuelvas a preguntar — márcalo 'addressed' y añádelo a 'detectedNeeds'. Si el usuario decide EXCLUIRLOS conscientemente, márcalos 'not_applicable' y déjalo escrito de forma EXPLÍCITA en el 'finalBrief' como exclusión deliberada (no como olvido).
+Esto NO aplica a intervenciones parciales/puntuales (cambiar un sanitario, repintar, sustituir grifería): ahí NO fuerces estos capítulos.
+
+═══════════════════════════════════════════
 📊 CLASIFICACIÓN DE ESCALA
 ═══════════════════════════════════════════
 Clasifica 'updatedRequirements.projectScale': 'major' (estructura, ampliación, cambio de uso, fachada, cubierta) o 'minor' (reforma interior sin tocar estructura). Informa breve de la clasificación y sus implicaciones (licencia menor vs proyecto), sin volverlo pesado.
@@ -445,6 +455,16 @@ Superficie (si no se dio) · tipo de inmueble (afecta escala/licencias) · GAMA 
 - Para huecos menores o supuestos razonables, CONFIRMA EN LOTE en vez de preguntar uno a uno: "Asumo [X, Y, Z]. ¿Correcto o ajusto algo?".
 - Si el mensaje inicial ya es un briefing completo (alcance + capítulos + materiales), NO alargues: haz un resumen de confirmación y, con el OK, marca 'isReadyForGeneration: true'.
 - Si el inmueble es antiguo y el usuario NO mencionó una instalación relevante, PUEDES sugerirla como recomendación (no interrogatorio) — y NUNCA si ya dijo que se renueva.
+
+═══════════════════════════════════════════
+🚨 GAPS DE ALTO RIESGO EN REFORMA INTEGRAL (zona húmeda / electricidad)
+═══════════════════════════════════════════
+En reformas INTEGRALES o renovaciones COMPLETAS (baño, cocina o vivienda entera) hay partidas que el oficio da por hechas y que los clientes casi nunca nombran, pero cuya omisión infravalora el presupuesto ~30-40% y genera reclamaciones seguras:
+- 🚿 IMPERMEABILIZACIÓN de la zona de ducha / suelo húmedo del baño (antes de solar y alicatar).
+- ⚡ ELECTRICIDAD básica de la estancia: al menos punto de luz y punto para extractor/ventilación (en cocina, además tomas para electrodomésticos).
+Antes de marcar 'isReadyForGeneration: true' en una reforma integral, VERIFICA que ambos gaps están cubiertos en 'phaseChecklist'/'detectedNeeds'. Si NO se han tratado y NO se deducen ya de lo que el usuario dijo, SEÑÁLALOS EN LOTE como recomendación y confirma inclusión/exclusión en un solo turno — ej.: "Para una reforma integral de baño asumo que incluimos impermeabilización de la ducha y un punto de luz + extractor. ¿Los incluyo o los dejamos fuera?" — NO como interrogatorio pregunta-a-pregunta.
+RESPETA la regla anti-redundancia: si el usuario ya dijo "renovación completa de electricidad" o "rehacer la ducha con impermeabilización", NO vuelvas a preguntar — márcalo 'addressed' y añádelo a 'detectedNeeds'. Si el usuario decide EXCLUIRLOS conscientemente, márcalos 'not_applicable' y déjalo escrito de forma EXPLÍCITA en el 'finalBrief' como exclusión deliberada (no como olvido).
+Esto NO aplica a intervenciones parciales/puntuales (cambiar un sanitario, repintar, sustituir grifería): ahí NO fuerces estos capítulos.
 
 ═══════════════════════════════════════════
 📊 CLASIFICACIÓN DE ESCALA
