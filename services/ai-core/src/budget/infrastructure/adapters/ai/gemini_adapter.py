@@ -12,6 +12,7 @@ from pydantic import BaseModel, ValidationError
 
 from src.budget.application.ports.ports import ILLMProvider
 from src.budget.domain.exceptions import AIProviderError
+from src.budget.infrastructure.config.model_registry import get_model
 
 logger = logging.getLogger(__name__)
 
@@ -521,11 +522,18 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
         while attempt < self.max_retries:
             try:
                 # Ejecutamos en Thread Pool el método síncrono del cliente genai.
-                # output_dimensionality=768 para casar con los vectores ya
-                # almacenados en Firestore (gemini-embedding-001 @768).
+                # Phase 0 — el id del modelo de embeddings viene del registry
+                # configurable (``model_registry/embedding``), TTL-cached y
+                # no-fatal; cae a ``gemini-embedding-001`` si no hay doc.
+                # output_dimensionality=768 se mantiene FIJO para casar con los
+                # vectores ya almacenados en Firestore (gemini-embedding-001 @768)
+                # — NUNCA lo decide el registry (cambiar dims invalida vectores).
+                embedding_model = get_model(
+                    "embedding", default_model_id="gemini-embedding-001"
+                ).model_id
                 response = await asyncio.to_thread(
                     self.genai_client.models.embed_content,
-                    model='gemini-embedding-001',
+                    model=embedding_model,
                     contents=text,
                     config=types.EmbedContentConfig(output_dimensionality=768),
                 )

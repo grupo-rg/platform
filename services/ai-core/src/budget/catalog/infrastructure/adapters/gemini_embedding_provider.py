@@ -25,6 +25,7 @@ import random
 from typing import Any
 
 from src.budget.catalog.application.ports.embedding_provider import IEmbeddingProvider
+from src.budget.infrastructure.config.model_registry import get_model
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,12 @@ class GeminiEmbeddingProvider(IEmbeddingProvider):
         location = os.environ.get("GOOGLE_CLOUD_LOCATION", "europe-southwest1")
         from google import genai
         self._client: Any = genai.Client(vertexai=True, project=project, location=location)
+        # Phase 0 — embedding model id from the configurable registry
+        # (``model_registry/embedding``), TTL-cached + non-fatal; falls back to
+        # ``_MODEL`` (``gemini-embedding-001``) with no doc present. Dims stay at
+        # ``_FIRESTORE_DIM_LIMIT`` (768) — NEVER driven by the registry, since
+        # changing dims would invalidate every stored vector.
+        self._model = get_model("embedding", default_model_id=_MODEL).model_id
         self._max_retries = max_retries
         self._base_delay = base_delay
         # Throttle preventivo entre batches — 0.7s da <90 RPM, por debajo del
@@ -85,7 +92,7 @@ class GeminiEmbeddingProvider(IEmbeddingProvider):
                 from google.genai import types
                 response = await asyncio.to_thread(
                     self._client.models.embed_content,
-                    model=_MODEL,
+                    model=self._model,
                     contents=texts,
                     config=types.EmbedContentConfig(output_dimensionality=_FIRESTORE_DIM_LIMIT),
                 )

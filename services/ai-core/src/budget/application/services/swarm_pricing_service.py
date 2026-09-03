@@ -23,6 +23,7 @@ from src.budget.application.services.calibration_service import (
     normalize_chapter_key,
 )
 from src.budget.application.services.from_scratch_compositor import FromScratchCompositor
+from src.budget.infrastructure.config.model_registry import get_model
 from src.budget.infrastructure.adapters.reranking.bge_reranker import (
     BgeReranker,
     is_enabled as _bge_is_enabled,
@@ -271,13 +272,22 @@ def _resolve_pricing_model(
     enable_pro = _env_truthy(resolved_env.get("ENABLE_PRO_PRICING"))
     force_flash_legacy = _env_truthy(resolved_env.get("FORCE_FLASH_PRICING"))
 
+    # Phase 0 — model id per tier comes from the configurable registry
+    # (``model_registry/{pricing_flash|pricing_pro}``), TTL-cached and non-fatal.
+    # ``MODEL_FLASH`` / ``MODEL_PRO`` stay as the code-default fallbacks: with no
+    # registry doc present these resolve byte-identically to today. The
+    # ENABLE_PRO_PRICING gate below is unchanged — the registry only supplies the
+    # id per tier, not the flash-vs-pro decision.
+    flash_model = get_model("pricing_flash", default_model_id=MODEL_FLASH).model_id
+    pro_model = get_model("pricing_pro", default_model_id=MODEL_PRO).model_id
+
     if enable_pro:
         # Opt-in explícito a Pro. La heurística decide tier libremente.
         if suggested_tier == "pro":
-            return MODEL_PRO, (
+            return pro_model, (
                 "ENABLE_PRO_PRICING=true y suggested_tier=pro → Pro (opt-in)"
             )
-        return MODEL_FLASH, (
+        return flash_model, (
             f"ENABLE_PRO_PRICING=true pero suggested_tier={suggested_tier} → Flash"
         )
 
@@ -293,7 +303,7 @@ def _resolve_pricing_model(
             f"Flash default post-hotfix; suggested_tier={suggested_tier}; "
             f"ENABLE_PRO_PRICING no activado"
         )
-    return MODEL_FLASH, reason
+    return flash_model, reason
 
 
 
