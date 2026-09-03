@@ -150,6 +150,11 @@ class BudgetPartida(BaseModel):
     active_price_source: Optional[Literal['bc3', 'ai']] = None
     measurements: Optional[List[Dict[str, Any]]] = None  # estado de mediciones estructurado
     originalTask: Optional[str] = None
+    # Material solicitado explícitamente por el cliente (p.ej. "cerámica"). Se usa
+    # como hint de generación para el Swarm y como anotación de auditoría. NO debe
+    # verse en el PDF entregado. Antes viajaba embebido en `description` como
+    # "[MATERIAL EXPLÍCITO: X]"; ahora es un campo dedicado (limpiado al ensamblar).
+    explicitMaterial: Optional[str] = None
     note: Optional[str] = None
     ai_justification: Optional[str] = None
     sourceDatabase: Optional[str] = None

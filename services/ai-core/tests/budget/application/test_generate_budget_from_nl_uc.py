@@ -22,6 +22,7 @@ from src.budget.application.services.architect_service import (
 from src.budget.application.use_cases.generate_budget_from_nl_uc import (
     AskingForClarificationError,
     GenerateBudgetFromNlUseCase,
+    _extract_explicit_material,
 )
 from src.budget.domain.entities import (
     AIResolution,
@@ -207,7 +208,35 @@ def test_user_specific_material_is_propagated_to_description():
     )
     asyncio.run(uc.execute(narrative="x", lead_id="l", budget_id="b"))
     assert len(captured) == 1
+    # El hint SÍ debe llegar al Swarm (search-time), en la descripción del RestructuredItem.
     assert "MATERIAL EXPLÍCITO: cobre" in captured[0].description
+
+
+def test_extract_explicit_material_cleans_description_and_sets_field():
+    """Tras el Swarm, la marca "[MATERIAL EXPLÍCITO: X]" se mueve a
+    `explicitMaterial` y desaparece del texto (no se entrega en el PDF)."""
+    partida = BudgetPartida(
+        id="p-1", order=1, type="PARTIDA", code="MOCK",
+        description="Alicatado de paredes con baldosa cerámica. [MATERIAL EXPLÍCITO: cerámica]",
+        unit="m2", quantity=10.0, unitPrice=20.0, totalPrice=200.0,
+        originalTask="Alicatado [MATERIAL EXPLÍCITO: cerámica]",
+    )
+    _extract_explicit_material(partida)
+    assert partida.explicitMaterial == "cerámica"
+    assert "MATERIAL EXPLÍCITO" not in partida.description
+    assert partida.description == "Alicatado de paredes con baldosa cerámica."
+    assert "MATERIAL EXPLÍCITO" not in (partida.originalTask or "")
+
+
+def test_extract_explicit_material_noop_without_tag():
+    partida = BudgetPartida(
+        id="p-2", order=1, type="PARTIDA", code="MOCK",
+        description="Demolición de tabique", unit="m2", quantity=5.0,
+        unitPrice=10.0, totalPrice=50.0,
+    )
+    _extract_explicit_material(partida)
+    assert partida.explicitMaterial is None
+    assert partida.description == "Demolición de tabique"
 
 
 def test_repository_save_called_once():

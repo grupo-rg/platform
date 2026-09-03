@@ -11,6 +11,7 @@ para que el UI no tenga que distinguir entre pipelines.
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from datetime import datetime
@@ -50,6 +51,38 @@ class AskingForClarificationError(Exception):
     def __init__(self, question: str):
         super().__init__(question)
         self.question = question
+
+
+# Marca "[MATERIAL EXPLÍCITO: X]" que `_task_to_restructured` inyecta en la
+# descripción como hint de búsqueda para el Swarm. Tolera sin-tilde y espacios.
+_EXPLICIT_MATERIAL_RE = re.compile(
+    r"\s*\[\s*MATERIAL\s+EXPL[IÍ]CITO\s*:\s*([^\]]*)\]", re.IGNORECASE
+)
+
+
+def _extract_explicit_material(partida) -> None:
+    """Mueve la marca "[MATERIAL EXPLÍCITO: X]" del texto de la partida (donde
+    servía de hint al Swarm, ya consumido) a un campo dedicado `explicitMaterial`.
+    Limpia `description` y `originalTask` in-place para que NO se entregue en el PDF.
+    """
+    material: Optional[str] = None
+    for attr in ("description", "originalTask"):
+        val = getattr(partida, attr, None)
+        if not val:
+            continue
+        match = _EXPLICIT_MATERIAL_RE.search(val)
+        if not match:
+            continue
+        if material is None:
+            material = (match.group(1) or "").strip()
+        cleaned = _EXPLICIT_MATERIAL_RE.sub("", val)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+        setattr(partida, attr, cleaned)
+    if material:
+        try:
+            partida.explicitMaterial = material
+        except Exception:
+            pass
 
 
 def _task_to_restructured(task: DecomposedTask) -> RestructuredItem:
@@ -128,6 +161,12 @@ class GenerateBudgetFromNlUseCase:
         # Fase 2: Pricing — reusa SwarmPricingService sin cambios.
         restructured = [_task_to_restructured(t) for t in tasks]
         partidas = await self.pricing_service.evaluate_batch(restructured, budget_id, metrics)
+
+        # La marca "[MATERIAL EXPLÍCITO: X]" ya cumplió su función (hint de búsqueda
+        # del Swarm). La movemos a `explicitMaterial` y limpiamos el texto para que no
+        # se persista ni se entregue en el PDF.
+        for p in partidas:
+            _extract_explicit_material(p)
 
         # Fase 3: Assembly
         chapters_dict: Dict[str, Dict] = {}
