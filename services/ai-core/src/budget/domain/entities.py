@@ -86,6 +86,13 @@ class AIResolution(BaseModel):
     # Phase 17 — snapshot del unit_price raw PEM antes de bakear GG+BI.
     # Permite auditoría y recálculo sin perder el valor original del LLM.
     calculated_unit_price_raw: Optional[float] = None
+    # Calibración (catálogo → constructor real). Snapshot del PEM ANTES de
+    # multiplicar por el factor de calibración + el factor aplicado. Permiten
+    # aprender el multiplicador real (corrected_raw / pre_calibration_unit_price)
+    # de forma independiente al factor vigente cuando se generó (evita runaway),
+    # y hacer transparente la calibración en el editor. 1.0 = sin calibración.
+    pre_calibration_unit_price: Optional[float] = None
+    applied_calibration_factor: Optional[float] = None
 
 # --- ICL & RLHF Fragment Entities (Many-Shot Engine) ---
 class HeuristicContext(BaseModel):

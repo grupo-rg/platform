@@ -18,6 +18,10 @@ from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem
 from src.budget.application.services.reconciliation import reconcile_breakdown
 from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
 from src.budget.application.services.pricing_cache import PricingCache
+from src.budget.application.services.calibration_service import (
+    CalibrationService,
+    normalize_chapter_key,
+)
 from src.budget.application.services.from_scratch_compositor import FromScratchCompositor
 from src.budget.infrastructure.adapters.reranking.bge_reranker import (
     BgeReranker,
@@ -585,6 +589,7 @@ class SwarmPricingService:
         reranker: Optional[BgeReranker] = None,
         pricing_cache: Optional[PricingCache] = None,
         compositor: Optional[FromScratchCompositor] = None,
+        calibration_service: Optional[CalibrationService] = None,
     ):
         self.llm = llm_provider
         self.vector_search = vector_search
@@ -618,6 +623,12 @@ class SwarmPricingService:
         # material_catalog). Opcional: cuando es None, from_scratch mantiene el
         # precio estimado por el LLM (camino legacy).
         self.compositor = compositor
+        # Calibración (catálogo → constructor real). Opcional para
+        # backward-compat: cuando es None, la calibración es no-op (factor 1.0)
+        # y el pricer devuelve el PEM del catálogo sin escalar. Cuando se
+        # inyecta, la tabla se carga UNA vez por batch (como pricing_cache) y se
+        # aplica al PEM antes de bakear GG+BI.
+        self.calibration_service = calibration_service
 
     async def _rerank_candidates(
         self,
@@ -1011,6 +1022,22 @@ class SwarmPricingService:
             raise asyncio.CancelledError(
                 "swarm_pricing: cancellation_event set before start"
             )
+
+        # Calibración (catálogo → constructor real): la tabla se carga UNA vez
+        # por batch (como pricing_cache), no por partida. Non-fatal / AI-First:
+        # si el service no está inyectado o Firestore falla, `load()` cae a
+        # code-defaults; si la tabla es None (service ausente), la calibración
+        # es no-op (factor 1.0) partida a partida.
+        calibration_table = None
+        if self.calibration_service is not None:
+            try:
+                calibration_table = await self.calibration_service.load()
+            except Exception as _cal_load_err:  # pragma: no cover - load ya es defensivo
+                logger.warning(
+                    f"[calibration] load failed ({type(_cal_load_err).__name__}: "
+                    f"{_cal_load_err}); calibration disabled for this batch"
+                )
+                calibration_table = None
 
         resumed_codes = {p.code for p in resume_from if p.code}
         if resumed_codes:
@@ -1661,6 +1688,56 @@ class SwarmPricingService:
                             logger.warning(f"[compositor] compose failed for {safe_code}: {ce}")
                             composed_result = None
 
+                    # ===== Calibración (catálogo → constructor real) =====
+                    # Se aplica al PEM (pre-markup) tras asentar `final_price`
+                    # (LLM o compositor) y ANTES de la reconciliación de
+                    # breakdown (línea ~1827) y del bake GG+BI (order §2):
+                    #   PVP = catálogo × calibración × markup × IVA
+                    # Excluidos (factor 1.0, pero se registra pre/factor para
+                    # transparencia §8):
+                    #   - `from_scratch`: su base son tarifas compuestas, no catálogo.
+                    #   - BC3 active-source: el precio activo es el del BC3, no la
+                    #     estimación IA; no se calibra ni se cosecha corrección.
+                    #   - sin tabla inyectada (backward-compat / tests).
+                    cal_key = normalize_chapter_key(safe_chapter)
+                    cal_pre_price = final_price
+                    cal_factor = 1.0
+                    cal_source = "none"
+                    cal_sample_count = 0
+                    _cal_bc3_price = getattr(item, "bc3_unit_price", None)
+                    if calibration_table is None:
+                        cal_source = "disabled"
+                    elif val.match_kind == "from_scratch":
+                        cal_source = "excluded:from_scratch"
+                    elif _cal_bc3_price is not None:
+                        cal_source = "excluded:bc3"
+                    else:
+                        _eff = calibration_table.effective_factor(cal_key)
+                        cal_factor = _eff.factor
+                        cal_source = _eff.source
+                        cal_sample_count = _eff.sample_count
+                        if cal_factor != 1.0 and final_price and final_price > 0:
+                            final_price = round(cal_pre_price * cal_factor, 2)
+                            # Escala el breakdown del LLM por el mismo factor para
+                            # que `reconcile_breakdown` (línea ~1827) no marque una
+                            # divergencia falsa. price×yield=total se preserva.
+                            if val.breakdown:
+                                for _cb in val.breakdown:
+                                    if _cb.price is not None:
+                                        _cb.price = _cb.price * cal_factor
+                                    if _cb.total is not None:
+                                        _cb.total = _cb.total * cal_factor
+                            self._emit(budget_id, 'calibration_applied', {
+                                "code": safe_code,
+                                "chapter": cal_key,
+                                "factor": cal_factor,
+                                "source": cal_source,
+                                "sample_count": cal_sample_count,
+                                "match_kind": val.match_kind,
+                                "price_before": round(cal_pre_price, 2),
+                                "price_after": final_price,
+                            })
+
                     # Fase 9.1 — sanity guard post-hoc: si el precio total
                     # calculado supera 100K € Y la partida está en una unidad
                     # común (m², m³, ml, ud), forzamos review humano y emitimos
@@ -1782,13 +1859,17 @@ class SwarmPricingService:
                                 catalog_breakdowns = await self.price_book_repo.find_breakdowns_by_parent(cand_code)
                                 if catalog_breakdowns:
                                     for bk in catalog_breakdowns:
+                                        # Calibración: el breakdown heredado del
+                                        # catálogo es RAW; se escala por el factor
+                                        # (no-op si 1.0) para no divergir del
+                                        # `final_price` ya calibrado en reconcile.
                                         breakdown_domain.append(BudgetBreakdownComponent(
                                             code=bk.code,
                                             concept=bk.description,
                                             type="OTHER",
-                                            price=bk.price_unit,
+                                            price=bk.price_unit * cal_factor,
                                             yield_amount=bk.quantity,
-                                            total=bk.price,  # bk.price = price_unit × quantity (catálogo lo precomputa)
+                                            total=bk.price * cal_factor,  # bk.price = price_unit × quantity (catálogo lo precomputa)
                                             isSubstituted=False,
                                             alternativeComponents=[],
                                             is_variable=bk.is_variable,
@@ -1867,7 +1948,12 @@ class SwarmPricingService:
                         calculated_total_price=final_price * safe_quantity,
                         confidence_score=confidence,
                         is_estimated=needs_human_review,
-                        needs_human_review=needs_human_review
+                        needs_human_review=needs_human_review,
+                        # Calibración §3/§8: PEM antes de calibrar + factor
+                        # aplicado (1.0 = sin calibración / excluida). El loop de
+                        # aprendizaje compara corrected_raw / pre_calibration.
+                        pre_calibration_unit_price=cal_pre_price,
+                        applied_calibration_factor=cal_factor,
                     )
 
                     # Flat alternatives (for 1:1)

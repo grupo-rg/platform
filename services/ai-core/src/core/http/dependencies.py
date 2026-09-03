@@ -28,6 +28,7 @@ from src.budget.application.services.budget_metadata_extractor import (
     BudgetMetadataExtractor,
 )
 from src.budget.application.services.pricing_cache import PricingCache
+from src.budget.application.services.calibration_service import CalibrationService
 from src.budget.application.services.swarm_pricing_service import SwarmPricingService
 from src.budget.catalog.application.services.hybrid_catalog_search import (
     HybridCatalogSearch,
@@ -250,6 +251,17 @@ def get_pricing_cache() -> PricingCache:
     return _pricing_cache_singleton
 
 
+# Calibración (catálogo → constructor real). Lee `calibration_factors/default`
+# vía admin SDK; si el doc falta, cae a code-defaults (global 1.36, DEMOLICIONES
+# 1.42, guard 8, clamp [0.8, 2.6]). La tabla se recarga UNA vez por batch dentro
+# del swarm, así que las ediciones del owner en la UI se recogen sin redeploy.
+_calibration_service_singleton: CalibrationService = CalibrationService(db=_db_client)
+
+
+def get_calibration_service() -> CalibrationService:
+    return _calibration_service_singleton
+
+
 _swarm_pricing = SwarmPricingService(
     llm_provider=_llm_adapter,
     vector_search=_vector_search_adapter,
@@ -263,6 +275,7 @@ _swarm_pricing = SwarmPricingService(
     reranker=_bge_reranker_singleton,
     pricing_cache=_pricing_cache_singleton,
     compositor=_from_scratch_compositor,
+    calibration_service=_calibration_service_singleton,
 )
 _architect = ArchitectService(llm_provider=_llm_adapter)
 _budget_metadata_extractor = BudgetMetadataExtractor(llm_provider=_llm_adapter)
