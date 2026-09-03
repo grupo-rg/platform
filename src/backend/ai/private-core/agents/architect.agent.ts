@@ -1,5 +1,6 @@
 import { ai, gemini25Flash } from '../../shared/config/genkit.config';
 import { generateWithRetry } from '../../shared/utils/ai-retry';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import * as fs from 'fs';
 import * as path from 'path';
 import pdfIndex from '../../../../lib/pdf_index_2025.json';
@@ -145,7 +146,9 @@ Cada objeto tarea en el array "tasks" debe tener:
 
         try {
             const result = await generateWithRetry({
-                model: 'vertexai/gemini-2.5-flash',
+                // model-registry role 'architect' (spec §5.1); falls back to the
+                // code default (gemini-2.5-flash) on any registry error.
+                model: (await resolveModel('architect')).prefixed,
                 prompt: prompt,
                 output: {
                     format: 'json',

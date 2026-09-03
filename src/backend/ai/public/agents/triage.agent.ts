@@ -1,5 +1,6 @@
 
 import { ai } from '@/backend/ai/core/config/genkit.config';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { z } from 'genkit';
 
 const TriageOutputSchema = z.object({
@@ -39,7 +40,9 @@ export const triageAgent = ai.defineFlow(
 
         const { safeGenerate } = await import('@/backend/ai/core/utils/safe-generation');
         const result = await safeGenerate({
-            model: 'vertexai/gemini-2.5-flash',
+            // model-registry role 'chat' (spec §5.1); falls back to the code
+            // default (gemini-2.5-flash) on any registry error.
+            model: (await resolveModel('chat')).prefixed,
             prompt: prompt,
             output: {
                 format: 'json',

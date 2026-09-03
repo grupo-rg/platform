@@ -1,6 +1,7 @@
 
 import { z } from 'zod';
 import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { PriceBookItem } from '../domain/price-book-item';
 import { createRequire } from 'module';
 
@@ -127,7 +128,9 @@ export class LLMPriceBookParser {
                 `;
 
                 const result = await ai.generate({
-                    model: 'vertexai/gemini-2.5-flash',
+                    // model-registry role 'extraction' (spec §5.1, site #20); falls
+                    // back to the code default (gemini-2.5-flash) on any registry error.
+                    model: (await resolveModel('extraction')).prefixed,
                     prompt: [
                         { text: promptText },
                         { media: { url: dataUri, contentType: 'application/pdf' } }

@@ -1,6 +1,7 @@
 
 import { PriceBookItem } from '../domain/price-book-item';
 import { ai } from '@/genkit/index';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { z } from 'zod';
 import { PriceBookItemSchema } from '../domain/price-book-item';
 import { PDFDocument } from 'pdf-lib';
@@ -119,7 +120,9 @@ export class GeminiPriceBookParser {
         `;
 
         const { output } = await ai.generate({
-            model: 'vertexai/gemini-2.5-flash',
+            // model-registry role 'extraction' (spec §5.1, site #19); falls back
+            // to the code default (gemini-2.5-flash) on any registry error.
+            model: (await resolveModel('extraction')).prefixed,
             config: {
                 temperature: 0.1,
             },
