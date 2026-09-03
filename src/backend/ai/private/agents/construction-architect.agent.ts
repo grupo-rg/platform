@@ -1,5 +1,6 @@
 
 import { ai } from '@/backend/ai/core/config/genkit.config';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { z } from 'genkit';
 
 // Input Schema: Project Description + Specs
@@ -50,7 +51,7 @@ export const constructionArchitectAgent = ai.defineFlow(
 
         const { safeGenerate } = await import('@/backend/ai/core/utils/safe-generation');
         const result = await safeGenerate({
-            model: 'vertexai/gemini-2.5-flash',
+            model: (await resolveModel('architect')).prefixed,
             prompt: prompt,
             output: {
                 format: 'json',

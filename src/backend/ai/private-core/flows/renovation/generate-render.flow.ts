@@ -1,6 +1,7 @@
 import { genkit, z } from 'genkit';
 import { ai } from '@/backend/ai/shared/config/genkit.config';
 import { getGeminiClient } from '@/backend/ai/infrastructure/gemini-client';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 
 const RenderInputSchema = z.object({
     imageBuffer: z.string().describe("Base64 encoded image"),
@@ -48,7 +49,7 @@ export const generateRenderFlow = ai.defineFlow(
         // AUTO-PROMPTING with Gemini 2.5 Flash (Translator/Enhancer)
         // Taking the simplistic user intention and blowing it up into a master prompt
         const promptTranslatorResponse = await client.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: (await resolveModel('chat')).id,
             contents: [{
                 role: 'user', 
                 parts: [{ text: `Actúa como un director de arte arquitectónico experto en prompts para motores fotorealistas como Midjourney v6 y Vertex Imagen 3. 
@@ -81,7 +82,7 @@ Devuelve ÚNICAMENTE el texto en inglés del prompt sin comentarios ni comillas.
         const aspectRatioVal = input.aspectRatio || "16:9";
 
         const response = await client.models.generateContent({
-            model: "gemini-2.5-flash-image",
+            model: (await resolveModel('image_gen')).id,
             contents: [
                 { role: 'user', parts: [{ text: finalPrompt }, imagePart] }
             ],

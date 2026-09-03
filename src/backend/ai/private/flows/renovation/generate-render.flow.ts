@@ -1,6 +1,7 @@
 import { z } from 'genkit';
 import { ai } from '@/backend/ai/core/config/genkit.config';
 import { getGeminiClient } from '@/backend/ai/core/infrastructure/gemini-client';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 
 const RenderInputSchema = z.object({
     imageBuffers: z.array(z.string()).describe("Base64 encoded images"),
@@ -65,7 +66,7 @@ export const generateRenderFlow = ai.defineFlow(
 
         // 3. Call Gemini via Vertex AI (no geo-restrictions)
         const response = await client.models.generateContent({
-            model: "gemini-2.5-flash-image",
+            model: (await resolveModel('image_gen')).id,
             contents: [
                 { role: 'user', parts: [{ text: promptText }, ...imageParts] }
             ],

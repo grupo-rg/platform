@@ -1,4 +1,5 @@
 import { ai } from '@/backend/ai/core/config/genkit.config';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { z } from 'zod';
 
 export const webPriceSearchTool = ai.defineTool(
@@ -39,7 +40,7 @@ export const webPriceSearchTool = ai.defineTool(
         `;
 
         const result = await ai.generate({
-            model: 'vertexai/gemini-2.5-flash', // Explicit stable version
+            model: (await resolveModel('chat')).prefixed, // Explicit stable version
             prompt: prompt,
             config: { temperature: 0.1 },
             output: {

@@ -1,5 +1,6 @@
 
 import { ai } from './index'; // Genkit instance
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { z } from 'zod';
 import { PriceBookItemSchema } from './schema';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -58,7 +59,7 @@ export async function processPriceBookPdf(fileUrl: string, year: number) {
     `;
 
         const { output } = await ai.generate({
-            model: 'vertexai/gemini-2.5-pro',
+            model: (await resolveModel('pricing_pro')).prefixed,
             prompt: [
                 { text: extractionPrompt },
                 { media: { url: `data:application/pdf;base64,${pdfBase64}` } }

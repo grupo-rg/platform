@@ -1,4 +1,5 @@
 import { getFilesApiClient as getGeminiClient } from './gemini-client';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -53,12 +54,15 @@ export const GeminiFilesService = {
      */
     async createBatchExtractionJob(pdfFileUri: string, promptText: string) {
         const client = getGeminiClient();
+        // Files/Batch API uses the Developer-API `models/<id>` id shape (a separate
+        // client migration); the id itself now comes from the registry.
+        const extractionModel = `models/${(await resolveModel('extraction')).id}`;
 
         // Create the JSONL request object
         // The Batch API expects each line to be a valid GenerateContent request
         const batchRequest = {
             request: {
-                model: "models/gemini-2.5-flash",
+                model: extractionModel,
                 contents: [
                     {
                         role: "user",
@@ -89,7 +93,7 @@ export const GeminiFilesService = {
             }
 
             const batchJob = await batchClient.create({
-                model: "models/gemini-2.5-flash",
+                model: extractionModel,
                 src: { fileName: jsonlFile.name }
             });
 

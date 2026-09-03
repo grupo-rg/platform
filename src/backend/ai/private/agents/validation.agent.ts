@@ -1,4 +1,5 @@
 import { ai } from '@/backend/ai/core/config/genkit.config';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { z } from 'genkit';
 
 export const validationAgent = ai.defineFlow(
@@ -34,7 +35,7 @@ export const validationAgent = ai.defineFlow(
         `;
 
         const result = await ai.generate({
-            model: 'vertexai/gemini-2.5-flash',
+            model: (await resolveModel('chat')).prefixed,
             prompt: prompt,
             output: {
                 format: 'json',

@@ -2,6 +2,7 @@ import { MessagingService } from "./messaging.service";
 import { MARKETING_TEMPLATES } from "../domain/marketing-templates";
 import { marked } from "marked";
 import { getGeminiClient } from "@/backend/ai/core/infrastructure/gemini-client";
+import { resolveModel } from "@/backend/ai/core/config/model-registry";
 
 /**
  * Decorator (Interceptor Pattern) para reescribir mensajes usando Gemini
@@ -75,7 +76,7 @@ REGLAS ESTRICTAS E INQUEBRANTABLES:
             // agotado) a Vertex AI (pago por uso) vía el cliente @google/genai.
             const client = getGeminiClient();
             const response = await client.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: (await resolveModel('marketing')).id,
                 contents: [{ role: 'user', parts: [{ text: `Reescribe y devuelve el EMAIL COMPLETO de principio a fin adaptado a mi perfil ahora mismo.` }] }],
                 config: {
                     systemInstruction,

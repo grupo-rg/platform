@@ -1,4 +1,5 @@
 import { ai } from '@/backend/ai/core/config/genkit.config';
+import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { z } from 'genkit';
 import { ProjectSpecs } from '@/backend/budget/domain/project-specs';
 
@@ -94,7 +95,7 @@ export const aparejadorOrchestratorAgent = ai.defineFlow(
         const { safeGenerate } = await import('@/backend/ai/core/utils/safe-generation');
 
         const result = await safeGenerate({
-            model: 'vertexai/gemini-2.5-flash',
+            model: (await resolveModel('chat')).prefixed,
             prompt: prompt,
             output: {
                 format: 'json',
