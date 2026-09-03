@@ -306,6 +306,11 @@ export const TableRowItem = React.memo(({
 
     const hasBreakdown = (item.item?.breakdown?.length ?? 0) > 0;
 
+    // WS-B — densidad de fila. Las acciones IA de la fila comparten un único
+    // acento (púrpura/índigo = "IA") para que la fila lea con calma. Se revelan
+    // en hover (desktop) y permanecen SIEMPRE accesibles en el menú ⋯ (touch).
+    const iaActionBtnClass = "h-6 px-2 text-[10px] font-semibold rounded-md flex items-center gap-1 shadow-sm transition-colors text-slate-600 bg-slate-50 border border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 dark:bg-white/5 dark:text-slate-300 dark:border-white/10 dark:hover:bg-purple-900/20 dark:hover:text-purple-300 dark:hover:border-purple-800 disabled:opacity-50 disabled:pointer-events-none";
+
     return (
         <div
             ref={setSortableRef}
@@ -370,7 +375,11 @@ export const TableRowItem = React.memo(({
                             target.style.height = `${target.scrollHeight}px`;
                         }}
                     />
-                    <div className="flex items-center gap-2 mt-1">
+                    {/* WS-B — LÍNEA DE ESTADO (siempre visible en reposo):
+                        código + procedencia + calibración + reconciliación + iconos de estado.
+                        Los iconos de estado (desviación / needs-review) comparten un único
+                        acento = ámbar. El chip "Aprox." (WS-F) vive junto al Total, intacto. */}
+                    <div className="flex items-center flex-wrap gap-1.5 mt-1">
                         <span className={cn(
                             "text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors",
                             item.item?.code === 'GENERIC-EXPLICIT'
@@ -424,51 +433,6 @@ export const TableRowItem = React.memo(({
                                 />
                             ) : null;
                         })()}
-                        {/* Unified Audit & Breakdown Button */}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                                "h-5 px-2 text-[10px] font-semibold transition-all shadow-sm flex items-center gap-1.5",
-                                hasBreakdown
-                                    ? "bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 hover:from-purple-200 hover:to-indigo-200 dark:from-purple-900/30 dark:to-indigo-900/30 dark:text-purple-300 ring-1 ring-purple-500/20"
-                                    : "bg-slate-100/80 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10 dark:hover:bg-white/10 dark:hover:text-slate-200"
-                            )}
-                            onClick={() => onOpenBreakdown(item)}
-                        >
-                            <Sparkles className={cn("w-3 h-3", hasBreakdown ? "text-indigo-500 animate-[pulse_2s_ease-in-out_infinite]" : "text-amber-500/80")} />
-                            Auditar & Detalles
-                        </Button>
-
-                        {/* Search Similar Items Button */}
-                        {!isReadOnly && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-5 px-2 text-[10px] font-semibold transition-all shadow-sm bg-slate-50 text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-300 border border-slate-100 dark:border-white/10 disabled:opacity-50 disabled:pointer-events-none"
-                                onClick={() => handleGenerateBreakdown(true)}
-                                disabled={isPending}
-                            >
-                                <Search className="w-3 h-3 mr-1" />
-                                Buscar similares
-                            </Button>
-                        )}
-
-
-
-                        {/* Frictionless ICL Micro-Interaction */}
-                        {showIclPrompt && (
-                            <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => setIsIclModalOpen(true)}
-                                className="h-5 px-2 text-[10px] font-semibold transition-all shadow-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800 animate-in fade-in zoom-in duration-300"
-                            >
-                                <BrainCircuit className="w-3 h-3 mr-1" />
-                                Enseñar a la IA el motivo
-                            </Button>
-                        )}
-
                         {isDeviated && (
                             <TooltipProvider>
                                 <Tooltip>
@@ -500,11 +464,54 @@ export const TableRowItem = React.memo(({
                             </TooltipProvider>
                         )}
                     </div>
+
+                    {/* WS-B — LÍNEA DE ACCIONES IA (revelada en hover, desktop).
+                        Todas estas acciones permanecen SIEMPRE accesibles en el menú ⋯
+                        (imprescindible en táctil, donde no hay hover). Acento unificado IA. */}
+                    <div className="hidden group-hover:flex items-center flex-wrap gap-1 mt-0.5">
+                        {/* Auditar & Detalles → abre el sheet (equivale a "Ver Detalles" del menú ⋯) */}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={iaActionBtnClass}
+                            onClick={() => onOpenBreakdown(item)}
+                        >
+                            <Sparkles className={cn("w-3 h-3", hasBreakdown ? "text-indigo-500" : "text-slate-400")} />
+                            Auditar & Detalles
+                        </Button>
+
+                        {/* Buscar similares → candidatos RAG (equivale a "Buscar similares" del menú ⋯) */}
+                        {!isReadOnly && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className={iaActionBtnClass}
+                                onClick={() => handleGenerateBreakdown(true)}
+                                disabled={isPending}
+                            >
+                                <Search className="w-3 h-3" />
+                                Buscar similares
+                            </Button>
+                        )}
+
+                        {/* Enseñar a la IA (ICL) → equivale a "Registrar Criterio Heurístico" del menú ⋯ */}
+                        {showIclPrompt && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsIclModalOpen(true)}
+                                className={iaActionBtnClass}
+                            >
+                                <BrainCircuit className="w-3 h-3" />
+                                Enseñar a la IA
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* Unit */}
-            <div className="w-[80px] shrink-0 p-2 pt-3">
+            <div className="w-[80px] shrink-0 px-3 pt-3 pb-2">
                 <EditableCell
                     value={item.item?.unit || 'ud'}
                     onChange={(val) => handleUpdate(item.id, { item: { ...item.item!, unit: val as string } })}
@@ -513,7 +520,7 @@ export const TableRowItem = React.memo(({
             </div>
 
             {/* Quantity */}
-            <div className="w-[100px] shrink-0 p-2 text-right pt-3">
+            <div className="w-[100px] shrink-0 px-3 pt-3 pb-2 text-right">
                 <EditableCell
                     value={item.item?.quantity || 0}
                     onChange={(val) => handleUpdate(item.id, { item: { ...item.item!, quantity: Number(val) } })}
@@ -537,7 +544,7 @@ export const TableRowItem = React.memo(({
             {hasDualPrice ? (
                 <>
                     {/* Precio BC3 (del propio archivo) */}
-                    <div className="w-[110px] shrink-0 p-2 text-right pt-2.5">
+                    <div className="w-[110px] shrink-0 px-3 pt-2.5 pb-2 text-right">
                         {bc3Price != null ? (
                             <button
                                 type="button"
@@ -557,7 +564,7 @@ export const TableRowItem = React.memo(({
                         )}
                     </div>
                     {/* Precio IA (estimación catálogo + Vertex) */}
-                    <div className="w-[110px] shrink-0 p-2 text-right pt-2.5">
+                    <div className="w-[110px] shrink-0 px-3 pt-2.5 pb-2 text-right">
                         <button
                             type="button"
                             onClick={() => onUpdate(item.id, { item: { ...item.item!, active_price_source: 'ai', unitPrice: aiPrice } })}
@@ -580,7 +587,7 @@ export const TableRowItem = React.memo(({
                 </>
             ) : (
                 /* Unit Price — mostrado all-in (raw × markupFactor). Edita en valor all-in y se guarda raw. */
-                <div className="w-[120px] shrink-0 p-2 text-right pt-3">
+                <div className="w-[120px] shrink-0 px-3 pt-3 pb-2 text-right">
                     <div className="relative group/price">
                         <EditableCell
                             value={displayUnitPrice}
@@ -606,7 +613,7 @@ export const TableRowItem = React.memo(({
             )}
 
             {/* Total Price */}
-            <div className="w-[120px] shrink-0 p-2 text-right font-bold text-slate-700 dark:text-white font-mono bg-slate-50/30 dark:bg-white/5 pt-3">
+            <div className="w-[120px] shrink-0 px-3 pt-3 pb-2 text-right font-bold text-slate-700 dark:text-white font-mono bg-slate-50/30 dark:bg-white/5">
                 <EditableCell
                     value={displayTotal}
                     onChange={handleTotalChange}
@@ -671,14 +678,36 @@ export const TableRowItem = React.memo(({
                                         <span className="text-[10px] text-slate-400 font-normal">Alinea con Catálogos Oficiales o presenta Opciones RAG</span>
                                     </div>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                {/* WS-B — espejo táctil del botón "Buscar similares" de la fila
+                                    (forceShowCandidates = true). En desktop está en hover; aquí
+                                    queda siempre accesible sin hover. */}
+                                <DropdownMenuItem
+                                    onClick={(e) => {
+                                        if (isReadOnly || isPending) {
+                                            e.preventDefault();
+                                            return;
+                                        }
+                                        handleGenerateBreakdown(true);
+                                    }}
+                                    disabled={isReadOnly || isPending}
+                                    className={cn(
+                                        "text-sm font-medium focus:bg-purple-50 dark:focus:bg-purple-900/20 focus:text-purple-700 dark:focus:text-purple-300 rounded-lg px-3 py-2 transition-colors",
+                                        (isReadOnly || isPending) ? "opacity-50 pointer-events-none" : "cursor-pointer"
+                                    )}
+                                >
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="flex items-center gap-2"><Search className="w-4 h-4 text-purple-600 dark:text-purple-400" />Buscar similares</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">Muestra candidatos del catálogo para elegir</span>
+                                    </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                     onClick={(e) => {
                                         if (isReadOnly) {
                                             e.preventDefault();
                                             return;
                                         }
                                         setIsIclModalOpen(true);
-                                    }} 
+                                    }}
                                     disabled={isReadOnly}
                                     className={cn(
                                         "text-sm font-medium focus:bg-indigo-50 dark:focus:bg-indigo-900/20 focus:text-indigo-700 dark:focus:text-indigo-300 rounded-lg px-3 py-2 transition-colors",
