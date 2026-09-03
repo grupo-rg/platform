@@ -527,6 +527,9 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
     const [showRequirements, setShowRequirements] = useState(true);
     const [requirementsExpanded, setRequirementsExpanded] = useState(false);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    // Micrófono: mientras se transcribe el audio bloqueamos el input (para no
+    // enviar el placeholder por error) y al terminar auto-enviamos la transcripción.
+    const [isTranscribing, setIsTranscribing] = useState(false);
 
     // F7 — BC3: al preparar un .bc3, lo detectamos (parse rápido en ai-core) para
     // mostrar la tarjeta con capítulos/partidas/con-precio antes de importar.
@@ -928,36 +931,48 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
     };
 
     const handleMicClick = async () => {
-        if (isRecording) {
-            const blob = await stopRecording();
-            if (blob) {
-                // Create FormData
-                const formData = new FormData();
-                formData.append('audio', blob, 'recording.webm');
-
-                // Optimistic UI update or loading state could go here
-                setInput(w.input.transcribing);
-
-                try {
-                    const { processAudioAction } = await import('@/actions/audio/process-audio.action');
-                    const result = await processAudioAction(formData);
-
-                    if (result.success && result.transcription) {
-                        // Append transcription to current input or replace it? 
-                        // Let's replace for now, or append if input existed.
-                        setInput(prev => prev === w.input.transcribing ? result.transcription : `${prev} ${result.transcription}`);
-                    } else {
-                        console.error(result.error);
-                        setInput(""); // Clear loading text on error
-                        // toast error
-                    }
-                } catch (error) {
-                    console.error("Audio upload failed", error);
-                    setInput("");
-                }
-            }
-        } else {
+        if (!isRecording) {
             await startRecording();
+            return;
+        }
+
+        const blob = await stopRecording();
+        if (!blob) return;
+
+        // Bloqueamos el input mientras transcribimos. NO tocamos `input`: así el
+        // usuario no puede enviar por error el texto "Transcribiendo audio...".
+        setIsTranscribing(true);
+        let text = '';
+        try {
+            const formData = new FormData();
+            formData.append('audio', blob, 'recording.webm');
+
+            const { processAudioAction } = await import('@/actions/audio/process-audio.action');
+            const result = await processAudioAction(formData);
+
+            if (result.success && result.transcription) {
+                text = result.transcription.trim();
+            } else if (!result.success) {
+                console.error(result.error);
+            }
+        } catch (error) {
+            console.error("Audio upload failed", error);
+        } finally {
+            // Desbloqueamos ANTES de enviar, para que el indicador de "procesando"
+            // del stream tome el relevo (y no se quede el estado de transcripción).
+            setIsTranscribing(false);
+        }
+
+        if (!text) return;
+
+        // Auto-envío inmediato: la transcripción va directa al chat sin pulsar Enviar.
+        // (El micrófono sólo se muestra con el input vacío y sin adjuntos, así que
+        // enviar sólo la transcripción es seguro.)
+        if (!isLimitReached && (state as string) !== 'generated' && state !== 'uploading') {
+            await sendMessage(text);
+        } else {
+            // Si no se puede enviar ahora, dejamos el texto editable en el input.
+            setInput(text);
         }
     };
     const handleReset = async () => {
@@ -1891,10 +1906,10 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                         value={input}
                                         onChange={(e) => setInput(e.target.value)}
                                         onKeyDown={handleKeyDown}
-                                        placeholder="Pega aquí todo tu proyecto o escribe..."
-                                        className="min-h-[100px] max-h-48 w-full resize-none border-0 border-transparent bg-transparent py-4 text-base placeholder:text-gray-500 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none shadow-none text-gray-100 scrollbar-hide font-medium leading-relaxed"
+                                        placeholder={isTranscribing ? w.input.transcribing : "Pega aquí todo tu proyecto o escribe..."}
+                                        className="min-h-[100px] max-h-48 w-full resize-none border-0 border-transparent bg-transparent py-4 text-base placeholder:text-gray-500 focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none shadow-none text-gray-100 scrollbar-hide font-medium leading-relaxed disabled:opacity-70"
                                         rows={1}
-                                        disabled={(state as string) === 'generated' || isLimitReached || state === 'uploading'}
+                                        disabled={(state as string) === 'generated' || isLimitReached || state === 'uploading' || isTranscribing}
                                     />
 
                                     <div className="shrink-0 flex items-center gap-1 mb-0.5">
@@ -1934,6 +1949,16 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                                             >
                                                 <Send className="h-4 w-4 md:h-5 md:w-5 ml-1" />
                                             </Button>
+                                        ) : isTranscribing ? (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                disabled
+                                                title={w.input.transcribing}
+                                                className="h-10 w-10 md:h-12 md:w-12 rounded-full text-primary"
+                                            >
+                                                <Loader2 className="h-5 w-5 animate-spin" />
+                                            </Button>
                                         ) : (
                                             <Button
                                                 variant={isRecording ? "destructive" : "ghost"}
@@ -1957,7 +1982,7 @@ export function BudgetWizardChat({ isAdmin = false, isPublicMode = false }: { is
                         </motion.div>
 
                         <p className="mt-3 text-center text-xs font-medium text-gray-400 dark:text-gray-600 hidden md:block pointer-events-auto">
-                            {isRecording ? `${w.input.recordingInfo} ${formatTime(recordingTime)}` : w.input.keyboardHint}
+                            {isTranscribing ? w.input.transcribing : (isRecording ? `${w.input.recordingInfo} ${formatTime(recordingTime)}` : w.input.keyboardHint)}
                         </p>
                     </div>
                 </div>
