@@ -25,6 +25,8 @@ import {
     Sparkles,
     Search,
     ListTree,
+    Layers,
+    Scale,
     Trash2,
     Copy,
     AlertTriangle,
@@ -173,6 +175,23 @@ export const TableRowItem = React.memo(({
     const deviation = originalPrice > 0 ? Math.abs((currentPrice - originalPrice) / originalPrice) : 0;
     const isDeviated = deviation > 0.2;
     const needsReview = item.item?.needsHumanReview;
+    // Wave 2 — procedencia de la partida (match_kind) visible en la fila para
+    // dirigir la revisión: 'from_scratch' (compuesta) y '1:N' (combinada) son las
+    // de mayor incertidumbre; '1:1' (match directo de catálogo) no se marca para
+    // no añadir ruido. El dato ya viaja en item.item.match_kind desde el backend.
+    const matchKind = item.item?.match_kind;
+    const provenance = matchKind === 'from_scratch'
+        ? { label: 'Compuesta', tip: 'Partida compuesta desde cero (mano de obra + materiales + medios auxiliares). Revisa rendimientos y precios.', cls: 'text-violet-700 bg-violet-50 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' }
+        : matchKind === '1:N'
+            ? { label: 'Combinada', tip: 'Combinada a partir de varias partidas del catálogo.', cls: 'text-sky-700 bg-sky-50 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800' }
+            : null;
+
+    // Wave 2 — factor de calibración catálogo→real aplicado al PEM. Transparencia
+    // "nada oculto" (spec §6/§8): visible sólo cuando el pricer aplicó un factor
+    // ≠ 1.0. Los campos los stampa el pricer Python en ai_resolution.
+    const appliedCalFactor: number | undefined = item.item?.aiResolution?.applied_calibration_factor;
+    const preCalPrice: number | undefined = item.item?.aiResolution?.pre_calibration_unit_price;
+    const hasCalibration = typeof appliedCalFactor === 'number' && Math.abs(appliedCalFactor - 1) > 0.001;
 
     // AI Candidates Inline State
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -354,6 +373,41 @@ export const TableRowItem = React.memo(({
                         )}>
                             {item.item?.code || "---"}
                         </span>
+                        {provenance && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className={cn("flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border cursor-help", provenance.cls)}>
+                                            {matchKind === 'from_scratch'
+                                                ? <Layers className="w-3 h-3" />
+                                                : <ListTree className="w-3 h-3" />}
+                                            {provenance.label}
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p className="max-w-[220px]">{provenance.tip}</p></TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                        {hasCalibration && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border cursor-help text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">
+                                            <Scale className="w-3 h-3" />
+                                            Calib ×{appliedCalFactor!.toFixed(2)}
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p className="max-w-[240px]">
+                                            Calibración catálogo→real ×{appliedCalFactor!.toFixed(2)} aplicada sobre el PEM
+                                            {typeof preCalPrice === 'number' && preCalPrice > 0
+                                                ? ` (base ${formatCurrency(preCalPrice * markupFactor)} → ${formatCurrency(preCalPrice * appliedCalFactor! * markupFactor)})`
+                                                : ''}
+                                        </p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
                         {isMarkupBaked && onOpenReconciliation && (() => {
                             const div = detectDivergence(item);
                             return div.hasDivergence ? (
@@ -432,7 +486,9 @@ export const TableRowItem = React.memo(({
                                         </span>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                        <p>Candidatos débiles. Revisión IA Sugerida.</p>
+                                        <p>{matchKind === 'from_scratch'
+                                            ? 'Partida compuesta desde cero — revisa rendimientos y precios.'
+                                            : 'Candidatos débiles. Revisión IA sugerida.'}</p>
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
