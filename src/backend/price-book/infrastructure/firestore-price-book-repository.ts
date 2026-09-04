@@ -24,6 +24,18 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app'; // We need this
 
+/**
+ * P2 — Down-weight de procedencia. Las partidas from_scratch que el constructor
+ * guarda en su libro desde el editor se etiquetan `source: 'ai_generated'` en la
+ * MISMA colección `price_book_2025` que el catálogo oficial COAATMCA (que no
+ * marca `source`). En la búsqueda de similares ("Buscar similares" del editor)
+ * NO deben competir de igual a igual hasta estar validadas: se multiplica su
+ * `matchScore` por este factor para relegarlas ante empates con un match oficial.
+ * NO se excluyen — siguen apareciendo, solo bajan en el ranking. 0.85 = ~15% de
+ * penalización suave (misma convención que el adapter Python `firestore_price_book.py`).
+ */
+const AI_GENERATED_MATCH_DOWNWEIGHT = 0.85;
+
 export class FirestorePriceBookRepository implements PriceBookRepository {
     private db;
     private collectionName: string;
@@ -142,6 +154,11 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
                 }
             }
 
+            // P2 — relega (no excluye) partidas `ai_generated` frente al catálogo oficial.
+            if (data.source === 'ai_generated') {
+                matchScore *= AI_GENERATED_MATCH_DOWNWEIGHT;
+            }
+
             const { embedding: _, createdAt, ...rest } = data;
 
             let createdDate: Date | undefined;
@@ -232,6 +249,11 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
                 if (vec) {
                     matchScore = this.cosineSimilarity(embedding, vec);
                 }
+            }
+
+            // P2 — relega (no excluye) partidas `ai_generated` frente al catálogo oficial.
+            if (data.source === 'ai_generated') {
+                matchScore *= AI_GENERATED_MATCH_DOWNWEIGHT;
             }
 
             const { embedding: _, createdAt, ...rest } = data;

@@ -16,6 +16,17 @@ logger = logging.getLogger(__name__)
 # el candidato — el Judge aguas abajo decide; solo se le baja el ranking.
 _DIMENSIONAL_MISMATCH_FACTOR = 0.3
 
+# P2 — Down-weight de procedencia. Las partidas from_scratch que el constructor
+# guarda en su libro desde el editor se etiquetan `source == "ai_generated"` en
+# la MISMA colección `price_book_2025` (sin `kind`, con embedding 768). El
+# vector search las surfacea junto al catálogo oficial COAATMCA. Hasta estar
+# validadas NO deben competir de igual a igual: se degrada su `matchScore` por
+# este factor para que, ante scores similares, gane el match oficial. NO se
+# excluyen — el Judge/rerank aguas abajo sigue viéndolas; solo se relegan.
+# 0.85 = penalización suave (~15%), suficiente para romper empates sin enterrar
+# un buen match de IA cuando no hay alternativa oficial cercana.
+_AI_GENERATED_SOURCE_FACTOR = 0.85
+
 
 class FirestorePriceBookAdapter(IVectorSearch):
     """Adapter de vector search sobre `price_book_2025`.
@@ -139,6 +150,16 @@ class FirestorePriceBookAdapter(IVectorSearch):
                     cand_dim = candidate.get("unit_dimension")
                     if cand_dim and cand_dim != partida_unit_dimension:
                         candidate["matchScore"] *= _DIMENSIONAL_MISMATCH_FACTOR
+
+            # P2 — Down-weight de procedencia `ai_generated`. Se aplica SIEMPRE
+            # (no depende de ningún filtro del caller) y sobre el score ya
+            # reranqueado/degradado, justo antes del sort final, para que los
+            # candidatos oficiales COAATMCA ganen los empates. `source` viaja en
+            # el propio doc de Firestore (`data.get("source")`), así que no hay
+            # nada que propagar aguas arriba.
+            for candidate in candidates:
+                if candidate.get("source") == "ai_generated":
+                    candidate["matchScore"] *= _AI_GENERATED_SOURCE_FACTOR
 
             # Final Sort and Limit.
             candidates.sort(key=lambda x: x.get("matchScore", 0), reverse=True)

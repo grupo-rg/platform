@@ -168,6 +168,63 @@ class TestDimensionalDegradation:
         assert results[0]["matchScore"] == pytest.approx(1.0, rel=1e-3)
 
 
+class TestAiGeneratedSourceDownweight:
+    """P2 — Los candidatos con `source == 'ai_generated'` (partidas from_scratch
+    guardadas por el constructor, aún sin validar) se degradan (score × 0.85)
+    para relegarlos ante el catálogo oficial COAATMCA. NO se excluyen."""
+
+    def test_ai_generated_score_is_downweighted(self) -> None:
+        snaps = [
+            _snap("official", source=None),        # catálogo oficial (sin source)
+            _snap("ia", source="ai_generated"),    # partida IA sin validar
+        ]
+        # Quitar `source=None` del doc oficial para simular ausencia real.
+        snaps[0]._data.pop("source", None)
+        adapter = FirestorePriceBookAdapter(db=_FakeDb(snaps))
+        results = adapter.search_similar_items(
+            query_vector=[1.0] + [0.0] * 767, limit=5
+        )
+
+        official = next(r for r in results if r["id"] == "official")
+        ia = next(r for r in results if r["id"] == "ia")
+
+        # Mismo embedding → mismo cosine base; el IA queda relegado por × 0.85.
+        assert official["matchScore"] > ia["matchScore"]
+        assert ia["matchScore"] == pytest.approx(official["matchScore"] * 0.85, rel=1e-3)
+
+    def test_ai_generated_not_excluded(self) -> None:
+        snaps = [_snap("ia", source="ai_generated")]
+        adapter = FirestorePriceBookAdapter(db=_FakeDb(snaps))
+        results = adapter.search_similar_items(
+            query_vector=[1.0] + [0.0] * 767, limit=5
+        )
+        # Sigue presente, solo con score degradado (no se filtra).
+        assert len(results) == 1
+        assert results[0]["id"] == "ia"
+        assert results[0]["matchScore"] == pytest.approx(0.85, rel=1e-3)
+
+    def test_official_source_is_not_downweighted(self) -> None:
+        snaps = [_snap("coa", source="coaatmca")]
+        adapter = FirestorePriceBookAdapter(db=_FakeDb(snaps))
+        results = adapter.search_similar_items(
+            query_vector=[1.0] + [0.0] * 767, limit=5
+        )
+        assert results[0]["matchScore"] == pytest.approx(1.0, rel=1e-3)
+
+    def test_ai_generated_ranks_below_official_on_tie(self) -> None:
+        snaps = [
+            _snap("ia", source="ai_generated"),
+            _snap("official"),
+        ]
+        snaps[1]._data.pop("source", None)
+        adapter = FirestorePriceBookAdapter(db=_FakeDb(snaps))
+        results = adapter.search_similar_items(
+            query_vector=[1.0] + [0.0] * 767, limit=5
+        )
+        assert results[0]["id"] == "official"
+        assert results[1]["id"] == "ia"
+
+
 class TestRankingAfterDegradation:
     """La degradación debe afectar el ORDEN final: el compatible sube, el
     incompatible baja al fondo."""
