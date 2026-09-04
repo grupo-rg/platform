@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from typing import Optional
 
 from src.budget.bc3_parser.entities import (
@@ -20,6 +22,68 @@ from src.budget.bc3_parser.tokenizer import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# --- Lever 1: detección de CABECERAS (reclasificar-no-borrar) ------------------
+# En el path de promoción-de-hoja (BC3 sin `~M`), algunas hojas que colgamos como
+# partida son en realidad TÍTULOS de sección o cláusulas contractuales, no unidades
+# de obra (p.ej. `CIM` "CIMENTACION. CIMENTACION", `C000` "Consideraciones Previas
+# [cláusula legal de 2500 chars]"). Se priciaban por error e inflaban el total. Las
+# reclasificamos a CHAPTER (sección, no se pricia) — NUNCA se borran. Ultra-
+# conservador: solo señales inequívocas, para no tumbar una partida real.
+# Solo léxico INEQUÍVOCAMENTE contractual (no 'propiedad'/'condicion'/'prescripci'
+# /'oferta', que aparecen en specs normales de partida — 'propiedades del material',
+# 'prescripciones técnicas'…). Combinado con un umbral de longitud alto, evita
+# tumbar una partida detallada real.
+_CLAUSE_MARKERS = re.compile(
+    r"contrat|clausul|licitac|pliego|adjudicac|proposicion|aval"
+)
+
+
+def _fold_text(s: Optional[str]) -> str:
+    """minúsculas + sin tildes + trim, para comparar descripciones."""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s or "")
+        if unicodedata.category(c) != "Mn"
+    ).lower().strip()
+
+
+def _looks_like_section_header(concept: "Bc3Concept", parent_chapter_desc: str) -> bool:
+    """True si una HOJA (sin `~M` ni precio, bajo un capítulo) es en realidad una
+    CABECERA de sección, no una partida de obra. Solo dispara con señales
+    inequívocas (una partida real no cae en ninguna):
+
+      1. AUTO-ECO de PALABRA ÚNICA: `~C` corto == `~T` largo Y es UNA sola palabra
+         (p.ej. 'CIMENTACION'/'CIMENTACION'). Doble guarda: en plantillas el `~C`
+         y el `~T` suelen ser idénticos incluso en partidas reales (p.ej.
+         'Instalación solado gres porcelánico'), así que exigir además que sea una
+         SOLA palabra distingue la etiqueta de sección (una palabra) de la partida
+         real (frase). Un prefijo tampoco vale (el corto suele prefijar al largo).
+      2. ECO DEL CAPÍTULO: la descripción == nombre del capítulo padre (exacto).
+      3. CLÁUSULA/BOILERPLATE: texto MUY largo (>2000) con léxico contractual
+         inequívoco. Un preámbulo legal (C000, ~5000 chars) lo cumple; una partida
+         detallada real (~800-1500 chars, aunque mencione 'propiedades') no.
+    """
+    short = _fold_text(concept.description)
+    long = _fold_text(concept.long_description)
+    if not short or len(short) < 4:
+        return False
+    # 1. auto-eco de PALABRA ÚNICA (etiqueta de sección tipo 'CIMENTACION')
+    if long and long == short and " " not in short:
+        return True
+    # 2. eco EXACTO del capítulo padre
+    pch = _fold_text(parent_chapter_desc)
+    if pch and short == pch:
+        return True
+    # 3. cláusula / boilerplate contractual (umbral alto + léxico inequívoco)
+    full = f"{short} {long}".strip()
+    if len(full) > 2000 and _CLAUSE_MARKERS.search(full):
+        return True
+    return False
+
+
+def _concept_has_price(concept: "Bc3Concept") -> bool:
+    return bool(concept.price and concept.price > 0)
 
 
 def _parse_spanish_float(s: str) -> Optional[float]:
@@ -299,6 +363,13 @@ class Bc3Parser:
              PARTIDA (aunque no tenga `~M` ni `~D` — la partida "en blanco");
              `~D` bajo capítulo ⇒ PARTIDA (descompuesta en recursos); resto de
              referenciados ⇒ COMPONENT; huérfanos ⇒ UNKNOWN.
+
+        Lever 1 (reclasificar-no-borrar): en el path de promoción-de-hoja, una hoja
+        sin precio que es una CABECERA de sección (`_looks_like_section_header`:
+        auto-eco de palabra única, eco del capítulo, o cláusula boilerplate) se
+        reclasifica a CHAPTER en vez de emitirse como partida — no se pricia ni
+        infla el total. Ultra-conservador: el ancla `~M`/precio y las guardas
+        protegen las partidas reales (nunca se borra ninguna).
         """
         # Set de códigos que aparecen como hijos en alguna decomposition.
         referenced_as_child: set[str] = set()
@@ -334,11 +405,25 @@ class Bc3Parser:
         for code, concept in tree.concepts.items():
             has_decomp = code in tree.decompositions
             has_measure = code in tree.measurements
-            parent_is_chapter = parent_of.get(code) in chapters
+            parent_code = parent_of.get(code)
+            parent_is_chapter = parent_code in chapters
 
             if has_measure:
                 concept.kind = Bc3ConceptKind.PARTIDA
             elif code in chapters:
+                concept.kind = Bc3ConceptKind.CHAPTER
+            elif (
+                parent_is_chapter
+                and not has_decomp
+                and not _concept_has_price(concept)
+                and _looks_like_section_header(
+                    concept,
+                    (tree.concepts.get(parent_code).description if parent_code and parent_code in tree.concepts else ""),
+                )
+            ):
+                # Lever 1 — CABECERA de sección (auto-eco / eco de capítulo /
+                # cláusula). Reclasificar-no-borrar a CHAPTER: no se pricia, no
+                # infla el total. Ultra-conservador (solo señales inequívocas).
                 concept.kind = Bc3ConceptKind.CHAPTER
             elif has_decomp:
                 # `~D` sin medir y no es capítulo: partida descompuesta en
