@@ -270,6 +270,27 @@ def _material_matches_description(description: Optional[str], material: str) -> 
     return False
 
 
+def _no_candidate_matches_explicit_material(
+    partida_description: Optional[str], candidates: Optional[List[Dict[str, Any]]]
+) -> Optional[str]:
+    """Backstop DETERMINISTA de fidelidad de material (regla 15 dura).
+
+    Si la partida pide un material explícito ("[MATERIAL EXPLÍCITO: X]") y NINGÚN
+    candidato del catálogo refleja ese material, devuelve X (el material pedido)
+    para forzar ``from_scratch`` — así el compositor construye la partida CON ese
+    material en vez de aceptar un 1:1 de material equivocado. Si algún candidato
+    cumple el material, o no hay material explícito, devuelve None (no interviene).
+    """
+    material = _extract_explicit_material_term(partida_description)
+    if not material:
+        return None
+    for c in (candidates or []):
+        desc = str(c.get("description") or c.get("desc") or "") if isinstance(c, dict) else ""
+        if _material_matches_description(desc, material):
+            return None  # existe candidato del material pedido → no hay conflicto
+    return material  # material pedido pero ningún candidato lo refleja
+
+
 def _candidate_price(candidate: Dict[str, Any]) -> Optional[float]:
     """Precio total del candidato (>0) o None. NUNCA usa el score de relevancia."""
     for key in ("priceTotal", "price"):
@@ -1874,6 +1895,29 @@ class SwarmPricingService:
                     item = meta["item"]
                     candidates = meta["candidates"]
                     val = evaluated.valuation
+
+                    # Backstop DETERMINISTA de FIDELIDAD DE MATERIAL (regla 15 dura):
+                    # si se pidió un material explícito y NINGÚN candidato lo refleja,
+                    # forzamos from_scratch para que el compositor lo construya con el
+                    # material pedido, en vez de aceptar un 1:1 de material equivocado.
+                    # (El prompt del evaluador a veces lo ignora — p.ej. resina→acrílico.)
+                    if val.match_kind in ("1:1", "1:N") and self.compositor is not None:
+                        _unmatched_material = _no_candidate_matches_explicit_material(
+                            item.description, candidates,
+                        )
+                        if _unmatched_material:
+                            logger.info(
+                                "[material_fidelity] %s: material '%s' sin candidato del catálogo → from_scratch",
+                                item.code, _unmatched_material,
+                            )
+                            val.match_kind = "from_scratch"
+                            val.selected_candidate = None
+                            val.breakdown = None
+                            val.needs_human_review = True
+                            self._emit(budget_id, "material_fidelity_from_scratch", {
+                                "code": item.code,
+                                "requested_material": _unmatched_material,
+                            })
 
                     # Sanitización en el boundary DTO→Domain: RestructuredItem permite None en
                     # code/unit/chapter (Optional[str]), OriginalItem los exige `str`. Coaccionamos
