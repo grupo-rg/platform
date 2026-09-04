@@ -477,3 +477,21 @@ async def test_swarm_persists_to_cache_after_llm_resolution(monkeypatch, fake_db
     h = compute_partida_hash("brand new partida", "m2")
     assert h in fake_db._store
     assert fake_db._store[h]["resolved_partida"]["code"] == "P.1"
+
+
+def test_hash_changes_with_pipeline_version():
+    """Distinta versión de pipeline => distinto hash para la misma partida
+    (invalidación por versión). Misma versión => mismo hash (estable)."""
+    a = compute_partida_hash("Plato de ducha de resina", "ud", version="v1")
+    b = compute_partida_hash("Plato de ducha de resina", "ud", version="v2")
+    assert a != b
+    a2 = compute_partida_hash("Plato de ducha de resina", "ud", version="v1")
+    assert a == a2
+
+
+def test_hash_uses_default_pipeline_version():
+    from src.budget.application.services.pricing_cache import PRICING_PIPELINE_VERSION
+    assert (
+        compute_partida_hash("x", "ud")
+        == compute_partida_hash("x", "ud", version=PRICING_PIPELINE_VERSION)
+    )

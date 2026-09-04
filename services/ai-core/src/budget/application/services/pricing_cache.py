@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -42,6 +43,16 @@ logger = logging.getLogger(__name__)
 PRICING_CACHE_COLLECTION = "partida_pricing_cache"
 PRICING_CACHE_TTL_DAYS = 90
 PRICING_CACHE_CONFIDENCE_THRESHOLD = 0.85
+
+# VERSIÓN DEL PIPELINE DE PRICING — forma parte de la clave del hash de caché.
+# Al BUMPEARLA (aquí o vía env `PRICING_PIPELINE_VERSION`), todas las entradas
+# cacheadas con la versión anterior dejan de matchear (cache-miss) → la partida
+# se RE-EVALÚA con el código nuevo y se re-cachea bajo la versión actual. Es la
+# forma de que cambios del evaluador/reranker/backstop (que NO cambian la
+# descripción de la partida) SÍ lleguen a partidas ya cacheadas. Las entradas
+# viejas quedan huérfanas y expiran solas por TTL. BUMPEAR en cada cambio que
+# altere cómo se PRECIA/SELECCIONA una partida (no en cambios cosméticos).
+PRICING_PIPELINE_VERSION = os.getenv("PRICING_PIPELINE_VERSION", "2026-09-04-material-fidelity")
 
 
 _WHITESPACE_RE = re.compile(r"\s+", re.UNICODE)
@@ -63,14 +74,23 @@ def normalize_for_hash(text: Optional[str]) -> str:
     return _WHITESPACE_RE.sub(" ", lowered).strip()
 
 
-def compute_partida_hash(description: Optional[str], unit: Optional[str]) -> str:
-    """Hash sha256 hex de la pareja (description, unit) normalizada.
+def compute_partida_hash(
+    description: Optional[str],
+    unit: Optional[str],
+    *,
+    version: Optional[str] = None,
+) -> str:
+    """Hash sha256 hex de (version_pipeline, description, unit) normalizada.
 
-    Determinista, case-insensitive, whitespace-insensitive.
+    Determinista, case-insensitive, whitespace-insensitive. La `version` (por
+    defecto `PRICING_PIPELINE_VERSION`) entra en el payload: al cambiarla, el
+    hash de la MISMA partida cambia → la caché anterior deja de matchear y la
+    partida se re-evalúa con el código nuevo (invalidación por versión).
     """
+    v = version if version is not None else PRICING_PIPELINE_VERSION
     desc = normalize_for_hash(description)
     u = normalize_for_hash(unit)
-    payload = f"{desc}|{u}".encode("utf-8")
+    payload = f"{v}|{desc}|{u}".encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
