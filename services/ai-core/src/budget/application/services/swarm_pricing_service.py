@@ -238,6 +238,21 @@ def _fold_accents(text: str) -> str:
     ).lower()
 
 
+def _descriptions_similar(a: Optional[str], b: Optional[str], threshold: float = 0.20) -> bool:
+    """Solapamiento Jaccard de tokens de contenido (≥4 letras, acento-folded)
+    entre dos descripciones. Gate de divergencia del CODE-FIRST: un autor puede
+    reutilizar un código del libro cambiando el concepto (p.ej. `UJA050` "grava"
+    vs catálogo "tierra vegetal"). Si el solapamiento cae bajo `threshold`, el
+    match por código se marca para revisión humana (no se descarta: el usuario
+    pidió code-first, pero avisamos de la divergencia)."""
+    def toks(s: Optional[str]) -> set[str]:
+        return {t for t in re.findall(r"[a-z0-9]+", _fold_accents(s or "")) if len(t) >= 4}
+    ta, tb = toks(a), toks(b)
+    if not ta or not tb:
+        return False
+    return (len(ta & tb) / len(ta | tb)) >= threshold
+
+
 def _extract_explicit_material_term(partida_description: Optional[str]) -> Optional[str]:
     """Devuelve X de "[MATERIAL EXPLÍCITO: X]" si está presente; si no, None."""
     if not partida_description:
@@ -2005,12 +2020,49 @@ class SwarmPricingService:
                     candidates = meta["candidates"]
                     val = evaluated.valuation
 
+                    # ===== CODE-FIRST (determinista) =====
+                    # Si la partida trae un CÓDIGO del libro base (CYPE / COAATMCA,
+                    # típico en BC3 de Arquímedes/Presto), su código ES la identidad
+                    # del catálogo: casamos 1:1 a esa entrada en vez de dejar que
+                    # caiga a semántico/from_scratch (que sobre-precia estructura
+                    # 2-6×). El precio y el descompuesto salen del catálogo (herencia
+                    # 1:1 aguas abajo). Si no hay código o no existe en el libro, el
+                    # LLM decide como siempre (búsqueda semántica). Gate: variantes
+                    # por código base o descripciones divergentes van a revisión.
+                    _code_first_applied = False
+                    if self.hybrid_search is not None and getattr(item, "code", None):
+                        _cm = self.hybrid_search.lookup_by_code(item.code)
+                        if _cm is not None:
+                            _prev_kind = val.match_kind
+                            _diverges = not _descriptions_similar(
+                                item.description, _cm["description"]
+                            )
+                            val.match_kind = "1:1"
+                            val.selected_candidate = _cm["catalog_code"]
+                            val.calculated_unit_price = _cm["priceTotal"]
+                            val.breakdown = None  # fuerza herencia del descompuesto del catálogo
+                            if _cm["match_kind_code"] == "base" or _diverges:
+                                val.needs_human_review = True
+                            _code_first_applied = True
+                            self._emit(budget_id, "code_first_match", {
+                                "code": item.code,
+                                "catalog_code": _cm["catalog_code"],
+                                "match": _cm["match_kind_code"],
+                                "prev_match_kind": _prev_kind,
+                                "price": _cm["priceTotal"],
+                                "description_diverges": _diverges,
+                            })
+
                     # Backstop DETERMINISTA de FIDELIDAD DE MATERIAL (regla 15 dura):
                     # si se pidió un material explícito y NINGÚN candidato lo refleja,
                     # forzamos from_scratch para que el compositor lo construya con el
                     # material pedido, en vez de aceptar un 1:1 de material equivocado.
                     # (El prompt del evaluador a veces lo ignora — p.ej. resina→acrílico.)
-                    if val.match_kind in ("1:1", "1:N") and self.compositor is not None:
+                    if (
+                        val.match_kind in ("1:1", "1:N")
+                        and self.compositor is not None
+                        and not _code_first_applied  # el match por código es autoritativo
+                    ):
                         _unmatched_material = _no_candidate_matches_explicit_material(
                             item.description, candidates,
                         )

@@ -70,6 +70,25 @@ def tokenize_es(text: Optional[str]) -> List[str]:
     return [t for t in tokens if len(t) >= 2 and t not in _SPANISH_STOPWORDS]
 
 
+# ---- Código base CYPE / FIEBDC -------------------------------------------
+
+# Los libros base (CYPE / Generador de Precios, COAATMCA) codifican las
+# partidas como 3 letras + 3 dígitos (p.ej. `ADL010`, `EHS010`, `CAV010`). Las
+# variantes de un mismo concepto añaden sufijo (`CAV010M2`, `EHM010M3`) o más
+# dígitos (`EHS01044`). El "código base" recorta a la raíz LLL+NNN para poder
+# casar variantes contra la entrada canónica del catálogo.
+_CYPE_BASE_RE = re.compile(r"^([A-Za-z]{2,4}\d{3})")
+
+
+def cype_base_code(code: Optional[str]) -> Optional[str]:
+    """Raíz canónica de un código CYPE (`CAV010M2` → `CAV010`), o None si el
+    código no sigue el patrón LLL+NNN (p.ej. códigos propios `04.03`, `ZTPB`)."""
+    if not code:
+        return None
+    m = _CYPE_BASE_RE.match(code.strip())
+    return m.group(1).upper() if m else None
+
+
 # ---- Reciprocal Rank Fusion ----------------------------------------------
 
 
@@ -143,6 +162,16 @@ class HybridCatalogSearch:
             it.code: it for it in self.catalog_items
         }
         self._index_codes: List[str] = [it.code for it in self.catalog_items]
+        # Índices para el matching CODE-FIRST (determinista, sin LLM): por código
+        # exacto (case-insensitive) y por código base CYPE (LLL+NNN). El primero
+        # visto gana cuando varias variantes comparten la misma raíz.
+        self._items_by_code_ci: Dict[str, PriceBookItemEntry] = {}
+        self._items_by_base_code: Dict[str, PriceBookItemEntry] = {}
+        for it in self.catalog_items:
+            self._items_by_code_ci.setdefault(it.code.strip().upper(), it)
+            base = cype_base_code(it.code)
+            if base:
+                self._items_by_base_code.setdefault(base, it)
         # Tokenizamos cada item con su descripción + unit_raw para que tanto
         # texto descriptivo como unidad alimenten el BM25.
         self._tokenized: List[List[str]] = [
@@ -160,6 +189,42 @@ class HybridCatalogSearch:
             f"[HybridCatalogSearch] indexed {len(self.catalog_items)} items "
             f"(bm25_built={self._bm25 is not None})"
         )
+
+    def lookup_by_code(self, code: Optional[str]) -> Optional[Dict[str, Any]]:
+        """CODE-FIRST: resuelve una partida por su CÓDIGO contra el catálogo, sin
+        LLM ni búsqueda semántica. Devuelve la entrada canónica (misma forma que
+        un candidato de `search`, más `match_kind_code` ∈ {'exact','base'} y
+        `catalog_code`) o None si el código no existe.
+
+        Prioridad: coincidencia exacta (case-insensitive) → raíz base CYPE
+        (`CAV010M2`→`CAV010`). Los códigos propios del autor (`04.03`, `ZTPB`)
+        no tienen raíz CYPE → None → el pipeline cae a búsqueda semántica."""
+        if not code:
+            return None
+        cu = code.strip().upper()
+        item = self._items_by_code_ci.get(cu)
+        match = "exact"
+        if item is None:
+            base = cype_base_code(cu)
+            item = self._items_by_base_code.get(base) if base else None
+            match = "base"
+        if item is None:
+            return None
+        return {
+            "id": item.code,
+            "code": item.code,
+            "catalog_code": item.code,
+            "description": item.description,
+            "unit": item.unit_raw,
+            "unit_normalized": item.unit_normalized,
+            "unit_dimension": item.unit_dimension,
+            "chapter": item.chapter,
+            "section": item.section,
+            "priceTotal": item.priceTotal,
+            "matchScore": 1.0,
+            "match_kind_code": match,
+            "_code_match": True,
+        }
 
     def _bm25_search(
         self,
