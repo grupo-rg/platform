@@ -42,11 +42,13 @@ async def test_query_expander_returns_multiple_queries():
     # Act
     description = "Acondicionamiento de entrada para camiones 10cm grava."
     unit = "Ud"
-    result = await expander.expand(description, unit)
+    # `expand` devuelve una tupla (queries, mapped_chapters).
+    queries, chapters = await expander.expand(description, unit)
 
     # Assert
-    assert len(result) == 3
-    assert result == expected_queries
+    assert queries == expected_queries
+    assert len(queries) == 3
+    assert chapters == []  # el mock no fija mapped_chapters → default []
     assert len(mock_llm.called_with) == 1
     assert "Acondicionamiento de entrada" in mock_llm.called_with[0]["user_prompt"]
     assert mock_llm.called_with[0]["temperature"] == 0.3
@@ -63,8 +65,8 @@ async def test_query_expander_fallback_on_exception():
 
     # Act
     description = "Pintura plastica blanca."
-    result = await expander.expand(description, "m2")
+    queries, chapters = await expander.expand(description, "m2")
 
-    # Assert
-    assert len(result) == 1
-    assert result[0] == description # Should fallback to original description safely
+    # Assert — fallback seguro: queries = [description], chapters = [].
+    assert queries == [description]
+    assert chapters == []

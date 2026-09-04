@@ -97,21 +97,27 @@ class _FakeDoc:
 
 
 class _FakeDocRef:
+    """El cliente firestore-admin es SÍNCRONO: `PricingCache` invoca
+    `.get/.set/.update` vía `asyncio.to_thread(...)` (los envuelve en un hilo).
+    Por eso el fake DEBE exponer métodos síncronos (no `async def`): si fueran
+    coroutines, `to_thread` las ejecutaría sin await → "never awaited" y el
+    "snapshot" sería la coroutine, no el `_FakeDoc`."""
+
     def __init__(self, store: Dict[str, Dict[str, Any]], doc_id: str):
         self._store = store
         self._doc_id = doc_id
 
-    async def get(self):
+    def get(self):
         data = self._store.get(self._doc_id)
         return _FakeDoc(data is not None, data)
 
-    async def set(self, data, merge=False):
+    def set(self, data, merge=False):
         if merge and self._doc_id in self._store:
             self._store[self._doc_id].update(data)
         else:
             self._store[self._doc_id] = dict(data)
 
-    async def update(self, data):
+    def update(self, data):
         self._store[self._doc_id].update(data)
 
 
