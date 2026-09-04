@@ -210,3 +210,75 @@ async def test_hallucinated_quantity_flags_review():
     res = await comp.compose(description="X", unit="ud")
     assert res.needs_human_review is True
     assert any("Revisar cantidad" in n for n in res.notes)
+
+
+# ---- P1: guard de plausibilidad de precio unitario ----------------------
+_PRICE_WARN_PREFIX = "⚠️ Precio compuesto atípico"
+
+
+@pytest.mark.asyncio
+async def test_atypical_unit_price_flags_and_keeps_price():
+    # Caso real: impermeabilización a ~535 €/m² (techo area = 400). Se añade
+    # mano de obra para que el material NO domine el directo (>85%) y así el
+    # aviso venga del guard de PRECIO (P1), no del safety-net de cantidad (#1).
+    plan = CompositionPlan(
+        main_task="Impermeabilización de suelo de baño",
+        labor=[LaborNeed(role="Oficial 1ª", hours=5.0)],       # 5*23.01 = 115.05
+        materials=[MaterialNeed(query="lámina impermeabilizante", quantity=1.2, unit="m2")],
+        aux_pct=0.0,
+    )
+    comp = FromScratchCompositor(
+        llm=_FakeLLM(plan), embed_fn=_embed,
+        catalog_lookup=_FakeCatalog({"oficial 1ª": _rate("oficial_1a", "Oficial 1ª", 23.01)}),
+        material_search=_FakeMaterials({"lámina": {"sku": "IMP", "name": "Lámina EPDM", "price": 350.0, "unit": "m2", "_cosine": 0.8}}),
+    )
+    res = await comp.compose(description="Impermeabilización", unit="m²")
+    # material 350*1.2=420 ; labor 115.05 ; directo=535.05. share material=78.5% (<85% → sin #1).
+    assert res.unit_price == pytest.approx(535.05, abs=0.02)   # precio NO alterado (no hay cap)
+    assert res.needs_human_review is True
+    warn = [n for n in res.notes if n.startswith(_PRICE_WARN_PREFIX)]
+    assert len(warn) == 1
+    assert "535.05" in warn[0] and "m²" in warn[0]
+    assert not any("Revisar cantidad" in n for n in res.notes)  # fue el guard de precio, no #1
+
+
+@pytest.mark.asyncio
+async def test_normal_unit_price_not_flagged():
+    # ~78 €/m² es un precio normalísimo por m² → el guard NO debe marcarlo.
+    plan = CompositionPlan(
+        main_task="Alicatado",
+        labor=[LaborNeed(role="Oficial 1ª", hours=1.0)],       # 23.01
+        materials=[MaterialNeed(query="azulejo", quantity=1.1, unit="m2")],  # 50*1.1=55
+        aux_pct=0.0,
+    )
+    comp = FromScratchCompositor(
+        llm=_FakeLLM(plan), embed_fn=_embed,
+        catalog_lookup=_FakeCatalog({"oficial 1ª": _rate("oficial_1a", "Oficial 1ª", 23.01)}),
+        material_search=_FakeMaterials({"azulejo": {"sku": "AZ", "name": "Azulejo", "price": 50.0, "unit": "m2", "_cosine": 0.85}}),
+    )
+    res = await comp.compose(description="Alicatado", unit="m²")
+    assert res.unit_price == pytest.approx(78.01, abs=0.02)
+    assert res.needs_human_review is False
+    assert not any(n.startswith(_PRICE_WARN_PREFIX) for n in res.notes)
+
+
+@pytest.mark.asyncio
+async def test_equipment_supply_high_price_is_exempt():
+    # Suministro de equipo: un material caro (la bomba que se compra entera)
+    # domina el precio por DISEÑO → NO debe disparar el guard de precio (P1),
+    # aunque sea miles de €/ud. (El review por otras vías queda intacto.)
+    plan = CompositionPlan(
+        main_task="Suministro de bomba de calor",
+        is_equipment_supply=True,
+        labor=[LaborNeed(role="Oficial 1ª", hours=4.0)],
+        materials=[MaterialNeed(query="bomba de calor", quantity=1.0, unit="ud")],
+        aux_pct=0.0,
+    )
+    comp = FromScratchCompositor(
+        llm=_FakeLLM(plan), embed_fn=_embed,
+        catalog_lookup=_FakeCatalog({"oficial 1ª": _rate("oficial_1a", "Oficial 1ª", 23.01)}),
+        material_search=_FakeMaterials({"bomba": {"sku": "BC", "name": "Bomba de calor 12kW", "price": 3500.0, "unit": "ud", "_cosine": 0.9}}),
+    )
+    res = await comp.compose(description="Suministro de bomba", unit="ud")
+    assert res.unit_price == pytest.approx(3592.04, abs=0.02)
+    assert not any(n.startswith(_PRICE_WARN_PREFIX) for n in res.notes)

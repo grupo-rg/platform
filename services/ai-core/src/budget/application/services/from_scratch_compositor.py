@@ -98,6 +98,73 @@ def _looks_like_hand_tool(query: str) -> bool:
 
 
 # --------------------------------------------------------------------------
+# P1 — Guard de plausibilidad de PRECIO UNITARIO (FLAG + auditoría, NO cap)
+# --------------------------------------------------------------------------
+# ``from_scratch`` YA va a ``needs_human_review``, pero un €/unidad DISPARATADO
+# se colaba sin señal explícita (caso real: impermeabilización de suelo de baño
+# a 481,35 €/m² cuando lo normal ronda 30-40 €/m²). Este guard NO altera el
+# precio: solo adjunta un aviso EXPLÍCITO en ``notes`` y emite telemetría (log
+# estructurado ``from_scratch_price_warning``) cuando el precio es un OUTLIER
+# CLARO. El objetivo es FLAG + auditabilidad, nunca censura ni cap silencioso.
+#
+# El criterio es DELIBERADAMENTE CONSERVADOR para NO marcar partidas normales:
+#
+#   (A) Techo ABSOLUTO por DIMENSIÓN de unidad, fijado MUY por encima del PEM
+#       razonable de una partida cotizada en esa unidad (headroom amplio):
+#         - area   (m²):    400 €/m²  — la obra premium por m² (fachada
+#             ventilada, impermeab. especial, pavimento técnico) rara vez pasa
+#             de ~250-300 €/m² en PEM; 400 deja margen holgado y el caso real
+#             (481 €/m²) lo supera con claridad.
+#         - linear (ml):    600 €/ml  — vigas/elementos lineales caros caben.
+#         - volume (m³):   1500 €/m³  — hormigones/resinas especiales caben.
+#         - mass   (kg):    100 €/kg  — acero/materiales por kg son € de una
+#             cifra; 100 es un techo enorme.
+#         - count  (ud):  25000 €/ud  — una "ud" puede ser un equipo entero,
+#             así que el techo es ENORME: solo caza absurdos flagrantes.
+#       Si la unidad NO se reconoce, NO se aplica techo absoluto (conservador).
+#
+#   (B) Dominancia + techo genérico: un ÚNICO componente material/maquinaria
+#       aporta >70% del ``unit_price`` Y el ``unit_price`` supera un techo
+#       GENÉRICO amplio (1000 €/unidad). Caza el caso de unidad no reconocida
+#       en el que un componente alucinado (>700 €/unidad él solo) infla el
+#       precio, sin depender de conocer la dimensión.
+#
+# Los SUMINISTROS DE EQUIPO (``plan.is_equipment_supply``) van EXENTOS: ahí un
+# único material caro (la máquina que se compra entera) domina POR DISEÑO y el
+# precio alto es CORRECTO — marcarlos sería un falso positivo garantizado.
+_UNIT_PRICE_CEILING: dict[str, float] = {
+    "area": 400.0,
+    "linear": 600.0,
+    "volume": 1500.0,
+    "mass": 100.0,
+    "count": 25000.0,
+}
+_BROAD_UNIT_PRICE_CEILING: float = 1000.0   # techo genérico para el criterio (B)
+_DOMINANCE_PRICE_SHARE: float = 0.70        # un componente > 70% del unit_price
+
+# Unidad normalizada (sin acentos ni superíndices; NFKD convierte 'm²'→'m2',
+# 'm³'→'m3') → dimensión conocida. Solo estas dimensiones reciben techo (A).
+_UNIT_DIMENSION: dict[str, str] = {
+    "m2": "area", "mp": "area",
+    "ml": "linear", "m": "linear", "mlineal": "linear", "mlin": "linear",
+    "m3": "volume",
+    "kg": "mass", "kgr": "mass",
+    "ud": "count", "u": "count", "un": "count", "uds": "count",
+    "unidad": "count", "unidades": "count",
+}
+
+
+def _unit_dimension(unit: Optional[str]) -> Optional[str]:
+    """Normaliza la unidad a una DIMENSIÓN conocida (area/linear/volume/mass/
+    count) o ``None`` si no la reconocemos. ``_strip_accents`` usa NFKD, que
+    además descompone los superíndices: 'm²'→'m2', 'm³'→'m3'."""
+    if not unit:
+        return None
+    u = _strip_accents(unit.strip().lower()).replace(" ", "").replace(".", "")
+    return _UNIT_DIMENSION.get(u)
+
+
+# --------------------------------------------------------------------------
 # Schema de descomposición (salida del LLM — SOLO recursos, sin precios)
 # --------------------------------------------------------------------------
 class LaborNeed(BaseModel):
@@ -216,7 +283,7 @@ class FromScratchCompositor:
 
     async def compose(self, *, description: str, unit: str, quantity: float = 1.0) -> ComposedResult:
         plan = await self._decompose(description, unit)
-        return await self._value(plan)
+        return await self._value(plan, unit=unit)
 
     # ---- 1. Descomposición (LLM, solo recursos) --------------------------
     async def _decompose(self, description: str, unit: str) -> CompositionPlan:
@@ -230,7 +297,7 @@ class FromScratchCompositor:
         return res or CompositionPlan(main_task=description)
 
     # ---- 2. Valoración (determinista, contra tablas reales) --------------
-    async def _value(self, plan: CompositionPlan) -> ComposedResult:
+    async def _value(self, plan: CompositionPlan, unit: str = "") -> ComposedResult:
         breakdown: List[Dict[str, Any]] = []
         notes: List[str] = []
         needs_review = False
@@ -346,10 +413,86 @@ class FromScratchCompositor:
             })
 
         unit_price = round(sum(r["total"] for r in breakdown), 2)
+
+        # P1 — guard de plausibilidad del PRECIO UNITARIO (FLAG, NO cap). Si el
+        # €/unidad es un outlier claro para la unidad, adjunta aviso explícito
+        # en `notes` + telemetría y fuerza review. NO modifica `unit_price`. Ver
+        # el bloque de constantes arriba para el criterio y su justificación.
+        if self._flag_price_outlier(unit_price=unit_price, unit=unit,
+                                    breakdown=breakdown, plan=plan, notes=notes):
+            needs_review = True
+
         return ComposedResult(
             unit_price=unit_price, breakdown=breakdown, plan=plan,
             needs_human_review=needs_review, notes=notes,
         )
+
+    # ---- 2b. Guard de plausibilidad de precio unitario (P1) --------------
+    def _flag_price_outlier(
+        self, *, unit_price: float, unit: str,
+        breakdown: List[Dict[str, Any]], plan: CompositionPlan,
+        notes: List[str],
+    ) -> bool:
+        """Marca (NO corrige) un ``unit_price`` atípico para la unidad de la
+        partida. Devuelve ``True`` si disparó (para que el caller fuerce review).
+
+        Conservador por diseño (ver constantes ``_UNIT_PRICE_CEILING`` /
+        ``_BROAD_UNIT_PRICE_CEILING``): dispara por (A) techo absoluto generoso
+        por dimensión, o (B) un único componente >70% del precio con el precio
+        por encima de un techo genérico amplio. Los suministros de equipo van
+        EXENTOS (un material caro domina por diseño → falso positivo). Nunca
+        altera el precio: solo `notes` + telemetría auditable."""
+        if unit_price <= 0 or plan.is_equipment_supply:
+            return False
+
+        dim = _unit_dimension(unit)
+        reason: Optional[str] = None
+
+        # (A) Techo absoluto por dimensión (solo si la unidad es reconocida).
+        ceiling = _UNIT_PRICE_CEILING.get(dim) if dim else None
+        if ceiling is not None and unit_price > ceiling:
+            reason = (f"{unit_price:.2f} > techo {ceiling:.0f} €/{unit} "
+                      f"para unidad tipo '{dim}'")
+
+        # (B) Dominancia de un componente + techo genérico amplio (funciona
+        #     aunque la dimensión no se reconozca).
+        dominant: Optional[Dict[str, Any]] = None
+        if reason is None and unit_price >= _BROAD_UNIT_PRICE_CEILING:
+            non_labor = [r for r in breakdown
+                         if r["type"] in ("MATERIAL", "MACHINERY") and r["total"] > 0]
+            if non_labor:
+                dominant = max(non_labor, key=lambda r: r["total"])
+                share = dominant["total"] / unit_price
+                if share >= _DOMINANCE_PRICE_SHARE:
+                    reason = (f"un componente ('{dominant['concept'][:36]}') aporta "
+                              f"{share * 100:.0f}% de {unit_price:.2f} €/"
+                              f"{unit or 'ud'}")
+
+        if reason is None:
+            return False
+
+        notes.append(
+            f"⚠️ Precio compuesto atípico: {unit_price:.2f} €/{unit or 'ud'} — "
+            f"revisar rendimientos/cantidades ({reason})"
+        )
+        # Telemetría auditable: log estructurado. El compositor no tiene emitter
+        # inyectado (no cambiamos firmas públicas), pero el caller re-emite estas
+        # `notes` en el evento `from_scratch_composed` JUNTO con el `code` de la
+        # partida, así que la traza queda ligada al código. Este log adicional
+        # deja el evento tipado y grep-able en Cloud Logging.
+        logger.warning(
+            "from_scratch_price_warning %s",
+            {
+                "event": "from_scratch_price_warning",
+                "unit_price": unit_price,
+                "unit": unit or None,
+                "unit_dim": dim,
+                "reason": reason,
+                "main_task": (plan.main_task or "")[:80],
+                "dominant_component": dominant["concept"] if dominant else None,
+            },
+        )
+        return True
 
     async def _top_material(self, query: str):
         """Devuelve ``(candidato | None, coseno)``. #2 — gate de calidad: si el
