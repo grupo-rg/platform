@@ -18,6 +18,10 @@ from src.budget.catalog.application.services.hybrid_catalog_search import Hybrid
 from src.budget.catalog.application.ports.price_book_repository import IPriceBookRepository
 from src.budget.catalog.domain.construction_dag import ConstructionDag
 from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem, BudgetBreakdownComponent, HeuristicFragment
+from src.budget.catalog.domain.breakdown_category import (
+    BreakdownCategory,
+    categorize_component,
+)
 from src.budget.application.services.reconciliation import reconcile_breakdown
 from src.budget.application.services.breakdown_normalizer import normalize_breakdown_quantities
 from src.budget.application.services.pricing_cache import PricingCache
@@ -309,6 +313,111 @@ def _candidate_score(candidate: Dict[str, Any]) -> float:
         return float(val or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+# -------------------------------------------------------------------------------------------------
+# P3 — Guard de RENDIMIENTO (yield) de MANO DE OBRA en matches 1:1/1:N.
+# -------------------------------------------------------------------------------------------------
+# En matches 1:1/1:N el descompuesto (heredado del catálogo o devuelto por el
+# LLM) a veces trae un rendimiento de M.O. absurdo — p.ej. 10,3 h de Oficial 1ª
+# cristalero para colocar UNA mampara — que infla el PEM. Los guards de precio
+# existentes (WS-3, regla 16, anomalía 100K) miran el PRECIO del candidato,
+# NO el yield de M.O. ya baked en el breakdown. Este guard FLAG + audita SIN
+# alterar precios.
+#
+# En el catálogo COAATMCA (códigos `mo*`) y en el compositor (códigos `labor-*`,
+# type=LABOR) el precio de la M.O. es €/hora y el `yield_amount` son HORAS, luego
+# Σ yield de los componentes LABOR = horas de M.O. por unidad de partida.
+#
+# Familias de unidad de la partida (no de los componentes):
+#   - DISCRETAS (ud, u…): la M.O. es la de instalar UN elemento contable.
+#   - CONTINUAS (m², m³, ml, kg…): la M.O. por unidad es intrínsecamente pequeña
+#     (alicatado ~1 h/m², pintura ~0,2 h/m²).
+#   - TANTO ALZADO (pa, %, global…): la M.O. NO es "por unidad" y puede ser
+#     legítimamente alta → el guard NO aplica.
+_LABOR_YIELD_DISCRETE_UNITS = {"ud", "u", "uds", "un", "unid", "unidad", "nº", "n", "no"}
+_LABOR_YIELD_CONTINUOUS_UNITS = {
+    "m2", "m3", "ml", "m", "km", "kg", "tn", "t", "l", "dm3", "cm3", "h", "kw",
+}
+_LABOR_YIELD_LUMPSUM_UNITS = {
+    "pa", "p.a.", "partida", "%", "gl", "global", "conjunto", "lote", "estudio",
+}
+
+# Techos GENEROSOS de horas de M.O. por unidad de partida. Muy por encima de lo
+# habitual para no marcar partidas legítimamente intensivas en M.O.:
+#   - 8 h/ud discreta = una jornada COMPLETA de un operario para UN elemento.
+#     El caso real (10,3 h para una mampara) lo cruza; una instalación normal
+#     de aparato (1–3 h) queda holgadamente por debajo.
+#   - 4 h/u continua = 4× el alicatado más intensivo (~1 h/m²); pintura, solado,
+#     etc. quedan muy por debajo.
+_LABOR_YIELD_HOURS_CEILING_DISCRETE = 8.0
+_LABOR_YIELD_HOURS_CEILING_CONTINUOUS = 4.0
+_LABOR_YIELD_HOURS_CEILING_DEFAULT = 8.0  # unidad desconocida → permisivo
+# Segunda señal ORTOGONAL: la M.O. debe dominar el PEM. Protege instalaciones
+# legítimas dominadas por MATERIAL (caldera, aparato caro): aunque tengan muchas
+# horas, la M.O. es minoría del PEM y no se marca. El caso mampara: M.O. ≈ 48%.
+_LABOR_YIELD_SHARE_MIN = 0.40
+
+
+def _normalize_unit_token(unit: Optional[str]) -> str:
+    """minúsculas, sin tildes ni separadores, para clasificar la unidad."""
+    u = _fold_accents(unit or "").strip()
+    return re.sub(r"[\s./\-]", "", u)
+
+
+def _labor_hours_ceiling_for_unit(unit_norm: str) -> Optional[float]:
+    """Techo de horas de M.O. por unidad de partida según familia de unidad.
+
+    Devuelve None si la unidad es a tanto alzado (guard NO aplica).
+    """
+    if unit_norm in _LABOR_YIELD_LUMPSUM_UNITS:
+        return None
+    if unit_norm in _LABOR_YIELD_CONTINUOUS_UNITS:
+        return _LABOR_YIELD_HOURS_CEILING_CONTINUOUS
+    if unit_norm in _LABOR_YIELD_DISCRETE_UNITS:
+        return _LABOR_YIELD_HOURS_CEILING_DISCRETE
+    return _LABOR_YIELD_HOURS_CEILING_DEFAULT
+
+
+def _analyze_labor_yield(
+    breakdown: Optional[List[BudgetBreakdownComponent]], pem_unit_price: float
+) -> Optional[Dict[str, Any]]:
+    """Suma horas y coste de los componentes LABOR de un descompuesto POR-UNIDAD.
+
+    Categoriza cada componente con la señal autoritativa `code` (`mo*`/`labor-*`)
+    y, como fallback, el `type` (LABOR). `labor_hours` = Σ yield_amount de los
+    componentes LABOR. Devuelve None si no hay M.O. o el PEM no es > 0 (nada que
+    evaluar).
+    """
+    if not breakdown or not pem_unit_price or pem_unit_price <= 0:
+        return None
+    labor_hours = 0.0
+    labor_total = 0.0
+    n_labor = 0
+    for c in breakdown:
+        cat = categorize_component(
+            getattr(c, "code", None),
+            getattr(c, "type", None),
+            getattr(c, "is_variable", None),
+        )
+        if cat != BreakdownCategory.LABOR:
+            continue
+        n_labor += 1
+        y = getattr(c, "yield_amount", None)
+        if isinstance(y, (int, float)) and y > 0:
+            labor_hours += float(y)
+        t = getattr(c, "total", None)
+        if isinstance(t, (int, float)) and t > 0:
+            labor_total += float(t)
+    if n_labor == 0:
+        return None
+    return {
+        "labor_hours": labor_hours,
+        "labor_total": labor_total,
+        "n_labor": n_labor,
+        "labor_share": labor_total / pem_unit_price,
+    }
+
 
 # S1-A-07 — concurrencia del swarm de pricing. Configurable vía
 # ``SWARM_CONCURRENCY`` (default 8). El valor previo era 4, que el incidente
@@ -2189,6 +2298,66 @@ class SwarmPricingService:
                             "unit_price": final_price,
                             "sum_breakdown": round(final_price + recon.divergence_amount, 2),
                         })
+
+                    # ===== P3 — Guard CONSERVADOR de RENDIMIENTO (yield) de M.O. =====
+                    # Solo matches de catálogo (1:1/1:N): from_scratch ya va a
+                    # review y su M.O. viene de tarifas acotadas por el compositor.
+                    # Corre sobre `breakdown_domain` YA normalizado/reconciliado
+                    # (yield preservado por reconcile: escala total y recomputa
+                    # price=total/yield). NO altera precios: solo FLAG + auditoría.
+                    #
+                    # Criterio = AND de dos señales ORTOGONALES (ambas deben darse):
+                    #   (1) horas de M.O. por unidad de partida > techo generoso de
+                    #       su familia de unidad → protege alicatado/pintura (yield
+                    #       por m² bajo, no cruza el techo).
+                    #   (2) la M.O. supera el 40% del PEM → protege instalaciones
+                    #       legítimas dominadas por material (caldera/aparato caro:
+                    #       muchas horas pero M.O. minoritaria).
+                    # Solo la anomalía real (dominada por M.O. Y horas/unidad
+                    # absurdas, como la mampara a 10,3 h/ud ≈ 48% del PEM) dispara
+                    # ambas y se marca.
+                    if val.match_kind in ("1:1", "1:N"):
+                        _ly = _analyze_labor_yield(breakdown_domain, final_price)
+                        if _ly is not None:
+                            _ceiling = _labor_hours_ceiling_for_unit(
+                                _normalize_unit_token(safe_unit)
+                            )
+                            if (
+                                _ceiling is not None
+                                and _ly["labor_hours"] > _ceiling
+                                and _ly["labor_share"] > _LABOR_YIELD_SHARE_MIN
+                            ):
+                                needs_human_review = True
+                                confidence = 40
+                                _ly_reason = (
+                                    f"Rendimiento de M.O. desproporcionado: "
+                                    f"{_ly['labor_hours']:.2f} h de mano de obra por "
+                                    f"'{safe_unit}' (techo {_ceiling:.0f} h) y la M.O. "
+                                    f"supone {_ly['labor_share'] * 100:.0f}% del PEM "
+                                    f"(umbral {_LABOR_YIELD_SHARE_MIN * 100:.0f}%). "
+                                    f"Revisar el descompuesto del match {val.match_kind}."
+                                )
+                                reasoning_full = (
+                                    (reasoning_full or "")
+                                    + "\n\n[labor_yield_warning] "
+                                    + _ly_reason
+                                )
+                                logger.warning(
+                                    "[labor_yield] %s: %s", safe_code, _ly_reason
+                                )
+                                self._emit(budget_id, 'labor_yield_warning', {
+                                    "code": safe_code,
+                                    "unit": safe_unit,
+                                    "labor_hours": round(_ly["labor_hours"], 3),
+                                    "labor_total": round(_ly["labor_total"], 2),
+                                    "labor_share": round(_ly["labor_share"], 4),
+                                    "n_labor_components": _ly["n_labor"],
+                                    "unit_price": round(final_price, 2),
+                                    "hours_ceiling": _ceiling,
+                                    "share_threshold": _LABOR_YIELD_SHARE_MIN,
+                                    "match_kind": val.match_kind,
+                                    "reason": _ly_reason,
+                                })
 
                     original_item_obj = OriginalItem(
                         code=safe_code, description=safe_description, quantity=safe_quantity,
