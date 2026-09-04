@@ -52,7 +52,7 @@ PRICING_CACHE_CONFIDENCE_THRESHOLD = 0.85
 # descripción de la partida) SÍ lleguen a partidas ya cacheadas. Las entradas
 # viejas quedan huérfanas y expiran solas por TTL. BUMPEAR en cada cambio que
 # altere cómo se PRECIA/SELECCIONA una partida (no en cambios cosméticos).
-PRICING_PIPELINE_VERSION = os.getenv("PRICING_PIPELINE_VERSION", "2026-09-04-compositor-r2")
+PRICING_PIPELINE_VERSION = os.getenv("PRICING_PIPELINE_VERSION", "2026-09-04-material-search-r3")
 
 
 _WHITESPACE_RE = re.compile(r"\s+", re.UNICODE)

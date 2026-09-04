@@ -282,3 +282,33 @@ async def test_equipment_supply_high_price_is_exempt():
     res = await comp.compose(description="Suministro de bomba", unit="ud")
     assert res.unit_price == pytest.approx(3592.04, abs=0.02)
     assert not any(n.startswith(_PRICE_WARN_PREFIX) for n in res.notes)
+
+
+from src.budget.application.services.from_scratch_compositor import _material_fidelity_conflict
+
+
+def test_material_fidelity_haya_vs_sapelly_conflicto():
+    # haya (madera) vs sapelly (madera, otra especie) -> conflicto
+    assert _material_fidelity_conflict("puerta de madera de haya", "PUERTA BLINDADA SAPELLY/BLANCA") is True
+
+
+def test_material_fidelity_pizarra_sin_piedra_conflicto():
+    assert _material_fidelity_conflict("revestimiento de piedra de pizarra", "MORTERO ADHESIVO PARA BLOQUE") is True
+
+
+def test_material_fidelity_granito_vs_piedra_generica_ok():
+    # granito (piedra) vs candidato con el genérico "piedra" -> aceptable
+    assert _material_fidelity_conflict("encimera de granito negro", "ENCIMERA PIEDRA 80cm Negro") is False
+
+
+def test_material_fidelity_especie_exacta_ok():
+    assert _material_fidelity_conflict("tarima de roble macizo", "Tarima flotante de roble natural") is False
+
+
+def test_material_fidelity_haya_vs_madera_generica_ok():
+    assert _material_fidelity_conflict("puerta de madera de haya", "Puerta de paso de madera maciza") is False
+
+
+def test_material_fidelity_sin_familia_conocida_no_interviene():
+    # resina no está en las familias madera/piedra -> no opina (False)
+    assert _material_fidelity_conflict("plato de ducha de resina", "Plato de ducha acrílico") is False

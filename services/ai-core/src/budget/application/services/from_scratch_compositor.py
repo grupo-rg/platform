@@ -87,6 +87,44 @@ def _strip_accents(text: str) -> str:
     )
 
 
+# Familias de material donde la especie/tipo concreto importa y el buscador
+# semántico suele devolver un "parecido equivocado" (misma familia, tipo distinto)
+# cuando el material exacto no está en el catálogo — ej. "haya" → "blindada
+# sapelly", "pizarra" → sin piedra. Cada familia: {genérico, especies concretas}.
+# Se restringe a MADERA y PIEDRA (donde ocurren los fallos y la distinción es
+# nítida); cerámica/metal/vidrio se omiten para no generar falsos positivos.
+_MATERIAL_FAMILIES: Dict[str, set] = {
+    "madera": {"roble", "haya", "pino", "nogal", "sapelly", "cerezo", "fresno",
+               "castano", "iroko", "wenge", "teca", "abeto", "cedro", "okume"},
+    "piedra": {"granito", "marmol", "cuarzo", "pizarra", "terrazo", "caliza",
+               "arenisca", "basalto", "travertino", "onice"},
+}
+
+
+def _material_fidelity_conflict(query: Optional[str], candidate_name: Optional[str]) -> bool:
+    """True si el candidato NO refleja el material CONCRETO pedido en `query`.
+
+    Solo opina cuando `query` pide una ESPECIE concreta de una familia conocida
+    (madera/piedra). Acepta (False) si el candidato contiene esa especie o el
+    término GENÉRICO de la familia (p.ej. "granito" → candidato con "piedra" es
+    OK). Marca conflicto (True) si el candidato trae OTRA especie de la familia
+    (haya vs sapelly) o NINGÚN término de esa familia (pizarra sin piedra). Para
+    queries sin especie concreta conocida devuelve False (no interviene).
+    """
+    q = _strip_accents(query or "").lower()
+    c = _strip_accents(candidate_name or "").lower()
+    for generic, species in _MATERIAL_FAMILIES.items():
+        requested = {s for s in species if s in q}
+        if not requested:
+            continue  # el query no pide una especie concreta de esta familia
+        if any(s in c for s in requested):
+            return False  # el candidato refleja la especie pedida
+        if generic in c:
+            return False  # el candidato trae el genérico de la familia (aceptable)
+        return True  # otra especie de la familia, o material de la familia ausente
+    return False
+
+
 def _looks_like_hand_tool(query: str) -> bool:
     """True si el término parece HERRAMIENTA DE MANO (utillaje), no maquinaria
     de ALQUILER. Determinista e insensible a acentos. Se excluye si contiene
@@ -395,13 +433,34 @@ class FromScratchCompositor:
             if cand is None:
                 needs_review = True
                 notes.append(self._miss_note("Material", mat.query, cos))
+                concept = mat.query
                 price = 0.0
-            else:
+                code = None
+                m_unit = mat.unit
+            elif _material_fidelity_conflict(mat.query, str(cand.get("name") or "")):
+                # El buscador devolvió un "parecido equivocado" (misma familia,
+                # especie distinta / material ausente): NO lo usamos como si fuera
+                # el material pedido. Conservamos el precio como ORIENTATIVO pero
+                # etiquetamos con el material del cliente y marcamos review — así
+                # el material equivocado no se cuela silenciosamente.
+                needs_review = True
+                notes.append(
+                    f"Material '{mat.query}' no hallado en catálogo (mejor "
+                    f"coincidencia: '{str(cand.get('name'))[:40]}'); precio "
+                    f"ORIENTATIVO — revisar material y precio"
+                )
+                concept = f"{mat.query} (orientativo)"
                 price = float(cand.get("price") or 0.0)
+                code = None
+                m_unit = mat.unit or cand.get("unit")
+            else:
+                concept = cand.get("name")
+                price = float(cand.get("price") or 0.0)
+                code = cand.get("sku")
+                m_unit = mat.unit or cand.get("unit")
             breakdown.append(self._row(
-                concept=(cand.get("name") if cand else mat.query), type_="MATERIAL",
-                price=price, yield_=mat.quantity, unit=(mat.unit or (cand.get("unit") if cand else None)),
-                code=(cand.get("sku") if cand else None),
+                concept=concept, type_="MATERIAL",
+                price=price, yield_=mat.quantity, unit=m_unit, code=code,
             ))
 
         direct_total = sum(r["total"] for r in breakdown)
