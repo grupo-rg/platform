@@ -280,11 +280,25 @@ class Bc3Parser:
     def _infer_kinds(self, tree: Bc3Tree) -> None:
         """Asigna `Bc3ConceptKind` heurísticamente.
 
-        Reglas:
-          - Si tiene `~M` que lo mide → PARTIDA.
-          - Si tiene `~D` pero NO `~M` → CHAPTER.
-          - Si es referenciado como hijo en algún `~D` y no tiene `~M` → COMPONENT.
-          - Resto → UNKNOWN.
+        BC3 no marca el tipo de un `~C`; se deduce por estructura. Hay DOS
+        familias de export muy distintas que debemos soportar ambas:
+
+          - **Plano, medido** (p.ej. exports desde herramientas de medición):
+            sin `~D`, cada partida se identifica por su `~M`. → `~M` ⇒ PARTIDA.
+          - **Jerárquico, sin medir** (plantillas / "presupuesto en blanco"):
+            árbol `~D` capítulo→partida, SIN `~M` ni precios. Aquí las partidas
+            son las HOJAS colgando de un capítulo (no tienen `~D` propio). Si
+            solo miráramos `~M`, este export produciría 0 partidas (budget vacío).
+
+        Estrategia en dos pasadas:
+          1. Detectar CAPÍTULOS (nodos de agrupación) por 3 señales robustas:
+             es raíz (no lo referencia nadie) · su código acaba en `#`/`##`
+             (marcador de capítulo FIEBDC) · o tiene algún hijo que a su vez
+             tiene `~D` (agrupa sub-árboles). Un nodo con `~M` nunca es capítulo.
+          2. Asignar el resto: `~M` ⇒ PARTIDA; hijo directo de un capítulo ⇒
+             PARTIDA (aunque no tenga `~M` ni `~D` — la partida "en blanco");
+             `~D` bajo capítulo ⇒ PARTIDA (descompuesta en recursos); resto de
+             referenciados ⇒ COMPONENT; huérfanos ⇒ UNKNOWN.
         """
         # Set de códigos que aparecen como hijos en alguna decomposition.
         referenced_as_child: set[str] = set()
@@ -292,14 +306,51 @@ class Bc3Parser:
             for child_code, _ in decomp.children:
                 referenced_as_child.add(child_code)
 
+        # Primer padre de cada código (para clasificar por tipo del padre).
+        parent_of: dict[str, str] = {}
+        for parent_code, decomp in tree.decompositions.items():
+            for child_code, _ in decomp.children:
+                parent_of.setdefault(child_code, parent_code)
+
+        def has_child_with_decomp(code: str) -> bool:
+            decomp = tree.decompositions.get(code)
+            if not decomp:
+                return False
+            return any(cc in tree.decompositions for cc, _ in decomp.children)
+
+        # --- Pasada 1: capítulos (nodos de agrupación) ---------------------
+        chapters: set[str] = set()
+        for code in tree.concepts:
+            if code not in tree.decompositions:
+                continue  # una hoja nunca agrupa nada → nunca es capítulo
+            if code in tree.measurements:
+                continue  # medido ⇒ partida, aunque tenga `~D` (partida-con-recursos)
+            is_root = code not in referenced_as_child
+            ends_hash = code.rstrip().endswith("#")  # marcador FIEBDC de capítulo
+            if is_root or ends_hash or has_child_with_decomp(code):
+                chapters.add(code)
+
+        # --- Pasada 2: partidas / componentes ------------------------------
         for code, concept in tree.concepts.items():
             has_decomp = code in tree.decompositions
             has_measure = code in tree.measurements
+            parent_is_chapter = parent_of.get(code) in chapters
 
             if has_measure:
                 concept.kind = Bc3ConceptKind.PARTIDA
-            elif has_decomp:
+            elif code in chapters:
                 concept.kind = Bc3ConceptKind.CHAPTER
+            elif has_decomp:
+                # `~D` sin medir y no es capítulo: partida descompuesta en
+                # recursos si cuelga de un capítulo; si no, mantenemos el
+                # comportamiento legacy (agrupación).
+                concept.kind = (
+                    Bc3ConceptKind.PARTIDA if parent_is_chapter else Bc3ConceptKind.CHAPTER
+                )
+            elif parent_is_chapter:
+                # Hoja colgando de un capítulo: es una PARTIDA "en blanco"
+                # (sin `~M` ni `~D` ni precio). Antes se perdía como COMPONENT.
+                concept.kind = Bc3ConceptKind.PARTIDA
             elif code in referenced_as_child:
                 concept.kind = Bc3ConceptKind.COMPONENT
             else:

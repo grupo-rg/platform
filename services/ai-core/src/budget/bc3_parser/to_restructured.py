@@ -84,10 +84,12 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
             seen.add(current)
             concept = tree.concepts.get(current)
             if concept and concept.kind == Bc3ConceptKind.CHAPTER:
-                # Formato consistente con el parser TABULAR: "CODE Nombre del capítulo"
+                # Formato consistente con el parser TABULAR: "CODE Nombre del capítulo".
+                # El marcador de capítulo FIEBDC ('#'/'##') no debe verse en el título.
+                clean_code = concept.code.rstrip("#").strip() or concept.code
                 if concept.description:
-                    return f"{concept.code} {concept.description}".strip()
-                return concept.code
+                    return f"{clean_code} {concept.description}".strip()
+                return clean_code
             current = parent_of.get(current)
         return "Sin Capítulo"
 
@@ -95,10 +97,11 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
     for code, concept in tree.concepts.items():
         if concept.kind != Bc3ConceptKind.PARTIDA:
             continue
+        # Una PARTIDA puede venir SIN `~M` en exports jerárquicos "en blanco"
+        # (plantilla capítulo→partida sin mediciones). No la descartamos: la
+        # emitimos con cantidad recuperada del texto o, en su defecto, 1 (irá a
+        # revisión) para que el pipeline la valore igualmente. Antes se perdía.
         measurement = tree.measurements.get(code)
-        if measurement is None:
-            # Defensivo: marcado como PARTIDA pero sin ~M — saltar.
-            continue
 
         # Descripción extensa: combinar `~C.description` (corta) + `~T` (extendida).
         short = concept.description.strip()
@@ -111,10 +114,11 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
             description = short or code  # fallback: código si no hay nada
 
         # Cantidad + unidad: normalmente del ~M. Si el ~M viene CIEGO (total 0, sin
-        # parciales), recuperamos la medición del TEXTO de la descripción y de paso
-        # limpiamos la anotación pegada. Fallback final: 1 (irá a revisión) para no
-        # quedar en 0 (0 × precio = 0€). Los BC3 bien formados NO entran aquí.
-        quantity = measurement.total_quantity
+        # parciales) O NO HAY ~M (partida "en blanco" de plantilla jerárquica),
+        # recuperamos la medición del TEXTO de la descripción y de paso limpiamos la
+        # anotación pegada. Fallback final: 1 (irá a revisión) para no quedar en 0
+        # (0 × precio = 0€). Los BC3 bien formados con ~M válido NO entran aquí.
+        quantity = measurement.total_quantity if measurement is not None else 0.0
         unit = concept.unit or "ud"
         if quantity is None or quantity <= 0:
             extracted = _extract_qty_from_text(description)
@@ -135,7 +139,7 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
 
         # Estado de mediciones estructurado (serializado a dicts para el pipeline).
         measurement_lines = None
-        if measurement.lines:
+        if measurement is not None and measurement.lines:
             measurement_lines = [
                 {
                     "comment": ln.comment,
