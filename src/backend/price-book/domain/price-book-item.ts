@@ -14,6 +14,17 @@ export const PriceBookItemSchema = z.object({
     chapter: z.string().optional(),
     section: z.string().optional(),
     page: z.number().optional(),
+    // Forma canónica del catálogo `price_book_2025` (la que ingesta COAATMCA y
+    // exige `PriceBookItemEntry` del pipeline híbrido, ver
+    // services/ai-core/.../price_book_entry.py). El buscador híbrido
+    // (`list_all_items` → BM25) filtra `where("kind","==","item")` y luego hace
+    // `PriceBookItemEntry(**data)`, que REQUIERE `unit_raw` y `chapter`. Sin estos
+    // campos, las partidas guardadas por el editor (from_scratch/IA) quedan fuera
+    // del índice híbrido y solo se reutilizan por el path vectorial legacy.
+    kind: z.literal('item').optional().describe("Discriminador item/breakdown del catálogo; el híbrido filtra kind=='item'"),
+    unit_raw: z.string().optional().describe("Unidad tal cual (= unit); requerida por PriceBookItemEntry"),
+    unit_normalized: z.string().optional(),
+    unit_dimension: z.string().optional(),
     searchKeywords: z.array(z.string()).optional(),
     createdAt: z.date().optional(),
     updatedAt: z.date().optional(),

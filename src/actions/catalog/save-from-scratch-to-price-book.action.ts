@@ -116,7 +116,14 @@ export async function saveFromScratchToPriceBookAction(input: SaveFromScratchInp
             priceLabor,
             priceMaterial,
             year: PRICE_BOOK_YEAR,
-            chapter,
+            // Forma canónica del catálogo para que la partida entre en el índice
+            // BM25 híbrido del pipeline NL→budget (`list_all_items` filtra
+            // `kind=='item'` y luego `PriceBookItemEntry(**data)` exige `unit_raw`
+            // y `chapter`). Sin esto solo la reutilizaba el path vectorial legacy.
+            kind: 'item',
+            unit_raw: unit,
+            unit_normalized: unit,
+            chapter: chapter || 'Sin Capítulo',
             searchKeywords: buildKeywords(description),
             breakdown: breakdown.length > 0 ? breakdown : undefined,
             embedding,
