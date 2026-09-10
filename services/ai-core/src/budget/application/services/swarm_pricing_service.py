@@ -1360,6 +1360,56 @@ class SwarmPricingService:
                     f"{type(_final_err).__name__}: {_final_err}"
                 )
 
+    def _build_unresolved_fallback(
+        self, item: RestructuredItem, *, reason: str
+    ) -> BudgetPartida:
+        """Partida de RESGUARDO determinista (SIN LLM) para un item que el swarm no
+        pudo valorar (fallo/omisión en fetch, chunk, batch o construcción del item).
+
+        Nunca se descarta una partida medida: se conserva marcada para revisión
+        humana (`match_kind='from_scratch'`, `needs_human_review=True`,
+        `confidence=40`). Precio activo = precio del propio BC3 si viene, si no 0.0.
+        Coste 0 (ni una llamada al LLM) — seguro a escala (500+ partidas)."""
+        safe_code = item.code or ""
+        safe_description = item.description or ""
+        safe_quantity = item.quantity if item.quantity is not None else 0.0
+        safe_unit = item.unit or "ud"
+        safe_chapter = item.chapter or "Sin Capítulo"
+        bc3_price = getattr(item, "bc3_unit_price", None)
+        measurements = getattr(item, "measurements", None)
+        active_source = "bc3" if bc3_price is not None else "ai"
+        unit_price = bc3_price if bc3_price is not None else 0.0
+        total_price = unit_price * safe_quantity
+        trace = (
+            f"[fallback_recovery] Partida conservada sin valorar por la IA "
+            f"({reason}). Precio "
+            f"{'importado del BC3' if bc3_price is not None else '0, pendiente de valorar'} "
+            f"y marcada para revisión humana — nunca se descarta una partida medida."
+        )
+        return BudgetPartida(
+            id=str(uuid.uuid4()),
+            order=0,
+            original_item=OriginalItem(
+                code=safe_code, description=safe_description, quantity=safe_quantity,
+                unit=safe_unit, chapter=safe_chapter, raw_table_data="fallback_recovery",
+            ),
+            ai_resolution=AIResolution(
+                reasoning_trace=trace,
+                calculated_unit_price=unit_price,
+                calculated_total_price=total_price,
+                confidence_score=40,
+                is_estimated=True,
+                needs_human_review=True,
+            ),
+            code=safe_code, description=safe_description, unit=safe_unit,
+            quantity=safe_quantity, unitPrice=unit_price, totalPrice=total_price,
+            isRealCost=False, matchConfidence=40.0, match_kind="from_scratch",
+            reasoning=trace,
+            bc3_unit_price=bc3_price, ai_unit_price=unit_price,
+            active_price_source=active_source, measurements=measurements,
+            needs_reconciliation=False,
+        )
+
     async def _evaluate_batch_inner(
         self,
         items: List[RestructuredItem],
@@ -1419,6 +1469,13 @@ class SwarmPricingService:
                     'resume_from_checkpoints',
                     {"resumed_count": skipped, "remaining_count": len(items)},
                 )
+
+        # Baseline de COBERTURA: la lista COMPLETA de items que deben acabar en el
+        # presupuesto (post-resume, pre-caché). Se usa al final para reconciliar y
+        # garantizar `codes(salida) ⊇ codes(esperados)` — ninguna partida medida
+        # puede desaparecer en silencio por un fallo/omisión del LLM (4 puntos de
+        # caída: fetch, chunk, batch, item). La recuperación es DETERMINISTA (sin LLM).
+        _expected_items: List[RestructuredItem] = list(items)
 
         # S1-A-04 — Cache lookup en lote ANTES del swarm.
         # Para cada item, intentamos un hit de cache; los que aciertan no
@@ -2595,7 +2652,62 @@ class SwarmPricingService:
                     continue
                 
         self._emit(budget_id, 'batch_pricing_completed', {"query": "Swarm finalizado. Ensamblando Presupuesto Real..."})
+
+        # ===== RECONCILIACIÓN DE COBERTURA (garantía anti-pérdida) =====
+        # Invariante: codes(salida) ⊇ codes(_expected_items). Cualquier partida que
+        # el swarm NO resolvió —omitida por el LLM (drop C), chunk de pricing caído
+        # (drop B), fetch de candidatos fallido (drop A) o item corrupto (drop D)—
+        # se RECUPERA aquí como fallback DETERMINISTA (sin llamada al LLM: coste 0).
+        # Nunca desaparece una partida medida en silencio. Los fallbacks NO se
+        # checkpointan (on_partida_resolved) a propósito: un 429 es transitorio y un
+        # retry debe RE-INTENTAR valorarla, no cementar el resguardo.
+        resolved_codes = {
+            p.code for p in (cached_partidas + priced_partidas) if p.code
+        }
+        fallback_partidas: List[BudgetPartida] = []
+        for _exp_item in _expected_items:
+            _exp_code = _exp_item.code or ""
+            if _exp_code in resolved_codes:
+                continue
+            try:
+                _fb = self._build_unresolved_fallback(
+                    _exp_item, reason="no resuelta por el swarm (fallo/omisión del LLM)"
+                )
+                fallback_partidas.append(_fb)
+                resolved_codes.add(_exp_code)
+                self._emit(budget_id, 'partida_fallback_recovered', {
+                    "code": _exp_code,
+                    "reason": "unresolved_by_swarm",
+                    "unit_price": _fb.unitPrice,
+                    "active_price_source": _fb.active_price_source,
+                })
+            except Exception as _fb_err:
+                # Ni el fallback determinista se pudo construir: LOUD, nunca silencioso.
+                logger.error(
+                    f"[reconciliation] No se pudo construir fallback para "
+                    f"{_exp_code!r}: {type(_fb_err).__name__}: {_fb_err}"
+                )
+                self._emit(budget_id, 'partida_recovery_failed', {
+                    "code": _exp_code,
+                    "error_type": type(_fb_err).__name__,
+                    "error": str(_fb_err),
+                })
+
+        if fallback_partidas:
+            logger.warning(
+                f"[reconciliation] Recuperadas {len(fallback_partidas)}/"
+                f"{len(_expected_items)} partidas NO resueltas por el swarm "
+                f"(conservadas para revisión, precio BC3/0)."
+            )
+        self._emit(budget_id, 'coverage_reconciliation', {
+            "expected": len(_expected_items),
+            "recovered": len(fallback_partidas),
+            "cached": len(cached_partidas),
+            "priced": len(priced_partidas),
+        })
+
         # Caller sees the full picture: resumed partidas (from prior attempts)
         # concatenated with newly resolved ones. Order: resumed first, then
-        # cached (S1-A-04, no LLM cost), then newly resolved via LLM.
-        return resume_from + cached_partidas + priced_partidas
+        # cached (S1-A-04, no LLM cost), then newly resolved via LLM, then
+        # fallbacks de reconciliación (garantía de cobertura, a revisión).
+        return resume_from + cached_partidas + priced_partidas + fallback_partidas

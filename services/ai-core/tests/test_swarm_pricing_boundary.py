@@ -90,8 +90,15 @@ def test_original_item_without_sanitization_rejects_null_unit():
 
 
 def test_evaluate_batch_skips_corrupt_item_and_emits_event(monkeypatch):
-    """Un item que revienta al construir `OriginalItem` NO aborta el batch.
-    Los demás items se resuelven normalmente; se emite `item_skipped` para el malo.
+    """Contrato "nunca perder en silencio".
+
+    Un item que revienta al construir `OriginalItem` NO aborta el batch. `OK.1` se
+    resuelve normalmente. `CORRUPT.1` no se puede construir ni como partida normal
+    (→ `item_skipped`) ni como fallback de reconciliación (el dominio parcheado
+    rechaza AMBOS `OriginalItem`), así que NO acaba en el presupuesto — pero
+    tampoco desaparece en silencio: se emite además `partida_recovery_failed`
+    (LOUD). En producción (dominio sano) el fallback SÍ se construye y `CORRUPT.1`
+    se recuperaría; aquí forzamos el peor caso "ni el fallback se puede construir".
     """
     import asyncio
 
@@ -200,14 +207,21 @@ def test_evaluate_batch_skips_corrupt_item_and_emits_event(monkeypatch):
     metrics: Dict[str, float] = {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0}
     priced = asyncio.run(svc.evaluate_batch(items, budget_id="b-1", metrics=metrics))
 
-    # Assertions: 1 partida resuelta + 1 evento item_skipped con el código correcto.
+    # `OK.1` resuelto; `CORRUPT.1` NO entra al presupuesto (ni normal ni fallback,
+    # ambos rechazados por el dominio parcheado).
     assert len(priced) == 1
     assert priced[0].code == "OK.1"
 
+    # Nunca en silencio: item_skipped (fallo al construir la partida normal) …
     skipped_events = [e for e in emitter.events if e["type"] == "item_skipped"]
     assert len(skipped_events) == 1
     assert skipped_events[0]["data"]["code"] == "CORRUPT.1"
     assert "Simulated" in skipped_events[0]["data"]["reason"]
+
+    # … y partida_recovery_failed (LOUD) cuando ni el fallback se pudo construir.
+    recovery_failed = [e for e in emitter.events if e["type"] == "partida_recovery_failed"]
+    assert len(recovery_failed) == 1
+    assert recovery_failed[0]["data"]["code"] == "CORRUPT.1"
 
 
 # -------- Test 3: item_resolved carries pricing_metadata (S1-A-04) -----------

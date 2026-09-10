@@ -386,6 +386,12 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
             # cuando el fallo ocurre en model_validate_json (JSON truncado por el LLM).
             raw_json: str = ""
             usage_metadata: Dict[str, Any] = {}
+            # S — un 429 (RESOURCE_EXHAUSTED) es rate-limit (backpressure), NO un
+            # servicio caído. Se reintenta con backoff, pero al agotar retries NO
+            # debe abrir el circuit breaker (que es singleton global): un burst de
+            # 429 lo abriría y hard-fallaría en cascada los siguientes chunks del
+            # swarm. Flag reset por intento; refleja el error del ÚLTIMO intento.
+            last_error_was_throttle = False
             try:
                 logger.debug(f"Calling Vertex AI {model} (Attempt {attempt + 1}/{self.max_retries})...")
 
@@ -461,6 +467,10 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                     # circuit rapido para no quemar recursos.
                     _circuit_breaker.record_failure()
                     raise AIProviderError(f"Terminal API Error {code} on Vertex AI: {e}")
+                if code == 429:
+                    # Rate-limit: reintentar con backoff, pero NO contar como failure
+                    # del breaker al agotar retries (ver flag arriba).
+                    last_error_was_throttle = True
                 error_str = f"Vertex API Error {code}: {e}"
                 logger.error(f"Vertex AI Error: {error_str}")
             except ValidationError as e:
@@ -498,8 +508,11 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
             if attempt >= self.max_retries:
                 # S2-A-02 — agotamos retries: marcamos un fallo en el circuit
                 # breaker. Si llevamos >3 fallos en 5 min, el próximo call
-                # se bloqueará en `should_allow_call`.
-                _circuit_breaker.record_failure()
+                # se bloqueará en `should_allow_call`. EXCEPCIÓN: si el último
+                # error fue un 429 (rate-limit), NO contamos failure — es
+                # backpressure transitorio, no un servicio caído.
+                if not last_error_was_throttle:
+                    _circuit_breaker.record_failure()
                 raise AIProviderError(f"Unknown AI API error after {self.max_retries} retries: {error_str}")
 
             delay = self.base_delay * (2 ** (attempt - 1))

@@ -292,6 +292,78 @@ async def test_adapter_4xx_terminal_error_records_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_adapter_429_throttle_does_not_record_failure(monkeypatch):
+    """Un 429 (RESOURCE_EXHAUSTED) es backpressure de rate-limit, NO un servicio
+    caído: al agotar retries NO debe registrar failure en el breaker. Si lo hiciera,
+    un burst de 429 abriría el breaker (singleton global) y hard-fallaría en cascada
+    los siguientes chunks del swarm (amplificando la pérdida de partidas)."""
+    monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "2")
+    adapter = GoogleGenerativeAIAdapter(
+        model_name="gemini-2.5-flash", max_retries=2, base_delay=0.0,
+    )
+
+    def _raise_429(**kw):
+        raise _FakeAPIError(429)
+
+    _install(adapter, _raise_429)
+
+    with pytest.raises(AIProviderError):
+        await adapter.generate_structured(
+            system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+        )
+
+    cb = get_circuit_breaker()
+    assert len(cb.failure_timestamps) == 0, "un 429 no debe contar como failure"
+    assert cb.state == CIRCUIT_HEALTHY
+
+
+@pytest.mark.asyncio
+async def test_adapter_burst_of_429_never_degrades_breaker(monkeypatch):
+    """Varias calls seguidas que agotan retries con 429 NO degradan el breaker."""
+    monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "1")
+    adapter = GoogleGenerativeAIAdapter(
+        model_name="gemini-2.5-flash", max_retries=1, base_delay=0.0,
+    )
+
+    def _raise_429(**kw):
+        raise _FakeAPIError(429)
+
+    _install(adapter, _raise_429)
+
+    for _ in range(6):
+        with pytest.raises(AIProviderError):
+            await adapter.generate_structured(
+                system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+            )
+
+    cb = get_circuit_breaker()
+    assert cb.state == CIRCUIT_HEALTHY
+    assert len(cb.failure_timestamps) == 0
+
+
+@pytest.mark.asyncio
+async def test_adapter_5xx_still_records_failure(monkeypatch):
+    """Contraste: un 5xx (servicio realmente caído, no rate-limit) SÍ cuenta."""
+    monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "1")
+    adapter = GoogleGenerativeAIAdapter(
+        model_name="gemini-2.5-flash", max_retries=1, base_delay=0.0,
+    )
+
+    def _raise_500(**kw):
+        raise _FakeAPIError(500)
+
+    _install(adapter, _raise_500)
+
+    with pytest.raises(AIProviderError):
+        await adapter.generate_structured(
+            system_prompt="s", user_prompt="u", response_schema=_MiniSchema,
+        )
+
+    cb = get_circuit_breaker()
+    assert len(cb.failure_timestamps) == 1
+
+
+@pytest.mark.asyncio
 async def test_adapter_after_3_failures_blocks_4th_call(monkeypatch):
     """Tras 3 fallos reales (no manual), la 4ª call se bloquea sin tocar API."""
     monkeypatch.setenv("LLM_CALL_MAX_RETRIES", "1")
