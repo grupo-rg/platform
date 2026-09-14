@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PdfPageThumbnails } from '@/components/prices/PdfPageThumbnails';
 import {
@@ -12,6 +12,11 @@ import {
   type ExtractPreviewResult,
   type DiffSample,
 } from '@/actions/price-book/extract-price-book-preview.action';
+import {
+  dispatchPriceBookIngestAction,
+  getPriceBookIngestStatusAction,
+  type IngestStatus,
+} from '@/actions/price-book/dispatch-price-book-ingest.action';
 
 // Cuántas páginas se extraen para el preview sincrónico (repartidas por todo
 // el libro). El libro completo se procesa en la ingesta (siguiente fase).
@@ -39,6 +44,10 @@ export function PriceBookUpdateWizard() {
   const [extracting, setExtracting] = useState(false);
   const [preview, setPreview] = useState<ExtractPreviewResult | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [dispatching, setDispatching] = useState(false);
+  const [ingestJobId, setIngestJobId] = useState<string | null>(null);
+  const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
+  const [ingestError, setIngestError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function onDetect() {
@@ -50,6 +59,7 @@ export function PriceBookUpdateWizard() {
     setShowThumbs(false);
     setPreview(null);
     setPreviewError(null);
+    resetIngest();
     const fd = new FormData();
     fd.append('file', file);
     const res = await detectPriceBookPagesAction(fd);
@@ -105,6 +115,7 @@ export function PriceBookUpdateWizard() {
     setExtracting(true);
     setPreview(null);
     setPreviewError(null);
+    resetIngest();
     const fd = new FormData();
     fd.append('file', file);
     fd.append('pages', JSON.stringify([...includedPages].sort((a, b) => a - b)));
@@ -115,6 +126,51 @@ export function PriceBookUpdateWizard() {
     else setPreviewError(res.error);
     setExtracting(false);
   }
+
+  function resetIngest() {
+    setDispatching(false);
+    setIngestJobId(null);
+    setIngestStatus(null);
+    setIngestError(null);
+  }
+
+  async function onIngest() {
+    if (!file || confirmedPages === 0) return;
+    setDispatching(true);
+    setIngestStatus(null);
+    setIngestError(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('pages', JSON.stringify([...includedPages].sort((a, b) => a - b)));
+    fd.append('year', String(year));
+    const res = await dispatchPriceBookIngestAction(fd);
+    setDispatching(false);
+    if (res.success) {
+      setIngestJobId(res.jobId);
+      setIngestStatus({ status: 'queued', eventCount: 0, staging: res.staging });
+    } else {
+      setIngestError(res.error);
+    }
+  }
+
+  // Polling del estado del job (cada 3s hasta terminal).
+  useEffect(() => {
+    if (!ingestJobId) return;
+    const terminal = (s?: string) => s === 'completed' || s === 'failed' || s === 'canceled';
+    if (terminal(ingestStatus?.status)) return;
+    let alive = true;
+    const tick = async () => {
+      const st = await getPriceBookIngestStatusAction(ingestJobId);
+      if (!alive) return;
+      setIngestStatus(st);
+    };
+    const id = setInterval(tick, 3000);
+    tick();
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [ingestJobId, ingestStatus?.status]);
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col gap-6 py-2">
@@ -267,6 +323,18 @@ export function PriceBookUpdateWizard() {
 
       {/* Paso 3 — preview + diff */}
       {preview && <PreviewPanel preview={preview} />}
+
+      {/* Paso 4 — ingesta a staging (job) */}
+      {preview && (
+        <IngestPanel
+          onIngest={onIngest}
+          dispatching={dispatching}
+          jobId={ingestJobId}
+          status={ingestStatus}
+          error={ingestError}
+          year={year}
+        />
+      )}
     </div>
   );
 }
@@ -324,20 +392,132 @@ function PreviewPanel({ preview }: { preview: ExtractPreviewResult }) {
         </table>
       </div>
 
-      <div className="mt-5 flex items-center justify-between border-t pt-4">
-        <p className="text-xs text-muted-foreground max-w-md">
-          Esto es una <span className="font-medium">muestra</span> para validar precios. La
-          extracción del libro completo, embeddings e ingesta a{' '}
-          <span className="font-mono">
-            price_book_{preview.target_year ?? ''}_staging
-          </span>{' '}
-          es el siguiente paso.
-        </p>
-        <Button disabled title="Ingesta a staging — en construcción">
-          Ingestar a staging →
-        </Button>
-      </div>
+      <p className="mt-5 border-t pt-4 text-xs text-muted-foreground">
+        Esto es una <span className="font-medium">muestra</span> para validar precios. Abajo puedes
+        lanzar la ingesta del libro <span className="font-medium">completo</span> a staging.
+      </p>
     </section>
+  );
+}
+
+function IngestPanel({
+  onIngest,
+  dispatching,
+  jobId,
+  status,
+  error,
+  year,
+}: {
+  onIngest: () => void;
+  dispatching: boolean;
+  jobId: string | null;
+  status: IngestStatus | null;
+  error: string | null;
+  year: number;
+}) {
+  const st = status?.status;
+  const running = st === 'queued' || st === 'running' || dispatching;
+  const done = st === 'completed';
+  const failed = st === 'failed' || st === 'canceled' || !!error;
+
+  return (
+    <section className="rounded-xl border bg-card p-5">
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <h3 className="text-base font-semibold">4 · Ingestar el libro completo a staging</h3>
+        <span className="text-xs text-muted-foreground font-mono">
+          price_book_{year}_staging
+        </span>
+      </div>
+      <p className="text-sm text-muted-foreground mb-4">
+        Extrae TODAS las páginas confirmadas, genera embeddings (Vertex) y escribe a la colección de
+        staging. No toca el libro activo. Corre en segundo plano (~varios minutos); puedes seguir el
+        progreso aquí.
+      </p>
+
+      {!jobId && !dispatching && (
+        <Button onClick={onIngest}>Ingestar a staging →</Button>
+      )}
+      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+
+      {jobId && (
+        <div className="mt-2 rounded-lg border bg-muted/10 p-4">
+          <div className="flex items-center gap-3">
+            <StatusDot done={done} failed={failed} running={running} />
+            <div className="flex-1">
+              <div className="text-sm font-medium">
+                {done
+                  ? 'Ingesta completada'
+                  : failed
+                    ? 'La ingesta falló'
+                    : st === 'queued'
+                      ? 'En cola…'
+                      : 'Procesando…'}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {status?.message ||
+                  (st === 'queued' ? 'Esperando al worker…' : 'Trabajando…')}
+              </div>
+            </div>
+            <span className="text-[11px] font-mono text-muted-foreground">
+              {jobId.slice(0, 8)}
+            </span>
+          </div>
+
+          {done && status?.diff && (
+            <div className="mt-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-lg overflow-hidden border bg-border">
+                <Stat n={status.itemsSaved ?? 0} l="partidas escritas" accent />
+                <Stat n={status.breakdownsSaved ?? 0} l="componentes" />
+                <Stat n={status.diff.changed} l="con cambio de precio" />
+                <Stat n={status.diff.new} l="nuevas vs activo" />
+              </div>
+              <p className="mt-3 text-sm">
+                Escrito a{' '}
+                <span className="font-mono">{status.staging}</span>. Diff completo vs libro activo:{' '}
+                <span className="font-medium">{status.diff.changed}</span> cambios,{' '}
+                <span className="font-medium">{status.diff.new}</span> nuevas,{' '}
+                <span className="font-medium">{status.diff.unchanged}</span> iguales
+                {status.diff.avg_change_pct !== null && (
+                  <>
+                    {' '}
+                    (media{' '}
+                    <span className="font-medium">
+                      {status.diff.avg_change_pct > 0 ? '+' : ''}
+                      {status.diff.avg_change_pct}%
+                    </span>
+                    )
+                  </>
+                )}
+                .
+              </p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Siguiente paso (en construcción): activar 2026 (flip del puntero) o volver a 2025.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StatusDot({
+  done,
+  failed,
+  running,
+}: {
+  done: boolean;
+  failed: boolean;
+  running: boolean;
+}) {
+  if (done) return <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />;
+  if (failed) return <span className="h-2.5 w-2.5 rounded-full bg-destructive" />;
+  return (
+    <span
+      className={
+        'h-2.5 w-2.5 rounded-full ' + (running ? 'bg-primary animate-pulse' : 'bg-muted-foreground')
+      }
+    />
   );
 }
 
