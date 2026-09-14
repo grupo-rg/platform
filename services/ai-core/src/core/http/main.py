@@ -873,20 +873,27 @@ async def test_tabular_parser(file: UploadFile = File(...)) -> JSONResponse:
 
 
 @app.post("/api/v1/admin/price-book/detect-pages")
-async def price_book_detect_pages(file: UploadFile = File(...)) -> JSONResponse:
-    """Detecta las páginas de precios de un libro COAATMCA (preview, sin escribir)."""
+async def price_book_detect_pages(
+    gcsUri: str = Form(...),
+    storage: IPdfStorage = Depends(_deps_get_pdf_storage),
+) -> JSONResponse:
+    """Detecta las páginas de precios de un libro COAATMCA (preview, sin escribir).
+
+    El PDF llega ya subido a GCS por el navegador (`uploadPdfForPipelineJob`) —
+    evita el tope de 4,5MB de body de las server actions en Vercel. Aquí solo se
+    recibe el `gs://` URI y se descarga con la SA del servicio.
+    """
     from src.budget.catalog.price_book_page_detector import detect_price_pages
 
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    if not gcsUri or not gcsUri.startswith("gs://"):
+        raise HTTPException(status_code=400, detail="`gcsUri` (gs://...) requerido")
     try:
-        pdf_bytes = await file.read()
+        pdf_bytes = await storage.download_to_bytes(gcsUri)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
+        logger.exception("price_book_detect_pages_download_failed")
+        raise HTTPException(status_code=422, detail=f"No se pudo leer el PDF de GCS: {e}")
     if not pdf_bytes:
-        raise HTTPException(status_code=400, detail="Empty PDF body")
-    if len(pdf_bytes) > 100 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="PDF too large (max 100MB)")
+        raise HTTPException(status_code=400, detail="PDF vacío en GCS")
 
     try:
         detection = detect_price_pages(pdf_bytes)
@@ -897,8 +904,7 @@ async def price_book_detect_pages(file: UploadFile = File(...)) -> JSONResponse:
     logger.info(
         "price_book_detect_pages",
         extra={
-            # NB: 'filename' es atributo reservado de LogRecord → usar 'pdf_name'.
-            "pdf_name": file.filename,
+            "gcs_uri": gcsUri,
             "total_pages": detection.total_pages,
             "price_pages": detection.price_page_count,
             "ranges": len(detection.ranges),
@@ -909,10 +915,11 @@ async def price_book_detect_pages(file: UploadFile = File(...)) -> JSONResponse:
 
 @app.post("/api/v1/admin/price-book/extract-preview")
 async def price_book_extract_preview(
-    file: UploadFile = File(...),
+    gcsUri: str = Form(...),
     pages: str = Form(...),
     year: int = Form(0),
     limit: int = Form(30),
+    storage: IPdfStorage = Depends(_deps_get_pdf_storage),
 ) -> JSONResponse:
     """Compuerta 2 (preview) del asistente de actualización del libro.
 
@@ -935,16 +942,15 @@ async def price_book_extract_preview(
     from src.budget.catalog.price_book_diff import diff_items, even_sample
     from src.budget.catalog.catalog_config import price_book_collection
 
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    if not gcsUri or not gcsUri.startswith("gs://"):
+        raise HTTPException(status_code=400, detail="`gcsUri` (gs://...) requerido")
     try:
-        pdf_bytes = await file.read()
+        pdf_bytes = await storage.download_to_bytes(gcsUri)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
+        logger.exception("price_book_extract_preview_download_failed")
+        raise HTTPException(status_code=422, detail=f"No se pudo leer el PDF de GCS: {e}")
     if not pdf_bytes:
-        raise HTTPException(status_code=400, detail="Empty PDF body")
-    if len(pdf_bytes) > 100 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="PDF too large (max 100MB)")
+        raise HTTPException(status_code=400, detail="PDF vacío en GCS")
 
     # `pages`: JSON array (["1","2"]) o CSV ("1,2,3") de páginas 1-based.
     raw = (pages or "").strip()
@@ -1054,32 +1060,26 @@ async def price_book_extract_preview(
 
 @app.post("/api/v1/jobs/price-book-extract")
 async def dispatch_price_book_ingest(
-    file: UploadFile = File(...),
+    gcsUri: str = Form(...),
     pages: str = Form(...),
     year: int = Form(...),
     leadId: str = Form("admin-user"),
-    storage: IPdfStorage = Depends(_deps_get_pdf_storage),
     repo: IPipelineJobRepository = Depends(_deps_get_pipeline_job_repository),
     executor: IJobExecutor = Depends(_deps_get_job_executor),
     worker_job_name: str = Depends(_deps_get_worker_job_name),
 ) -> JSONResponse:
     """Fase 4c — lanza el JOB de ingesta del libro nuevo a staging.
 
-    Igual que los demás jobs pesados: sube el PDF a GCS, crea
-    `pipeline_jobs/{jobId}` y dispara el Cloud Run Job `ai-core-worker` con
-    `JOB_TYPE=price-book-extract` (el worker enruta a `RunPriceBookIngestUseCase`).
-    Responde 202 al instante; el progreso llega por `pipeline_telemetry/{jobId}`.
+    El PDF ya está en GCS (subido por el navegador con `uploadPdfForPipelineJob`
+    — evita el tope de 4,5MB de las server actions en Vercel). Aquí solo se crea
+    `pipeline_jobs/{jobId}` con el `gcsUri` y se dispara el Cloud Run Job
+    `ai-core-worker` con `JOB_TYPE=price-book-extract`. Responde 202 al instante;
+    el progreso llega por `pipeline_telemetry/{jobId}`.
     """
     import json as _json
 
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-    try:
-        pdf_bytes = await file.read()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
-    if not pdf_bytes:
-        raise HTTPException(status_code=400, detail="Empty PDF body")
+    if not gcsUri or not gcsUri.startswith("gs://"):
+        raise HTTPException(status_code=400, detail="`gcsUri` (gs://...) requerido")
 
     raw = (pages or "").strip()
     try:
@@ -1095,16 +1095,7 @@ async def dispatch_price_book_ingest(
     job_id = str(uuid.uuid4())
     uid = (leadId or "").strip() or "admin-user"
 
-    # 1. Subir el PDF a GCS para que el worker lo lea.
-    try:
-        gcs_uri = await storage.upload_pdf(
-            uid=uid, job_id=job_id, filename=file.filename, pdf_bytes=pdf_bytes
-        )
-    except Exception as e:
-        logger.error("price_book_ingest_upload_failed", extra={"jobId": job_id, "error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Failed to upload PDF to GCS: {e}")
-
-    # 2. Persistir el PipelineJob.
+    # Persistir el PipelineJob (el PDF ya está en GCS; el worker lo descarga).
     job = PipelineJob.new(
         jobId=job_id,
         jobType=JobType.PRICE_BOOK_EXTRACT,
@@ -1112,10 +1103,9 @@ async def dispatch_price_book_ingest(
         budgetId=job_id,
         uid=uid,
         payload={
-            "gcsUri": gcs_uri,
+            "gcsUri": gcsUri,
             "pages": page_list,
             "year": int(year),
-            "filename": file.filename,
         },
     )
     try:
