@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { PdfPageThumbnails } from '@/components/prices/PdfPageThumbnails';
 import {
   detectPriceBookPagesAction,
   type PageDetectionResult,
@@ -11,9 +12,11 @@ import {
  * Asistente de actualización del libro de precios COAATMCA.
  *
  * Rebanada 1 (esta): subir el PDF → detectar las páginas de precios → el admin
- * CONFIRMA/ajusta los rangos (excluir promos coladas / incluir omitidas). Es la
- * compuerta humana: la máquina propone, el humano decide. Los pasos siguientes
- * (extraer + preview + diff, ingesta a staging, activar) se añaden encima.
+ * CONFIRMA/ajusta qué páginas entran. Es la compuerta humana: la máquina
+ * propone, el humano decide. La confirmación es POR PÁGINA (fuente de verdad =
+ * `includedPages`); los rangos y el render del PDF son dos vistas de lo mismo.
+ * Los pasos siguientes (extraer + preview + diff, ingesta a staging, activar)
+ * se añaden encima.
  */
 export function PriceBookUpdateWizard() {
   const [file, setFile] = useState<File | null>(null);
@@ -21,7 +24,9 @@ export function PriceBookUpdateWizard() {
   const [detecting, setDetecting] = useState(false);
   const [detection, setDetection] = useState<PageDetectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [excluded, setExcluded] = useState<Set<number>>(new Set());
+  // Fuente de verdad: qué páginas (1-indexadas) se van a extraer.
+  const [includedPages, setIncludedPages] = useState<Set<number>>(new Set());
+  const [showThumbs, setShowThumbs] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function onDetect() {
@@ -29,29 +34,56 @@ export function PriceBookUpdateWizard() {
     setDetecting(true);
     setError(null);
     setDetection(null);
-    setExcluded(new Set());
+    setIncludedPages(new Set());
+    setShowThumbs(false);
     const fd = new FormData();
     fd.append('file', file);
     const res = await detectPriceBookPagesAction(fd);
-    if (res.success) setDetection(res.detection);
-    else setError(res.error);
+    if (res.success) {
+      setDetection(res.detection);
+      // Semilla: las páginas que la detección clasificó como de precio.
+      setIncludedPages(
+        new Set(res.detection.pages.filter((p) => p.is_price).map((p) => p.page)),
+      );
+    } else {
+      setError(res.error);
+    }
     setDetecting(false);
   }
 
-  const confirmedPages = useMemo(() => {
-    if (!detection) return 0;
-    return detection.ranges.reduce(
-      (acc, [a, b], i) => acc + (excluded.has(i) ? 0 : b - a + 1),
-      0,
-    );
-  }, [detection, excluded]);
+  const confirmedPages = includedPages.size;
 
-  function toggleRange(i: number) {
-    setExcluded((prev) => {
+  const togglePage = useCallback((page: number) => {
+    setIncludedPages((prev) => {
       const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
+      next.has(page) ? next.delete(page) : next.add(page);
       return next;
     });
+  }, []);
+
+  // Toggle de un rango entero: si alguna página del rango está incluida, lo
+  // excluye completo; si ninguna, lo incluye completo.
+  function toggleRange([a, b]: [number, number]) {
+    setIncludedPages((prev) => {
+      const next = new Set(prev);
+      let anyIncluded = false;
+      for (let p = a; p <= b; p++) if (next.has(p)) { anyIncluded = true; break; }
+      for (let p = a; p <= b; p++) {
+        if (anyIncluded) next.delete(p);
+        else next.add(p);
+      }
+      return next;
+    });
+  }
+
+  // Estado de un rango: 'all' | 'none' | 'partial'
+  function rangeState([a, b]: [number, number]): 'all' | 'none' | 'partial' {
+    let inc = 0;
+    const total = b - a + 1;
+    for (let p = a; p <= b; p++) if (includedPages.has(p)) inc++;
+    if (inc === 0) return 'none';
+    if (inc === total) return 'all';
+    return 'partial';
   }
 
   return (
@@ -80,6 +112,7 @@ export function PriceBookUpdateWizard() {
                 setFile(e.target.files?.[0] ?? null);
                 setDetection(null);
                 setError(null);
+                setShowThumbs(false);
               }}
             />
             {file ? (
@@ -110,9 +143,7 @@ export function PriceBookUpdateWizard() {
             {detecting ? 'Analizando…' : 'Detectar páginas'}
           </Button>
         </div>
-        {error && (
-          <p className="mt-3 text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       </section>
 
       {/* Paso 2 — confirmar páginas */}
@@ -123,35 +154,44 @@ export function PriceBookUpdateWizard() {
             <span className="text-xs text-muted-foreground font-mono">{detection.signal}</span>
           </div>
           <p className="text-sm text-muted-foreground mb-4">
-            Revisa los rangos detectados. Haz clic en un rango para excluirlo (p. ej. si
-            coló una página de publicidad) o para volver a incluirlo.
+            Revisa lo detectado. Puedes ajustar por rangos o abrir el render del PDF para
+            validar página a página (las excluidas se ven opacas y marcadas).
           </p>
 
           {/* Tiles */}
           <div className="grid grid-cols-3 gap-px rounded-lg overflow-hidden border bg-border mb-4">
-            <Stat n={detection.price_page_count} l="páginas de precios" accent />
-            <Stat n={detection.total_pages - detection.price_page_count} l="descartadas (promo/índice)" />
+            <Stat n={confirmedPages} l="páginas confirmadas" accent />
+            <Stat n={detection.total_pages - confirmedPages} l="excluidas" />
             <Stat n={detection.ranges.length} l="rangos detectados" />
           </div>
 
           {/* Filmstrip */}
-          <Filmstrip detection={detection} excluded={excluded} />
+          <Filmstrip detection={detection} rangeState={rangeState} />
 
           {/* Rangos como chips toggle */}
           <div className="mt-4 flex flex-wrap gap-2">
-            {detection.ranges.map(([a, b], i) => {
-              const off = excluded.has(i);
+            {detection.ranges.map((range, i) => {
+              const st = rangeState(range);
+              const [a, b] = range;
               return (
                 <button
                   key={i}
-                  onClick={() => toggleRange(i)}
+                  onClick={() => toggleRange(range)}
                   className={
                     'font-mono text-xs rounded-md border px-2 py-1 transition-colors ' +
-                    (off
+                    (st === 'none'
                       ? 'line-through text-muted-foreground bg-muted/40'
-                      : 'border-primary/40 text-foreground hover:bg-muted/40')
+                      : st === 'partial'
+                        ? 'border-amber-500/50 text-amber-600 dark:text-amber-400'
+                        : 'border-primary/40 text-foreground hover:bg-muted/40')
                   }
-                  title={off ? 'Excluido — clic para incluir' : 'Incluido — clic para excluir'}
+                  title={
+                    st === 'none'
+                      ? 'Excluido — clic para incluir'
+                      : st === 'partial'
+                        ? 'Parcial — clic para excluir todo el rango'
+                        : 'Incluido — clic para excluir'
+                  }
                 >
                   {a === b ? `p.${a}` : `${a}–${b}`}
                 </button>
@@ -159,23 +199,42 @@ export function PriceBookUpdateWizard() {
             })}
           </div>
 
+          {/* Toggle del render visual */}
+          <div className="mt-5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowThumbs((v) => !v)}
+            >
+              {showThumbs ? 'Ocultar render del PDF' : 'Ver páginas del PDF (validación visual)'}
+            </Button>
+          </div>
+
+          {showThumbs && file && (
+            <div className="mt-4 rounded-lg border bg-muted/10 p-3">
+              <PdfPageThumbnails
+                file={file}
+                pages={detection.pages}
+                includedPages={includedPages}
+                onTogglePage={togglePage}
+              />
+            </div>
+          )}
+
           {/* Confirmar */}
           <div className="mt-5 flex items-center justify-between border-t pt-4">
             <p className="text-sm">
               <span className="font-semibold tabular-nums">{confirmedPages}</span>
               <span className="text-muted-foreground"> páginas confirmadas para extraer</span>
             </p>
-            <Button
-              disabled
-              title="Siguiente paso (extracción + preview) — en construcción"
-            >
+            <Button disabled title="Siguiente paso (extracción + preview) — en construcción">
               Confirmar y extraer →
             </Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             El siguiente paso (extraer las partidas de las páginas confirmadas, ver el
-            diff vs el libro activo, e ingestar a <span className="font-mono">price_book_{year}</span>) está
-            en construcción.
+            diff vs el libro activo, e ingestar a{' '}
+            <span className="font-mono">price_book_{year}</span>) está en construcción.
           </p>
         </section>
       )}
@@ -196,23 +255,33 @@ function Stat({ n, l, accent }: { n: number; l: string; accent?: boolean }) {
 
 function Filmstrip({
   detection,
-  excluded,
+  rangeState,
 }: {
   detection: PageDetectionResult;
-  excluded: Set<number>;
+  rangeState: (r: [number, number]) => 'all' | 'none' | 'partial';
 }) {
   const total = detection.total_pages || 1;
   return (
     <div>
       <div className="relative h-14 rounded-md overflow-hidden border bg-muted/40">
-        {detection.ranges.map(([a, b], i) => (
-          <div
-            key={i}
-            className={excluded.has(i) ? 'absolute top-0 bottom-0 bg-muted-foreground/25' : 'absolute top-0 bottom-0 bg-primary'}
-            style={{ left: `${((a - 1) / total) * 100}%`, width: `${((b - a + 1) / total) * 100}%` }}
-            title={a === b ? `Página ${a}` : `Páginas ${a}–${b}`}
-          />
-        ))}
+        {detection.ranges.map((range, i) => {
+          const st = rangeState(range);
+          const [a, b] = range;
+          const cls =
+            st === 'none'
+              ? 'bg-muted-foreground/25'
+              : st === 'partial'
+                ? 'bg-primary/50'
+                : 'bg-primary';
+          return (
+            <div
+              key={i}
+              className={'absolute top-0 bottom-0 ' + cls}
+              style={{ left: `${((a - 1) / total) * 100}%`, width: `${((b - a + 1) / total) * 100}%` }}
+              title={a === b ? `Página ${a}` : `Páginas ${a}–${b}`}
+            />
+          );
+        })}
       </div>
       <div className="flex justify-between mt-1 text-[11px] font-mono text-muted-foreground">
         <span>pág. 1</span>
