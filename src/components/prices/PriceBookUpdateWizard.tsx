@@ -7,6 +7,15 @@ import {
   detectPriceBookPagesAction,
   type PageDetectionResult,
 } from '@/actions/price-book/detect-price-book-pages.action';
+import {
+  extractPriceBookPreviewAction,
+  type ExtractPreviewResult,
+  type DiffSample,
+} from '@/actions/price-book/extract-price-book-preview.action';
+
+// Cuántas páginas se extraen para el preview sincrónico (repartidas por todo
+// el libro). El libro completo se procesa en la ingesta (siguiente fase).
+const PREVIEW_PAGE_LIMIT = 24;
 
 /**
  * Asistente de actualización del libro de precios COAATMCA.
@@ -27,6 +36,9 @@ export function PriceBookUpdateWizard() {
   // Fuente de verdad: qué páginas (1-indexadas) se van a extraer.
   const [includedPages, setIncludedPages] = useState<Set<number>>(new Set());
   const [showThumbs, setShowThumbs] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [preview, setPreview] = useState<ExtractPreviewResult | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function onDetect() {
@@ -36,6 +48,8 @@ export function PriceBookUpdateWizard() {
     setDetection(null);
     setIncludedPages(new Set());
     setShowThumbs(false);
+    setPreview(null);
+    setPreviewError(null);
     const fd = new FormData();
     fd.append('file', file);
     const res = await detectPriceBookPagesAction(fd);
@@ -84,6 +98,22 @@ export function PriceBookUpdateWizard() {
     if (inc === 0) return 'none';
     if (inc === total) return 'all';
     return 'partial';
+  }
+
+  async function onConfirmExtract() {
+    if (!file || confirmedPages === 0) return;
+    setExtracting(true);
+    setPreview(null);
+    setPreviewError(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('pages', JSON.stringify([...includedPages].sort((a, b) => a - b)));
+    fd.append('year', String(year));
+    fd.append('limit', String(PREVIEW_PAGE_LIMIT));
+    const res = await extractPriceBookPreviewAction(fd);
+    if (res.success) setPreview(res.preview);
+    else setPreviewError(res.error);
+    setExtracting(false);
   }
 
   return (
@@ -227,18 +257,122 @@ export function PriceBookUpdateWizard() {
               <span className="font-semibold tabular-nums">{confirmedPages}</span>
               <span className="text-muted-foreground"> páginas confirmadas para extraer</span>
             </p>
-            <Button disabled title="Siguiente paso (extracción + preview) — en construcción">
-              Confirmar y extraer →
+            <Button onClick={onConfirmExtract} disabled={confirmedPages === 0 || extracting}>
+              {extracting ? 'Extrayendo muestra…' : 'Confirmar y extraer →'}
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            El siguiente paso (extraer las partidas de las páginas confirmadas, ver el
-            diff vs el libro activo, e ingestar a{' '}
-            <span className="font-mono">price_book_{year}</span>) está en construcción.
-          </p>
+          {previewError && <p className="mt-3 text-sm text-destructive">{previewError}</p>}
         </section>
       )}
+
+      {/* Paso 3 — preview + diff */}
+      {preview && <PreviewPanel preview={preview} />}
     </div>
+  );
+}
+
+function PreviewPanel({ preview }: { preview: ExtractPreviewResult }) {
+  const s = preview.diff.summary;
+  return (
+    <section className="rounded-xl border bg-card p-5">
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <h3 className="text-base font-semibold">3 · Preview y diferencias vs libro activo</h3>
+        <span className="text-xs text-muted-foreground font-mono">{preview.active_collection}</span>
+      </div>
+      <p className="text-sm text-muted-foreground mb-4">
+        Muestra de{' '}
+        <span className="font-medium text-foreground">{preview.sampled_count}</span> páginas
+        repartidas por las {preview.pages_confirmed} confirmadas ·{' '}
+        <span className="font-medium text-foreground">{preview.extracted_count}</span> partidas
+        extraídas · contrastadas con{' '}
+        <span className="font-medium text-foreground">{preview.active_item_count}</span> del libro
+        activo.
+      </p>
+
+      {/* Tiles del diff */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px rounded-lg overflow-hidden border bg-border mb-4">
+        <Stat n={s.changed} l="con cambio de precio" accent />
+        <Stat n={s.new} l="nuevas (no en el libro activo)" />
+        <Stat n={s.unchanged} l="sin cambio" />
+        <div className="bg-card p-3">
+          <div className="text-2xl font-bold tabular-nums leading-none">
+            {s.avg_change_pct === null ? '—' : `${s.avg_change_pct > 0 ? '+' : ''}${s.avg_change_pct}%`}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">variación media (cambios)</div>
+        </div>
+      </div>
+
+      {/* Tabla de muestras */}
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-xs text-muted-foreground">
+            <tr>
+              <th className="text-left font-medium px-3 py-2">Estado</th>
+              <th className="text-left font-medium px-3 py-2">Código</th>
+              <th className="text-left font-medium px-3 py-2">Ud.</th>
+              <th className="text-right font-medium px-3 py-2">Activo</th>
+              <th className="text-right font-medium px-3 py-2">Nuevo</th>
+              <th className="text-right font-medium px-3 py-2">Δ%</th>
+              <th className="text-left font-medium px-3 py-2">Descripción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {preview.diff.samples.map((d) => (
+              <DiffRow key={d.code} d={d} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-5 flex items-center justify-between border-t pt-4">
+        <p className="text-xs text-muted-foreground max-w-md">
+          Esto es una <span className="font-medium">muestra</span> para validar precios. La
+          extracción del libro completo, embeddings e ingesta a{' '}
+          <span className="font-mono">
+            price_book_{preview.target_year ?? ''}_staging
+          </span>{' '}
+          es el siguiente paso.
+        </p>
+        <Button disabled title="Ingesta a staging — en construcción">
+          Ingestar a staging →
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function DiffRow({ d }: { d: DiffSample }) {
+  const badge =
+    d.status === 'changed'
+      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+      : d.status === 'new'
+        ? 'bg-primary/15 text-primary'
+        : 'bg-muted text-muted-foreground';
+  const label = d.status === 'changed' ? 'cambio' : d.status === 'new' ? 'nueva' : 'igual';
+  const deltaCls =
+    d.delta_pct == null || d.delta_pct === 0
+      ? 'text-muted-foreground'
+      : d.delta_pct > 0
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : 'text-red-600 dark:text-red-400';
+  return (
+    <tr className="border-t">
+      <td className="px-3 py-1.5">
+        <span className={'rounded px-1.5 py-0.5 text-[11px] font-medium ' + badge}>{label}</span>
+      </td>
+      <td className="px-3 py-1.5 font-mono text-xs">{d.code}</td>
+      <td className="px-3 py-1.5 text-muted-foreground">{d.unit}</td>
+      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+        {d.old_price == null ? '—' : d.old_price.toFixed(2)}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums font-medium">{d.new_price.toFixed(2)}</td>
+      <td className={'px-3 py-1.5 text-right tabular-nums ' + deltaCls}>
+        {d.delta_pct == null ? '—' : `${d.delta_pct > 0 ? '+' : ''}${d.delta_pct}%`}
+      </td>
+      <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[22rem]" title={d.description}>
+        {d.description}
+      </td>
+    </tr>
   );
 }
 
