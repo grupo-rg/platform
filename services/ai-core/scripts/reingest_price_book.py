@@ -32,7 +32,10 @@ Usage
     python reingest_price_book.py --backup-only  # only download the backup
 
 Env required (read from services/ai-core/.env or shell):
-  - GOOGLE_GENAI_API_KEY     (embeddings)
+  - GOOGLE_CLOUD_PROJECT (o FIREBASE_PROJECT_ID) + ADC  → embeddings vía Vertex AI
+    (mismo proveedor que el runtime; `gcloud auth application-default login` en local,
+    o el service-account con rol `roles/aiplatform.user` en Cloud). GOOGLE_CLOUD_LOCATION
+    default europe-southwest1.
   - FIREBASE_PROJECT_ID
   - FIREBASE_CLIENT_EMAIL
   - FIREBASE_PRIVATE_KEY     (with literal \\n; the loader replaces them)
@@ -71,6 +74,9 @@ from src.budget.catalog.domain.price_book_entry import (  # noqa: E402
     PriceBookItemEntry,
 )
 from src.budget.catalog.domain.unit import Unit  # noqa: E402
+from src.budget.catalog.infrastructure.adapters.gemini_embedding_provider import (  # noqa: E402
+    GeminiEmbeddingProvider,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -480,11 +486,12 @@ def _is_rate_limit_error(exc: Exception) -> bool:
 
 
 class GeminiBatchEmbedder:
-    """Thin wrapper over google.genai.Client with retry + throttle.
+    """DEPRECATED — NO USAR. Cliente API-key (`GOOGLE_GENAI_API_KEY`), muerto tras
+    la migración a Vertex (429 prepago). El reingest usa ahora
+    `GeminiEmbeddingProvider` (Vertex, misma vía que el runtime). Se conserva solo
+    de referencia histórica; no se instancia en ningún sitio.
 
-    Mirrors `GeminiEmbeddingProvider` but stays inside this script so the
-    re-ingest doesn't depend on the dry-run-only in-memory port and adapter
-    machinery.
+    Thin wrapper over google.genai.Client with retry + throttle.
     """
 
     def __init__(
@@ -861,7 +868,8 @@ async def run_apply(
     logger.info("=" * 64)
     logger.info("STEP 2/5 — Generate embeddings")
     logger.info("=" * 64)
-    embedder = GeminiBatchEmbedder()
+    # Vertex AI (mismo proveedor que el runtime) — NO el cliente API-key muerto.
+    embedder = GeminiEmbeddingProvider()
 
     async def embed_all(
         texts: list[str], label: str, log_every: int
