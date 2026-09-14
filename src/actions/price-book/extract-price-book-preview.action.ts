@@ -54,26 +54,29 @@ export type ExtractPreviewActionResult =
   | { success: true; preview: ExtractPreviewResult }
   | { success: false; error: string };
 
-export async function extractPriceBookPreviewAction(
-  formData: FormData,
-): Promise<ExtractPreviewActionResult> {
+export async function extractPriceBookPreviewAction(args: {
+  gcsUri: string;
+  pages: string;
+  year: number | string;
+  limit?: number | string;
+}): Promise<ExtractPreviewActionResult> {
   try {
-    const file = formData.get('file');
-    if (!file || !(file instanceof File)) {
-      return { success: false, error: 'Falta el archivo PDF.' };
+    const { gcsUri } = args;
+    if (!gcsUri || !gcsUri.startsWith('gs://')) {
+      return { success: false, error: 'Falta la referencia del PDF (gs://...).' };
     }
-    const pages = String(formData.get('pages') ?? '');
+    const pages = String(args.pages ?? '');
     if (!pages) {
       return { success: false, error: 'No hay páginas confirmadas.' };
     }
-    const year = String(formData.get('year') ?? '');
-    const limit = String(formData.get('limit') ?? '30');
+    const year = String(args.year ?? '');
+    const limit = String(args.limit ?? '30');
 
     const AI_CORE_URL = process.env.AI_CORE_URL || 'http://127.0.0.1:8080';
     const token = process.env.INTERNAL_WORKER_TOKEN;
 
     const forward = new FormData();
-    forward.append('file', file, file.name);
+    forward.append('gcsUri', gcsUri);
     forward.append('pages', pages);
     if (year) forward.append('year', year);
     forward.append('limit', limit);

@@ -42,16 +42,18 @@ export interface IngestStatus {
   eventCount: number;
 }
 
-export async function dispatchPriceBookIngestAction(
-  formData: FormData,
-): Promise<DispatchIngestResult> {
+export async function dispatchPriceBookIngestAction(args: {
+  gcsUri: string;
+  pages: string;
+  year: number | string;
+}): Promise<DispatchIngestResult> {
   try {
-    const file = formData.get('file');
-    if (!file || !(file instanceof File)) {
-      return { success: false, error: 'Falta el archivo PDF.' };
+    const { gcsUri } = args;
+    if (!gcsUri || !gcsUri.startsWith('gs://')) {
+      return { success: false, error: 'Falta la referencia del PDF (gs://...).' };
     }
-    const pages = String(formData.get('pages') ?? '');
-    const year = String(formData.get('year') ?? '');
+    const pages = String(args.pages ?? '');
+    const year = String(args.year ?? '');
     if (!pages) return { success: false, error: 'No hay páginas confirmadas.' };
     if (!year) return { success: false, error: 'Falta el año.' };
 
@@ -59,7 +61,7 @@ export async function dispatchPriceBookIngestAction(
     const token = process.env.INTERNAL_WORKER_TOKEN;
 
     const forward = new FormData();
-    forward.append('file', file, file.name);
+    forward.append('gcsUri', gcsUri);
     forward.append('pages', pages);
     forward.append('year', year);
 

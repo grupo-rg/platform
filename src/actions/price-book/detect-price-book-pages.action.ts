@@ -28,19 +28,18 @@ export type DetectPagesResult =
   | { success: false; error: string };
 
 export async function detectPriceBookPagesAction(
-  formData: FormData,
+  gcsUri: string,
 ): Promise<DetectPagesResult> {
   try {
-    const file = formData.get('file');
-    if (!file || !(file instanceof File)) {
-      return { success: false, error: 'Falta el archivo PDF.' };
+    if (!gcsUri || !gcsUri.startsWith('gs://')) {
+      return { success: false, error: 'Falta la referencia del PDF (gs://...).' };
     }
 
     const AI_CORE_URL = process.env.AI_CORE_URL || 'http://127.0.0.1:8080';
     const token = process.env.INTERNAL_WORKER_TOKEN;
 
     const forward = new FormData();
-    forward.append('file', file, file.name);
+    forward.append('gcsUri', gcsUri);
 
     const headers: Record<string, string> = {};
     if (token) headers['x-internal-token'] = token;

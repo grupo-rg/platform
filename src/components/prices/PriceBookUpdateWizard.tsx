@@ -17,6 +17,9 @@ import {
   getPriceBookIngestStatusAction,
   type IngestStatus,
 } from '@/actions/price-book/dispatch-price-book-ingest.action';
+import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '@/hooks/use-auth';
+import { uploadPdfForPipelineJob } from '@/lib/firebase/storage-uploader';
 
 // Cuántas páginas se extraen para el preview sincrónico (repartidas por todo
 // el libro). El libro completo se procesa en la ingesta (siguiente fase).
@@ -33,7 +36,15 @@ const PREVIEW_PAGE_LIMIT = 24;
  * se añaden encima.
  */
 export function PriceBookUpdateWizard() {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
+  // El PDF se sube al navegador → Firebase Storage (gs://) y las acciones solo
+  // reciben el URI. Esquiva el tope de 4,5MB de body de las server actions en
+  // Vercel (un libro son ~7MB). El File se conserva para el render de pdf.js.
+  const [gcsUri, setGcsUri] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [detecting, setDetecting] = useState(false);
   const [detection, setDetection] = useState<PageDetectionResult | null>(null);
@@ -48,10 +59,45 @@ export function PriceBookUpdateWizard() {
   const [ingestJobId, setIngestJobId] = useState<string | null>(null);
   const [ingestStatus, setIngestStatus] = useState<IngestStatus | null>(null);
   const [ingestError, setIngestError] = useState<string | null>(null);
+  const [ingestStartedAt, setIngestStartedAt] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Al elegir fichero: reset total + subida en background a Storage.
+  async function onSelectFile(f: File | null) {
+    setFile(f);
+    setDetection(null);
+    setError(null);
+    setIncludedPages(new Set());
+    setShowThumbs(false);
+    setPreview(null);
+    setPreviewError(null);
+    resetIngest();
+    setGcsUri(null);
+    setUploadError(null);
+    setUploadPct(0);
+    if (!f) return;
+    if (!user?.uid) {
+      setUploadError('Debes iniciar sesión para subir el libro.');
+      return;
+    }
+    setUploading(true);
+    try {
+      const { gcsUri: uri } = await uploadPdfForPipelineJob({
+        file: f,
+        uid: user.uid,
+        jobId: uuidv4(),
+        onProgress: setUploadPct,
+      });
+      setGcsUri(uri);
+    } catch (e: any) {
+      setUploadError(e?.message || 'Falló la subida del PDF a Storage.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function onDetect() {
-    if (!file) return;
+    if (!gcsUri) return;
     setDetecting(true);
     setError(null);
     setDetection(null);
@@ -60,19 +106,22 @@ export function PriceBookUpdateWizard() {
     setPreview(null);
     setPreviewError(null);
     resetIngest();
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await detectPriceBookPagesAction(fd);
-    if (res.success) {
-      setDetection(res.detection);
-      // Semilla: las páginas que la detección clasificó como de precio.
-      setIncludedPages(
-        new Set(res.detection.pages.filter((p) => p.is_price).map((p) => p.page)),
-      );
-    } else {
-      setError(res.error);
+    try {
+      const res = await detectPriceBookPagesAction(gcsUri);
+      if (res.success) {
+        setDetection(res.detection);
+        // Semilla: las páginas que la detección clasificó como de precio.
+        setIncludedPages(
+          new Set(res.detection.pages.filter((p) => p.is_price).map((p) => p.page)),
+        );
+      } else {
+        setError(res.error);
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Error inesperado en la detección.');
+    } finally {
+      setDetecting(false);
     }
-    setDetecting(false);
   }
 
   const confirmedPages = includedPages.size;
@@ -110,21 +159,28 @@ export function PriceBookUpdateWizard() {
     return 'partial';
   }
 
+  const pagesJson = () => JSON.stringify([...includedPages].sort((a, b) => a - b));
+
   async function onConfirmExtract() {
-    if (!file || confirmedPages === 0) return;
+    if (!gcsUri || confirmedPages === 0) return;
     setExtracting(true);
     setPreview(null);
     setPreviewError(null);
     resetIngest();
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('pages', JSON.stringify([...includedPages].sort((a, b) => a - b)));
-    fd.append('year', String(year));
-    fd.append('limit', String(PREVIEW_PAGE_LIMIT));
-    const res = await extractPriceBookPreviewAction(fd);
-    if (res.success) setPreview(res.preview);
-    else setPreviewError(res.error);
-    setExtracting(false);
+    try {
+      const res = await extractPriceBookPreviewAction({
+        gcsUri,
+        pages: pagesJson(),
+        year,
+        limit: PREVIEW_PAGE_LIMIT,
+      });
+      if (res.success) setPreview(res.preview);
+      else setPreviewError(res.error);
+    } catch (e: any) {
+      setPreviewError(e?.message || 'Error inesperado en la extracción.');
+    } finally {
+      setExtracting(false);
+    }
   }
 
   function resetIngest() {
@@ -132,24 +188,31 @@ export function PriceBookUpdateWizard() {
     setIngestJobId(null);
     setIngestStatus(null);
     setIngestError(null);
+    setIngestStartedAt(null);
   }
 
   async function onIngest() {
-    if (!file || confirmedPages === 0) return;
+    if (!gcsUri || confirmedPages === 0) return;
     setDispatching(true);
     setIngestStatus(null);
     setIngestError(null);
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('pages', JSON.stringify([...includedPages].sort((a, b) => a - b)));
-    fd.append('year', String(year));
-    const res = await dispatchPriceBookIngestAction(fd);
-    setDispatching(false);
-    if (res.success) {
-      setIngestJobId(res.jobId);
-      setIngestStatus({ status: 'queued', eventCount: 0, staging: res.staging });
-    } else {
-      setIngestError(res.error);
+    try {
+      const res = await dispatchPriceBookIngestAction({
+        gcsUri,
+        pages: pagesJson(),
+        year,
+      });
+      if (res.success) {
+        setIngestJobId(res.jobId);
+        setIngestStartedAt(Date.now());
+        setIngestStatus({ status: 'queued', eventCount: 0, staging: res.staging });
+      } else {
+        setIngestError(res.error);
+      }
+    } catch (e: any) {
+      setIngestError(e?.message || 'Error inesperado lanzando la ingesta.');
+    } finally {
+      setDispatching(false);
     }
   }
 
@@ -194,12 +257,7 @@ export function PriceBookUpdateWizard() {
               type="file"
               accept="application/pdf,.pdf"
               className="hidden"
-              onChange={(e) => {
-                setFile(e.target.files?.[0] ?? null);
-                setDetection(null);
-                setError(null);
-                setShowThumbs(false);
-              }}
+              onChange={(e) => onSelectFile(e.target.files?.[0] ?? null)}
             />
             {file ? (
               <div className="text-sm">
@@ -225,10 +283,36 @@ export function PriceBookUpdateWizard() {
               max={2100}
             />
           </div>
-          <Button onClick={onDetect} disabled={!file || detecting}>
-            {detecting ? 'Analizando…' : 'Detectar páginas'}
+          <Button onClick={onDetect} disabled={!gcsUri || detecting || uploading}>
+            {uploading
+              ? `Subiendo… ${Math.round(uploadPct * 100)}%`
+              : detecting
+                ? 'Analizando…'
+                : 'Detectar páginas'}
           </Button>
         </div>
+
+        {/* Progreso de subida a Storage */}
+        {uploading && (
+          <div className="mt-3">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${Math.round(uploadPct * 100)}%` }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Subiendo el PDF a Storage… {(uploadPct * (file?.size ?? 0) / 1024 / 1024).toFixed(1)} /{' '}
+              {((file?.size ?? 0) / 1024 / 1024).toFixed(1)} MB
+            </p>
+          </div>
+        )}
+        {gcsUri && !uploading && (
+          <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-400">
+            ✓ PDF subido. Listo para detectar páginas.
+          </p>
+        )}
+        {uploadError && <p className="mt-3 text-sm text-destructive">{uploadError}</p>}
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       </section>
 
@@ -333,6 +417,7 @@ export function PriceBookUpdateWizard() {
           status={ingestStatus}
           error={ingestError}
           year={year}
+          startedAt={ingestStartedAt}
         />
       )}
     </div>
@@ -400,6 +485,22 @@ function PreviewPanel({ preview }: { preview: ExtractPreviewResult }) {
   );
 }
 
+const INGEST_STEPS = ['En cola', 'Extrayendo páginas', 'Embeddings + escritura', 'Diff + cierre'];
+
+function ingestStepIndex(status: IngestStatus | null, done: boolean): number {
+  if (done) return INGEST_STEPS.length; // todo hecho
+  const phase = status?.phase;
+  if (phase === 'embed_write') return 2;
+  if (phase === 'extract') return 1;
+  return 0; // queued / arranque
+}
+
+function fmtElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+}
+
 function IngestPanel({
   onIngest,
   dispatching,
@@ -407,6 +508,7 @@ function IngestPanel({
   status,
   error,
   year,
+  startedAt,
 }: {
   onIngest: () => void;
   dispatching: boolean;
@@ -414,11 +516,22 @@ function IngestPanel({
   status: IngestStatus | null;
   error: string | null;
   year: number;
+  startedAt: number | null;
 }) {
   const st = status?.status;
   const running = st === 'queued' || st === 'running' || dispatching;
   const done = st === 'completed';
   const failed = st === 'failed' || st === 'canceled' || !!error;
+
+  // Reloj de tiempo transcurrido — para que un proceso de minutos nunca parezca colgado.
+  const [now, setNow] = useState<number>(Date.now());
+  useEffect(() => {
+    if (!startedAt || done || failed) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [startedAt, done, failed]);
+  const elapsed = startedAt ? fmtElapsed((done || failed ? now : Date.now()) - startedAt) : null;
+  const stepIdx = ingestStepIndex(status, done);
 
   return (
     <section className="rounded-xl border bg-card p-5">
@@ -430,12 +543,15 @@ function IngestPanel({
       </div>
       <p className="text-sm text-muted-foreground mb-4">
         Extrae TODAS las páginas confirmadas, genera embeddings (Vertex) y escribe a la colección de
-        staging. No toca el libro activo. Corre en segundo plano (~varios minutos); puedes seguir el
-        progreso aquí.
+        staging. No toca el libro activo. Corre en segundo plano (varios minutos); puedes seguir el
+        progreso aquí en vivo.
       </p>
 
       {!jobId && !dispatching && (
         <Button onClick={onIngest}>Ingestar a staging →</Button>
+      )}
+      {dispatching && !jobId && (
+        <p className="text-sm text-muted-foreground">Lanzando el job…</p>
       )}
       {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
@@ -458,10 +574,48 @@ function IngestPanel({
                   (st === 'queued' ? 'Esperando al worker…' : 'Trabajando…')}
               </div>
             </div>
+            {elapsed && (
+              <span className="text-xs font-mono tabular-nums text-muted-foreground" title="tiempo transcurrido">
+                ⏱ {elapsed}
+              </span>
+            )}
             <span className="text-[11px] font-mono text-muted-foreground">
               {jobId.slice(0, 8)}
             </span>
           </div>
+
+          {/* Stepper de fases */}
+          {!failed && (
+            <ol className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
+              {INGEST_STEPS.map((label, i) => {
+                const state = i < stepIdx ? 'done' : i === stepIdx ? 'active' : 'todo';
+                return (
+                  <li key={label} className="flex items-center gap-1.5 text-xs">
+                    <span
+                      className={
+                        'h-2 w-2 rounded-full ' +
+                        (state === 'done'
+                          ? 'bg-emerald-500'
+                          : state === 'active'
+                            ? 'bg-primary animate-pulse'
+                            : 'bg-muted-foreground/30')
+                      }
+                    />
+                    <span
+                      className={
+                        state === 'todo' ? 'text-muted-foreground/50' : 'text-foreground'
+                      }
+                    >
+                      {label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+          {failed && status?.error && (
+            <p className="mt-3 text-sm text-destructive">{status.error}</p>
+          )}
 
           {done && status?.diff && (
             <div className="mt-4">
