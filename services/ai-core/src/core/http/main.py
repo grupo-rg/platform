@@ -905,3 +905,148 @@ async def price_book_detect_pages(file: UploadFile = File(...)) -> JSONResponse:
         },
     )
     return JSONResponse(status_code=200, content=detection.to_dict())
+
+
+@app.post("/api/v1/admin/price-book/extract-preview")
+async def price_book_extract_preview(
+    file: UploadFile = File(...),
+    pages: str = Form(...),
+    year: int = Form(0),
+    limit: int = Form(30),
+) -> JSONResponse:
+    """Compuerta 2 (preview) del asistente de actualización del libro.
+
+    Extrae una MUESTRA representativa (repartida por todo el libro) de las
+    páginas que el humano confirmó y la contrasta con el libro ACTIVO
+    (`price_book_{CATALOG_YEAR}`): cuántas partidas son nuevas, cuántas cambian
+    de precio y cuáles siguen igual, con ejemplos ordenados por magnitud.
+
+    Es SINCRÓNICO y ACOTADO (`limit` páginas): sirve para validar que la
+    extracción y los precios son correctos ANTES de ingestar. La extracción del
+    libro COMPLETO + embeddings + escritura es el job de ingesta (4c), que
+    reutiliza este mismo `diff_items` sobre el universo entero.
+    """
+    import asyncio
+    import json as _json
+    import tempfile
+    from pathlib import Path as _Path
+
+    from src.budget.catalog.pdf_extractor import extract_catalog
+    from src.budget.catalog.price_book_diff import diff_items, even_sample
+    from src.budget.catalog.catalog_config import price_book_collection
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    try:
+        pdf_bytes = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Empty PDF body")
+    if len(pdf_bytes) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF too large (max 100MB)")
+
+    # `pages`: JSON array (["1","2"]) o CSV ("1,2,3") de páginas 1-based.
+    raw = (pages or "").strip()
+    try:
+        if raw.startswith("["):
+            parsed = [int(x) for x in _json.loads(raw)]
+        else:
+            parsed = [int(x) for x in raw.split(",") if x.strip()]
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="`pages` inválido (usa JSON array o CSV de enteros)",
+        )
+    confirmed = sorted({p for p in parsed if p >= 1})
+    if not confirmed:
+        raise HTTPException(status_code=400, detail="No hay páginas confirmadas para extraer")
+
+    limit = max(1, min(int(limit or 30), 120))
+    sample = even_sample(confirmed, limit)
+
+    def _work() -> dict:
+        # 1. Extraer la muestra (pdfplumber es bloqueante → to_thread).
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(pdf_bytes)
+            tmp_path = _Path(tmp.name)
+        try:
+            extraction = extract_catalog(tmp_path, page_filter=sample)
+        finally:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+
+        items = [
+            {
+                "code": it.code,
+                "unit": it.unit,
+                "description": it.description,
+                "price_total": it.price_total,
+                "breakdown_count": len(it.breakdowns),
+                "page": it.page_physical,
+                "chapter": it.chapter,
+            }
+            for it in extraction.items
+        ]
+
+        # 2. Índice del libro activo (code -> priceTotal), proyección ligera.
+        collection = price_book_collection()
+        active_index: dict[str, float] = {}
+        try:
+            from firebase_admin import firestore as _fs
+
+            db = _fs.client()
+            q = (
+                db.collection(collection)
+                .where("kind", "==", "item")
+                .select(["code", "priceTotal"])
+            )
+            for snap in q.stream():
+                d = snap.to_dict() or {}
+                c = (str(d.get("code") or "")).strip()
+                if not c:
+                    continue
+                try:
+                    active_index[c] = float(d.get("priceTotal") or 0.0)
+                except (TypeError, ValueError):
+                    active_index[c] = 0.0
+        except Exception as e:  # noqa: BLE001 — el diff sigue siendo útil (todo "new")
+            logger.warning(
+                "extract_preview_active_index_failed",
+                extra={"error": str(e), "collection": collection},
+            )
+
+        # 3. Diff.
+        diff = diff_items(items, active_index)
+        return {
+            "target_year": year or None,
+            "active_collection": collection,
+            "pages_confirmed": len(confirmed),
+            "pages_sampled": sample,
+            "sampled_count": len(sample),
+            "extracted_count": len(items),
+            "active_item_count": len(active_index),
+            "items_preview": items[:40],
+            "diff": diff.to_dict(),
+        }
+
+    try:
+        result = await asyncio.to_thread(_work)
+    except Exception as e:
+        logger.exception("price_book_extract_preview_failed")
+        raise HTTPException(status_code=422, detail=f"No se pudo extraer/diferenciar: {e}")
+
+    logger.info(
+        "price_book_extract_preview",
+        extra={
+            "pdf_name": file.filename,
+            "pages_confirmed": len(confirmed),
+            "sampled": len(sample),
+            "extracted": result["extracted_count"],
+            "diff_new": result["diff"]["summary"]["new"],
+            "diff_changed": result["diff"]["summary"]["changed"],
+        },
+    )
+    return JSONResponse(status_code=200, content=result)
