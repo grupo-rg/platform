@@ -1047,7 +1047,7 @@ async def price_book_extract_preview(
     logger.info(
         "price_book_extract_preview",
         extra={
-            "pdf_name": file.filename,
+            "gcs_uri": gcsUri,
             "pages_confirmed": len(confirmed),
             "sampled": len(sample),
             "extracted": result["extracted_count"],
