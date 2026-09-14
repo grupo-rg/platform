@@ -8,6 +8,7 @@ from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
 from google.cloud.firestore_v1.vector import Vector
 
 from src.budget.application.ports.ports import IVectorSearch
+from src.budget.catalog.catalog_config import price_book_collection
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ class FirestorePriceBookAdapter(IVectorSearch):
             query_vector = query_vector[:768]
 
             logger.info(f"Searching Firestore with {len(query_vector)} dimensions...")
-            collection_ref = self.db.collection("price_book_2025")
+            collection_ref = self.db.collection(price_book_collection())
 
             # Fetch a larger candidate pool to rerank.
             candidate_limit = limit * 3 if query_text else limit

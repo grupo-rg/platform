@@ -5,6 +5,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { PriceBookComponent } from '@/backend/price-book/domain/price-book-item';
 import { adaptV005Breakdown, V005BreakdownDoc } from '@/lib/price-book/v005-adapter';
 import type { NormalizedCatalogComponent } from '@/lib/budget/reconciliation';
+import { priceBookCollection } from '@/lib/catalog/catalog-config';
 
 /**
  * Phase 18 — Carga los componentes (descompuesto) de una partida del catálogo
@@ -29,7 +30,7 @@ export async function getPriceBookBreakdown(parentCode: string): Promise<{
     try {
         initFirebaseAdminApp();
         const db = getFirestore();
-        const collectionRef = db.collection('price_book_2025');
+        const collectionRef = db.collection(priceBookCollection());
 
         const snapshot = await collectionRef
             .where('kind', '==', 'breakdown')
@@ -72,7 +73,7 @@ export async function getCatalogBreakdownForRepair(parentCode: string): Promise<
         initFirebaseAdminApp();
         const db = getFirestore();
 
-        const snapshot = await db.collection('price_book_2025')
+        const snapshot = await db.collection(priceBookCollection())
             .where('kind', '==', 'breakdown')
             .where('parent_code', '==', parentCode)
             .get();

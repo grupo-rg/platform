@@ -18,6 +18,7 @@ from src.budget.catalog.application.ports.price_book_repository import (
     EntryWithEmbedding,
     IPriceBookRepository,
 )
+from src.budget.catalog.catalog_config import price_book_collection
 from src.budget.catalog.domain.price_book_entry import (
     PriceBookBreakdownEntry,
     PriceBookItemEntry,
@@ -25,7 +26,8 @@ from src.budget.catalog.domain.price_book_entry import (
 
 logger = logging.getLogger(__name__)
 
-PRICE_BOOK_COLLECTION = "price_book_2025"
+# Puntero de versión: resuelve a `price_book_{CATALOG_YEAR}` (default 2025).
+PRICE_BOOK_COLLECTION = price_book_collection()
 
 # Firestore limita batches a 500 OPERACIONES **y** a ~10 MiB de PAYLOAD.
 # Con embeddings de 768 dims (~30KB serialized per doc), el límite real

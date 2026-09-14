@@ -14,12 +14,17 @@ import logging
 from typing import Any, Optional
 
 from src.budget.catalog.application.ports.catalog_repository import ICatalogRepository
+from src.budget.catalog.catalog_config import (
+    labor_rates_collection,
+    machinery_rates_collection,
+)
 from src.budget.catalog.domain.entities import LaborRate, MachineryRate
 
 logger = logging.getLogger(__name__)
 
-COLLECTION_NAME = "labor_rates_2025"
-MACHINERY_COLLECTION_NAME = "machinery_rates_2025"
+# Puntero de versión: resuelven a `{labor,machinery}_rates_{CATALOG_YEAR}` (default 2025).
+COLLECTION_NAME = labor_rates_collection()
+MACHINERY_COLLECTION_NAME = machinery_rates_collection()
 
 
 class FirestoreCatalogRepository(ICatalogRepository):

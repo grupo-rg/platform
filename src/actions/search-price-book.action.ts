@@ -6,6 +6,7 @@ import { RestApiVectorizerAdapter } from '@/backend/price-book/infrastructure/ai
 import { FirestorePriceBookRepository } from '@/backend/price-book/infrastructure/firestore/firestore-price-book.repository';
 import { PriceBookItem } from '@/backend/price-book/domain/price-book-item';
 import { adaptV005Item, V005ItemDoc } from '@/lib/price-book/v005-adapter';
+import { priceBookCollection } from '@/lib/catalog/catalog-config';
 
 export async function searchPriceBookAction(query: string, year: number = 2025): Promise<PriceBookItem[]> {
     if (!query || query.trim().length === 0) {
@@ -15,10 +16,9 @@ export async function searchPriceBookAction(query: string, year: number = 2025):
     try {
         console.log(`[ServerAction] Searching for: "${query}"`);
 
-        // Dependency Injection (Manual for now)
-        // In a larger app, we might use a container or singleton instance
-        const collectionName = year === 2025 ? 'price_book_2025' : 'price_book_2025';
-        const repository = new FirestorePriceBookRepository(collectionName);
+        // Colección activa vía el puntero de versión (antes: dos ramas idénticas
+        // que hacían que una consulta de 2026 leyera 2025 en silencio).
+        const repository = new FirestorePriceBookRepository(priceBookCollection());
         const vectorizer = new RestApiVectorizerAdapter();
         const useCase = new SemanticSearchUseCase(repository, vectorizer);
 

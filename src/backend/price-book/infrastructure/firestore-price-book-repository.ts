@@ -23,6 +23,7 @@ import { collection, doc, writeBatch, getDocs, query, where, Timestamp } from 'f
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app'; // We need this
+import { priceBookCollection } from '@/lib/catalog/catalog-config';
 
 /**
  * P2 — Down-weight de procedencia. Las partidas from_scratch que el constructor
@@ -40,7 +41,7 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
     private db;
     private collectionName: string;
 
-    constructor(collectionName: string = 'price_book_2025') {
+    constructor(collectionName: string = priceBookCollection()) {
         initFirebaseAdminApp();
         this.db = getFirestore();
         this.collectionName = collectionName;

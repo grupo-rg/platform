@@ -4,6 +4,7 @@ import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/a
 import { getFirestore } from 'firebase-admin/firestore';
 import { PriceBookItem } from '@/backend/price-book/domain/price-book-item';
 import { adaptV005Item, V005ItemDoc } from '@/lib/price-book/v005-adapter';
+import { priceBookCollection } from '@/lib/catalog/catalog-config';
 
 /**
  * Phase 18 — Lista los items del catálogo desde la colección `price_book_2025`.
@@ -23,7 +24,7 @@ export async function getPriceBookItems(year: number = 2025, limitCount: number 
         console.log(`[Action] Fetching price book items (limit: ${limitCount})...`);
         initFirebaseAdminApp();
         const db = getFirestore();
-        const collectionRef = db.collection('price_book_2025');
+        const collectionRef = db.collection(priceBookCollection());
 
         // Query v005: filtrar por kind='item'. Si el doc no tiene `kind` es legacy
         // y lo aceptamos también (defensivo). Para evitar excluir legacy, hacemos

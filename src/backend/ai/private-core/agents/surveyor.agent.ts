@@ -13,7 +13,7 @@ export class SurveyorAgent {
     private vectorizer: RestApiVectorizerAdapter;
 
     constructor() {
-        this.repository = new FirestorePriceBookRepository('price_book_2025');
+        this.repository = new FirestorePriceBookRepository(); // colección activa vía puntero de versión
         this.vectorizer = new RestApiVectorizerAdapter();
     }
 

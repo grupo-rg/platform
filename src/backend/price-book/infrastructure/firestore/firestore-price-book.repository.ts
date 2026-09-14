@@ -4,6 +4,7 @@ import { PriceBookItem } from '../../domain/price-book-item';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
+import { priceBookCollection } from '@/lib/catalog/catalog-config';
 
 
 
@@ -11,7 +12,7 @@ export class FirestorePriceBookRepository implements PriceBookRepository {
     private db;
     private collectionName: string;
 
-    constructor(collectionName: string = 'price_book_2025') {
+    constructor(collectionName: string = priceBookCollection()) {
         initFirebaseAdminApp();
         this.db = getFirestore();
         this.collectionName = collectionName;
