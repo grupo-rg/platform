@@ -42,10 +42,12 @@ substitutions:
   _SERVICE_MEMORY: "2Gi"
   _SERVICE_CPU: "1"
   _SERVICE_TIMEOUT: "60s"
-  # 4Gi: la ingesta del libro de precios (JobType price-book-extract) mantiene
-  # ~20k embeddings (768 dims) en RAM a la vez antes de guardar. 2Gi se queda
-  # corto en el libro completo. El swarm de budget también gana headroom.
-  _JOB_MEMORY: "4Gi"
+  # 8Gi: la ingesta del libro (JobType price-book-extract) tiene DOS picos que
+  # se solapan: la extracción con pdfplumber de ~428 páginas deja un RSS alto
+  # que CPython no devuelve al SO, y encima acumula ~20k embeddings (768) en RAM
+  # antes de guardar. A 4Gi OOM (SIGKILL) a mitad de embeddings. El swarm de
+  # budget también gana headroom.
+  _JOB_MEMORY: "8Gi"
   _JOB_CPU: "2"
   # 3600s is the Cloud Run Jobs default; raise to 24h with --task-timeout=86400s
   # when handling the 250+ page workloads that prompted this whole rewrite.
