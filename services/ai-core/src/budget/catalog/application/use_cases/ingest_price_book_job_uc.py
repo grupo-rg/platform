@@ -2,25 +2,30 @@
 
 Fase 4c del asistente de actualización. Corre DENTRO del Cloud Run Job worker
 (enrutado por `JOB_TYPE=price-book-extract` en `worker_main`), NO en el Service
-HTTP: la extracción del libro completo son ~73s + embeddings, demasiado para una
-request síncrona (timeout + OOM — misma razón por la que el pipeline de budget
-se sacó a un job).
+HTTP.
+
+**Streaming / memoria constante.** El libro completo son ~1.700 partidas +
+~18k componentes. Cargarlo todo (extracción pdfplumber de todas las páginas +
+acumular todos los embeddings antes de guardar) revienta la RAM y no escala con
+el tamaño del PDF. En su lugar procesamos por **ventanas de páginas**: por cada
+ventana extraemos → embebemos (Vertex 768) → escribimos a
+`price_book_{year}_staging` → liberamos, antes de pasar a la siguiente. Solo se
+acumula el resumen del diff (code→precio), que es ligero. Así la memoria es
+plana sea cual sea el tamaño del libro, y el staging se va llenando en vivo.
 
 Flujo:
-  1. Reclama el job (queued→running) + descarga el PDF de GCS.
-  2. Extrae SOLO las páginas confirmadas (`extract_catalog(page_filter=...)`).
-  3. Mapea la extracción al formato del `CatalogTransformer`.
-  4. `ReindexPriceBookUseCase` → transforma + embeda (Vertex 768) + escribe a
-     `price_book_{year}_staging` (wipe previo — es una colección scratch, NUNCA
-     toca el libro activo).
-  5. Diff COMPLETO extraído↔activo (reutiliza `diff_items`) para la compuerta 2.
-  6. Marca completado. Progreso por fases a `pipeline_telemetry/{jobId}/events`
-     (la UI se suscribe por SSE).
+  1. Reclama el job (queued→running) + descarga el PDF de GCS a un temp local.
+  2. Wipe de la colección de staging (una vez — NUNCA toca el activo).
+  3. Por cada ventana de páginas confirmadas: extraer → mapear → embed+save.
+  4. Diff COMPLETO extraído↔activo (reutiliza `diff_items`) para la compuerta 2.
+  5. Marca completado. Progreso por ventana a `pipeline_telemetry/{jobId}/events`
+     (la UI se suscribe por polling).
 """
 
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
 import tempfile
 from collections import OrderedDict
@@ -38,6 +43,10 @@ from src.budget.catalog.pdf_extractor import extract_catalog
 from src.budget.catalog.price_book_diff import diff_items
 
 logger = logging.getLogger(__name__)
+
+# Páginas por ventana de streaming. ~40 págs ≈ ~150 items + ~1.500 componentes
+# por lote → pico de RAM de unos cientos de MB, no gigas. Ajustable.
+_PAGE_WINDOW = 40
 
 
 def staging_collection_for(year: int) -> str:
@@ -75,6 +84,10 @@ def _extraction_to_source_chapters(extraction: Any) -> list[dict]:
     return [{"chapter": ch, "items": items} for ch, items in chapters.items()]
 
 
+def _windows(pages: list[int], size: int) -> list[list[int]]:
+    return [pages[i : i + size] for i in range(0, len(pages), size)]
+
+
 class RunPriceBookIngestUseCase:
     def __init__(
         self,
@@ -102,17 +115,10 @@ class RunPriceBookIngestUseCase:
         except Exception:  # noqa: BLE001 — la telemetría nunca tumba el job
             logger.exception("price_book_ingest_emit_failed", extra={"jobId": job_id})
 
-    def _extract(self, pdf_bytes: bytes, pages: list[int]) -> Any:
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            tmp.write(pdf_bytes)
-            tmp_path = Path(tmp.name)
-        try:
-            return extract_catalog(tmp_path, page_filter=pages or None)
-        finally:
-            try:
-                tmp_path.unlink()
-            except OSError:
-                pass
+    @staticmethod
+    def _extract_window(tmp_path: Path, window: list[int]) -> Any:
+        """Extrae SOLO las páginas de esta ventana (pdfplumber, bloqueante)."""
+        return extract_catalog(tmp_path, page_filter=window or None)
 
     def _load_active_index(self) -> dict[str, float]:
         idx: dict[str, float] = {}
@@ -147,11 +153,12 @@ class RunPriceBookIngestUseCase:
         )
 
         payload = job.payload or {}
-        pages = [int(p) for p in (payload.get("pages") or []) if int(p) >= 1]
+        pages = sorted({int(p) for p in (payload.get("pages") or []) if int(p) >= 1})
         year = int(payload.get("year") or 0)
         gcs_uri = payload.get("gcsUri") or ""
         staging = staging_collection_for(year)
 
+        tmp_path: Path | None = None
         try:
             self._emit(
                 job_id,
@@ -159,70 +166,90 @@ class RunPriceBookIngestUseCase:
                 {"pages": len(pages), "year": year, "staging": staging},
             )
 
-            # 1. PDF desde GCS.
+            # 1. PDF desde GCS → temp local (se reusa en cada ventana).
             pdf_bytes = await self.storage.download_to_bytes(gcs_uri)
 
-            # 2. Extracción (bloqueante → thread).
-            self._emit(
-                job_id,
-                "price_book_ingest_progress",
-                {"phase": "extract", "message": f"Extrayendo {len(pages)} páginas…"},
-            )
-            extraction = await asyncio.to_thread(self._extract, pdf_bytes, pages)
-            source_chapters = _extraction_to_source_chapters(extraction)
-            n_items = sum(len(c["items"]) for c in source_chapters)
+            def _write_temp() -> Path:
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                    tmp.write(pdf_bytes)
+                    return Path(tmp.name)
 
-            # 3. Transform + embed (Vertex) + escritura a staging (wipe previo).
-            self._emit(
-                job_id,
-                "price_book_ingest_progress",
-                {
-                    "phase": "embed_write",
-                    "message": f"{n_items} partidas · generando embeddings y escribiendo a staging…",
-                    "items": n_items,
-                },
-            )
+            tmp_path = await asyncio.to_thread(_write_temp)
+            del pdf_bytes  # ya está en disco; no lo mantengas en RAM
+
+            # 2. Repo apuntando a staging + wipe (una vez). NUNCA toca el activo.
             staging_repo = FirestorePriceBookRepository(self.db, collection=staging)
+            await staging_repo.wipe_price_book()
             reindex = ReindexPriceBookUseCase(staging_repo, self.embedder)
-            report = await reindex.execute(
-                source_chapters, wipe=True, source_book=f"COAATMCA_{year}"
-            )
+
+            windows = _windows(pages, _PAGE_WINDOW)
+            diff_input: list[dict] = []
+            items_saved = 0
+            breakdowns_saved = 0
+
+            # 3. Streaming por ventanas: extraer → embed → save → liberar.
+            for wi, window in enumerate(windows):
+                self._emit(
+                    job_id,
+                    "price_book_ingest_progress",
+                    {
+                        "phase": "embed_write",
+                        "message": (
+                            f"Lote {wi + 1}/{len(windows)} · págs {window[0]}–{window[-1]} · "
+                            f"extrayendo + embeddings + escritura…"
+                        ),
+                        "window": wi + 1,
+                        "windows": len(windows),
+                        "items_saved": items_saved,
+                    },
+                )
+                extraction = await asyncio.to_thread(self._extract_window, tmp_path, window)
+                source_chapters = _extraction_to_source_chapters(extraction)
+                for it in extraction.items:
+                    diff_input.append(
+                        {
+                            "code": it.code,
+                            "price_total": it.price_total,
+                            "description": it.description,
+                            "unit": it.unit,
+                        }
+                    )
+                report = await reindex.execute(
+                    source_chapters, wipe=False, source_book=f"COAATMCA_{year}"
+                )
+                items_saved += report.items_saved
+                breakdowns_saved += report.breakdowns_saved
+
+                # Liberar la ventana antes de la siguiente (memoria plana).
+                extraction = None
+                source_chapters = None
+                await asyncio.to_thread(gc.collect)
 
             # 4. Diff COMPLETO extraído ↔ libro activo (compuerta 2).
             active_index = await asyncio.to_thread(self._load_active_index)
-            diff = diff_items(
-                [
-                    {
-                        "code": it.code,
-                        "price_total": it.price_total,
-                        "description": it.description,
-                        "unit": it.unit,
-                    }
-                    for it in extraction.items
-                ],
-                active_index,
-            )
+            diff = diff_items(diff_input, active_index)
 
             self._emit(
                 job_id,
                 "price_book_ingest_completed",
                 {
                     "staging": staging,
-                    "items_saved": report.items_saved,
-                    "breakdowns_saved": report.breakdowns_saved,
+                    "items_saved": items_saved,
+                    "breakdowns_saved": breakdowns_saved,
                     "active_item_count": len(active_index),
                     "diff": diff.to_dict()["summary"],
                     "diff_samples": diff.to_dict()["samples"][:40],
                 },
             )
-            await self.job_repo.mark_completed(job_id, partidas_resolved=report.items_saved)
+            await self.job_repo.mark_completed(job_id, partidas_resolved=items_saved)
             logger.info(
                 "price_book_ingest_completed",
                 extra={
                     "jobId": job_id,
                     "staging": staging,
-                    "itemsSaved": report.items_saved,
-                    "breakdownsSaved": report.breakdowns_saved,
+                    "itemsSaved": items_saved,
+                    "breakdownsSaved": breakdowns_saved,
+                    "windows": len(windows),
                 },
             )
 
@@ -249,3 +276,9 @@ class RunPriceBookIngestUseCase:
             except Exception:
                 logger.exception("price_book_ingest_mark_failed_error", extra={"jobId": job_id})
             raise
+        finally:
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
