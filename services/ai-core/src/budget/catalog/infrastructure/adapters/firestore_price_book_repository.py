@@ -51,8 +51,12 @@ def _embedding_for_firestore(vector: list[float]) -> Any:
 
 
 class FirestorePriceBookRepository(IPriceBookRepository):
-    def __init__(self, db: Any) -> None:
+    def __init__(self, db: Any, collection: str | None = None) -> None:
         self.db = db
+        # Por defecto apunta al libro activo (`price_book_{CATALOG_YEAR}`). El
+        # job de ingesta lo instancia apuntando a la colección de staging
+        # (ej. `price_book_2026_staging`) para escribir sin tocar el activo.
+        self._collection = collection or PRICE_BOOK_COLLECTION
 
     async def save_price_book_entries_batch(
         self, entries_with_embeddings: list[EntryWithEmbedding]
@@ -60,7 +64,7 @@ class FirestorePriceBookRepository(IPriceBookRepository):
         if not entries_with_embeddings:
             return
 
-        col = self.db.collection(PRICE_BOOK_COLLECTION)
+        col = self.db.collection(self._collection)
         # Trocear si excede el límite de batch de Firestore.
         for i in range(0, len(entries_with_embeddings), _FIRESTORE_BATCH_LIMIT):
             chunk = entries_with_embeddings[i : i + _FIRESTORE_BATCH_LIMIT]
@@ -78,7 +82,7 @@ class FirestorePriceBookRepository(IPriceBookRepository):
             batch.commit()
 
     async def wipe_price_book(self) -> None:
-        col = self.db.collection(PRICE_BOOK_COLLECTION)
+        col = self.db.collection(self._collection)
         deleted = 0
         batch = self.db.batch()
         ops_in_batch = 0
@@ -94,7 +98,7 @@ class FirestorePriceBookRepository(IPriceBookRepository):
         if ops_in_batch > 0:
             batch.commit()
         if deleted:
-            logger.info(f"Wiped {deleted} docs from {PRICE_BOOK_COLLECTION}")
+            logger.info(f"Wiped {deleted} docs from {self._collection}")
 
     async def find_breakdowns_by_parent(
         self, parent_code: str
@@ -102,7 +106,7 @@ class FirestorePriceBookRepository(IPriceBookRepository):
         """Phase 17.8 — Carga los componentes hijos (kind='breakdown')."""
         if not parent_code:
             return []
-        col = self.db.collection(PRICE_BOOK_COLLECTION)
+        col = self.db.collection(self._collection)
         query = col.where("kind", "==", "breakdown").where("parent_code", "==", parent_code)
         results: list[PriceBookBreakdownEntry] = []
         for snap in query.stream():
@@ -126,7 +130,7 @@ class FirestorePriceBookRepository(IPriceBookRepository):
         antes de construir la entity (heavy: ~3KB/doc × 1661 ≈ 5MB en
         memoria que no necesitamos para BM25).
         """
-        col = self.db.collection(PRICE_BOOK_COLLECTION)
+        col = self.db.collection(self._collection)
         query = col.where("kind", "==", "item")
         items: list[PriceBookItemEntry] = []
         for snap in query.stream():
@@ -139,5 +143,5 @@ class FirestorePriceBookRepository(IPriceBookRepository):
                     f"[list_all_items] doc {snap.id} no parsea como "
                     f"PriceBookItemEntry: {e}"
                 )
-        logger.info(f"[list_all_items] loaded {len(items)} items from {PRICE_BOOK_COLLECTION}")
+        logger.info(f"[list_all_items] loaded {len(items)} items from {self._collection}")
         return items

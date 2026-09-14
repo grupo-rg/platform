@@ -1050,3 +1050,111 @@ async def price_book_extract_preview(
         },
     )
     return JSONResponse(status_code=200, content=result)
+
+
+@app.post("/api/v1/jobs/price-book-extract")
+async def dispatch_price_book_ingest(
+    file: UploadFile = File(...),
+    pages: str = Form(...),
+    year: int = Form(...),
+    leadId: str = Form("admin-user"),
+    storage: IPdfStorage = Depends(_deps_get_pdf_storage),
+    repo: IPipelineJobRepository = Depends(_deps_get_pipeline_job_repository),
+    executor: IJobExecutor = Depends(_deps_get_job_executor),
+    worker_job_name: str = Depends(_deps_get_worker_job_name),
+) -> JSONResponse:
+    """Fase 4c — lanza el JOB de ingesta del libro nuevo a staging.
+
+    Igual que los demás jobs pesados: sube el PDF a GCS, crea
+    `pipeline_jobs/{jobId}` y dispara el Cloud Run Job `ai-core-worker` con
+    `JOB_TYPE=price-book-extract` (el worker enruta a `RunPriceBookIngestUseCase`).
+    Responde 202 al instante; el progreso llega por `pipeline_telemetry/{jobId}`.
+    """
+    import json as _json
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    try:
+        pdf_bytes = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Empty PDF body")
+
+    raw = (pages or "").strip()
+    try:
+        parsed = _json.loads(raw) if raw.startswith("[") else [int(x) for x in raw.split(",") if x.strip()]
+        page_list = sorted({int(p) for p in parsed if int(p) >= 1})
+    except Exception:
+        raise HTTPException(status_code=400, detail="`pages` inválido (JSON array o CSV de enteros)")
+    if not page_list:
+        raise HTTPException(status_code=400, detail="No hay páginas confirmadas para ingestar")
+    if not year or year < 2000:
+        raise HTTPException(status_code=400, detail="`year` inválido")
+
+    job_id = str(uuid.uuid4())
+    uid = (leadId or "").strip() or "admin-user"
+
+    # 1. Subir el PDF a GCS para que el worker lo lea.
+    try:
+        gcs_uri = await storage.upload_pdf(
+            uid=uid, job_id=job_id, filename=file.filename, pdf_bytes=pdf_bytes
+        )
+    except Exception as e:
+        logger.error("price_book_ingest_upload_failed", extra={"jobId": job_id, "error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to upload PDF to GCS: {e}")
+
+    # 2. Persistir el PipelineJob.
+    job = PipelineJob.new(
+        jobId=job_id,
+        jobType=JobType.PRICE_BOOK_EXTRACT,
+        leadId=uid,
+        budgetId=job_id,
+        uid=uid,
+        payload={
+            "gcsUri": gcs_uri,
+            "pages": page_list,
+            "year": int(year),
+            "filename": file.filename,
+        },
+    )
+    try:
+        await repo.create(job)
+    except Exception as e:
+        logger.error("price_book_ingest_create_job_failed", extra={"jobId": job_id, "error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to persist pipeline job: {e}")
+
+    # 3. Disparar el Cloud Run Job worker con el tipo de job en el env.
+    try:
+        execution_name = await executor.run_execution(
+            job_name=worker_job_name,
+            env_overrides={"JOB_ID": job_id, "JOB_TYPE": "price-book-extract"},
+        )
+    except JobExecutorError as e:
+        try:
+            await repo.mark_dispatch_failed(job_id, error_message=str(e), error_type=type(e).__name__)
+        except Exception:
+            logger.exception("price_book_ingest_dispatch_mark_failed", extra={"jobId": job_id})
+        logger.error("price_book_ingest_executor_failed", extra={"jobId": job_id, "error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to start Cloud Run Job: {e}")
+
+    await repo.attach_execution_name(job_id, execution_name)
+    logger.info(
+        "price_book_ingest_dispatch_started",
+        extra={
+            "jobId": job_id,
+            "pages": len(page_list),
+            "year": int(year),
+            "executionName": execution_name,
+        },
+    )
+    return JSONResponse(
+        status_code=202,
+        content={
+            "status": "processing",
+            "jobId": job_id,
+            "pages": len(page_list),
+            "year": int(year),
+            "staging": f"price_book_{int(year)}_staging",
+        },
+    )

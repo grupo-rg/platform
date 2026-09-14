@@ -93,6 +93,26 @@ def main(
         logger.error("worker_main: JOB_ID env var is required")
         return EXIT_CONFIG_ERROR
 
+    # Enrutado por tipo de job. Los jobs de ingesta del libro de precios NO
+    # comparten el use case (ni el bootstrap del swarm/BM25) con el pipeline de
+    # budget: se seleccionan por la env `JOB_TYPE` que pone el dispatcher. En
+    # tests (con `use_case_factory` inyectado) esta rama no se toca.
+    job_type = (resolved_env.get("JOB_TYPE") or "").strip()
+    if job_type == "price-book-extract" and use_case_factory is None:
+        try:
+            use_case = _build_price_book_ingest_uc(resolved_env)
+        except Exception:
+            logger.exception("worker_main: failed to build price-book ingest use case")
+            return EXIT_RUNTIME_ERROR
+        attempt_id = attempt_id_factory()
+        logger.info(
+            "worker_main starting (price-book ingest)",
+            extra={"jobId": job_id, "attemptId": attempt_id},
+        )
+        if install_signal_handlers:
+            _install_sigterm_handler(use_case, job_id)
+        return asyncio.run(_run_job(use_case, job_id, attempt_id))
+
     factory = use_case_factory or _build_use_case_from_env
     try:
         use_case = factory(resolved_env)
@@ -251,6 +271,47 @@ def _build_use_case_from_env(env: Mapping[str, str]) -> RunPipelineJobUseCase:
         logger.exception("worker_main: bootstrap_hybrid_catalog_search failed (non-fatal)")
 
     return get_run_pipeline_job_uc()
+
+
+def _build_price_book_ingest_uc(env: Mapping[str, str]):
+    """Factory LEAN para la ingesta del libro de precios.
+
+    A diferencia de `_build_use_case_from_env`, NO importa `dependencies.py`
+    (que construye el swarm entero + catálogo BM25 al importarse) ni bootstrapea
+    HybridCatalogSearch: la ingesta solo necesita Firestore, GCS, telemetría y
+    el embedder Vertex. Así el worker de ingesta arranca ligero.
+    """
+    from src.core.bootstrap import init_firebase_admin
+
+    init_firebase_admin(env)
+
+    from firebase_admin import firestore
+
+    from src.budget.catalog.application.use_cases.ingest_price_book_job_uc import (
+        RunPriceBookIngestUseCase,
+    )
+    from src.budget.catalog.infrastructure.adapters.gemini_embedding_provider import (
+        GeminiEmbeddingProvider,
+    )
+    from src.pipeline_jobs.infrastructure.firestore_pipeline_job_repository import (
+        FirestorePipelineJobRepository,
+    )
+    from src.pipeline_jobs.infrastructure.gcs_pdf_storage import GcsPdfStorage
+    from src.pipeline_telemetry.application.use_cases.emit_telemetry_uc import (
+        EmitTelemetryUseCase,
+    )
+    from src.pipeline_telemetry.infrastructure.firebase_telemetry_repository import (
+        FirebaseTelemetryRepository,
+    )
+
+    db = firestore.client()
+    return RunPriceBookIngestUseCase(
+        job_repo=FirestorePipelineJobRepository(db=db),
+        storage=GcsPdfStorage.from_env(),
+        telemetry=EmitTelemetryUseCase(repository=FirebaseTelemetryRepository(db=db)),
+        embedder=GeminiEmbeddingProvider(),
+        db=db,
+    )
 
 
 # ---------------------------------------------------------------------------

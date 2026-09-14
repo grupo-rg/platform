@@ -62,8 +62,16 @@ class ReindexPriceBookUseCase:
         *,
         wipe: bool = False,
         dry_run: bool = False,
+        source_book: str | None = None,
     ) -> ReindexReport:
         items, breakdowns = CatalogTransformer.transform(source)
+        # El transformer usa el default `COAATMCA_2025` en las entries. Cuando
+        # se ingesta otro libro (ej. 2026 a staging) hay que sellar su origen.
+        if source_book:
+            for _e in items:
+                _e.source_book = source_book
+            for _e in breakdowns:
+                _e.source_book = source_book
         report = ReindexReport(
             items_transformed=len(items),
             breakdowns_transformed=len(breakdowns),

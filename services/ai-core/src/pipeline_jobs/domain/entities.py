@@ -34,6 +34,10 @@ class JobType(str, Enum):
     MEASUREMENTS = "measurements"
     VISION_EXTRACT = "vision-extract"
     NL_BUDGET = "nl-budget"
+    # Ingesta del libro de precios (COAATMCA) a una colección de staging.
+    # No comparte runner con el pipeline de budget: el worker enruta por
+    # JOB_TYPE a `RunPriceBookIngestUseCase` (ver worker_main).
+    PRICE_BOOK_EXTRACT = "price-book-extract"
 
 
 class PipelineJob(BaseModel):
