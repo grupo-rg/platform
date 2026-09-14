@@ -897,7 +897,8 @@ async def price_book_detect_pages(file: UploadFile = File(...)) -> JSONResponse:
     logger.info(
         "price_book_detect_pages",
         extra={
-            "filename": file.filename,
+            # NB: 'filename' es atributo reservado de LogRecord → usar 'pdf_name'.
+            "pdf_name": file.filename,
             "total_pages": detection.total_pages,
             "price_pages": detection.price_page_count,
             "ranges": len(detection.ranges),
