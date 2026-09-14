@@ -860,3 +860,47 @@ async def test_tabular_parser(file: UploadFile = File(...)) -> JSONResponse:
             "pageMetrics": page_metrics_payload,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/admin/price-book/detect-pages
+# Compuerta 1 del asistente de actualización del libro de precios: recibe el PDF
+# del libro COAATMCA, clasifica cada página por densidad (importes + códigos +
+# imágenes) y devuelve los RANGOS de páginas de precios + la señal por página,
+# para que el admin confirme/ajuste antes de extraer. NO escribe nada en Firestore.
+# Rápido (fitz, solo texto). Gated por x-internal-token igual que /api/v1/admin/*.
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/v1/admin/price-book/detect-pages")
+async def price_book_detect_pages(file: UploadFile = File(...)) -> JSONResponse:
+    """Detecta las páginas de precios de un libro COAATMCA (preview, sin escribir)."""
+    from src.budget.catalog.price_book_page_detector import detect_price_pages
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    try:
+        pdf_bytes = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read PDF: {e}")
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Empty PDF body")
+    if len(pdf_bytes) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="PDF too large (max 100MB)")
+
+    try:
+        detection = detect_price_pages(pdf_bytes)
+    except Exception as e:
+        logger.exception("price_book_detect_pages_failed")
+        raise HTTPException(status_code=422, detail=f"No se pudo analizar el PDF: {e}")
+
+    logger.info(
+        "price_book_detect_pages",
+        extra={
+            "filename": file.filename,
+            "total_pages": detection.total_pages,
+            "price_pages": detection.price_page_count,
+            "ranges": len(detection.ranges),
+        },
+    )
+    return JSONResponse(status_code=200, content=detection.to_dict())
