@@ -6,9 +6,12 @@ from types import SimpleNamespace
 
 from src.budget.catalog.application.services.catalog_transformer import CatalogTransformer
 from src.budget.catalog.application.use_cases.ingest_price_book_job_uc import (
+    _alias_keys,
     _extraction_to_source_chapters,
+    _lookup_aliases,
     staging_collection_for,
 )
+from src.budget.catalog.domain.price_book_entry import EmbeddingTextBuilder
 
 
 def _bk(code, desc, unit, qty, pu, pt):
@@ -80,3 +83,23 @@ def test_missing_chapter_defaults():
     chapters = _extraction_to_source_chapters(ex)
     assert chapters[0]["chapter"] == "SIN CAPÍTULO"
     assert chapters[0]["items"][0]["section"] == ""
+
+
+def test_alias_key_normalizes_m_suffix():
+    keys = _alias_keys("D3006.0060m")
+    assert "d3006.0060" in keys  # el 2026 (sin m) matchea el 2025 (con m)
+    idx = {"d3006.0060": ["reparar grieta", "cosido"]}
+    assert _lookup_aliases("D3006.0060", idx) == ["reparar grieta", "cosido"]
+    assert _lookup_aliases("NOEXISTE", idx) == []
+
+
+def test_aliases_injected_and_embedded():
+    ex = _extraction([_item("EHV010", "m3", "Viga", 100.0, "EST", "H", 61, [])])
+    idx = {"ehv010": ["viga colgada", "jacena hormigon"]}
+    chapters = _extraction_to_source_chapters(ex, idx)
+    it = chapters[0]["items"][0]
+    assert it["search_aliases"] == ["viga colgada", "jacena hormigon"]
+    # y llegan al texto del embedding vía el transformer + EmbeddingTextBuilder
+    items, _ = CatalogTransformer.transform(chapters)
+    text = EmbeddingTextBuilder.for_item(items[0])
+    assert "también: viga colgada, jacena hormigon" in text

@@ -34,6 +34,10 @@ class PriceBookItemEntry(BaseModel):
     unit_dimension: Optional[str] = None
     priceTotal: float
     breakdown_ids: list[str] = Field(default_factory=list)
+    # Enriquecimiento semántico: alias de búsqueda (jerga comercial/coloquial
+    # del cliente/aparejador) que se anexan al texto del embedding para mejorar
+    # el recall de la búsqueda vectorial. Vienen del corpus `price_book_aliases`.
+    search_aliases: list[str] = Field(default_factory=list)
     source_page: Optional[int] = None
     source_book: str = "COAATMCA_2025"
 
@@ -82,7 +86,13 @@ class EmbeddingTextBuilder:
     def for_item(item: PriceBookItemEntry) -> str:
         unit = item.unit_normalized or item.unit_raw
         section = item.section or ""
-        return f"{item.chapter} > {section} | {unit} | {item.description}"
+        base = f"{item.chapter} > {section} | {unit} | {item.description}"
+        # Enriquecimiento semántico: anexa los alias de búsqueda (jerga de
+        # cliente/aparejador) para que el vector "entienda" cómo se nombra la
+        # partida en un presupuesto real, no solo la redacción oficial COAATMCA.
+        if item.search_aliases:
+            base += f" | también: {', '.join(item.search_aliases)}"
+        return base
 
     @staticmethod
     def for_breakdown(bk: PriceBookBreakdownEntry) -> str:

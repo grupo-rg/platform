@@ -49,13 +49,37 @@ logger = logging.getLogger(__name__)
 _PAGE_WINDOW = 40
 
 
+ALIASES_COLLECTION = "price_book_aliases"
+
+
 def staging_collection_for(year: int) -> str:
     return f"price_book_{year}_staging"
 
 
-def _extraction_to_source_chapters(extraction: Any) -> list[dict]:
+def _alias_keys(code: str) -> set[str]:
+    """Claves de lookup de aliases para un código: exacto, minúsculas, y sin el
+    sufijo de variante `m` (el 2025 traía `D3006.0060m`, el 2026 `D3006.0060`)."""
+    c = (code or "").strip()
+    lc = c.lower()
+    keys = {c, lc}
+    if lc.endswith("m"):
+        keys.add(lc[:-1])
+    return keys
+
+
+def _lookup_aliases(code: str, idx: dict[str, list[str]]) -> list[str]:
+    for k in _alias_keys(code):
+        if k in idx:
+            return idx[k]
+    return []
+
+
+def _extraction_to_source_chapters(
+    extraction: Any, aliases_idx: dict[str, list[str]] | None = None
+) -> list[dict]:
     """Extracción (Partida planas) → formato que espera CatalogTransformer
-    (capítulos → items → breakdown)."""
+    (capítulos → items → breakdown). Inyecta `search_aliases` desde el corpus."""
+    aliases_idx = aliases_idx or {}
     chapters: "OrderedDict[str, list[dict]]" = OrderedDict()
     for it in extraction.items:
         ch = it.chapter or "SIN CAPÍTULO"
@@ -67,6 +91,7 @@ def _extraction_to_source_chapters(extraction: Any) -> list[dict]:
                 "section": it.subchapter or "",
                 "priceTotal": it.price_total,
                 "page": it.page_physical,
+                "search_aliases": _lookup_aliases(it.code, aliases_idx),
                 "breakdown": [
                     {
                         "code": bk.code,
@@ -119,6 +144,22 @@ class RunPriceBookIngestUseCase:
     def _extract_window(tmp_path: Path, window: list[int]) -> Any:
         """Extrae SOLO las páginas de esta ventana (pdfplumber, bloqueante)."""
         return extract_catalog(tmp_path, page_filter=window or None)
+
+    def _load_aliases(self) -> dict[str, list[str]]:
+        """Carga el corpus `price_book_aliases` (doc_id = código) a un índice
+        con claves normalizadas para el join partida→aliases."""
+        idx: dict[str, list[str]] = {}
+        try:
+            for snap in self.db.collection(ALIASES_COLLECTION).stream():
+                d = snap.to_dict() or {}
+                al = d.get("aliases") or []
+                if not al:
+                    continue
+                for k in _alias_keys(snap.id):
+                    idx.setdefault(k, al)
+        except Exception:  # noqa: BLE001 — sin aliases se ingesta sin enriquecer
+            logger.exception("price_book_ingest_load_aliases_failed")
+        return idx
 
     def _load_active_index(self) -> dict[str, float]:
         idx: dict[str, float] = {}
@@ -182,6 +223,13 @@ class RunPriceBookIngestUseCase:
             await staging_repo.wipe_price_book()
             reindex = ReindexPriceBookUseCase(staging_repo, self.embedder)
 
+            # Corpus de aliases (enriquecimiento semántico) — se une por código.
+            aliases_idx = await asyncio.to_thread(self._load_aliases)
+            logger.info(
+                "price_book_ingest_aliases_loaded",
+                extra={"jobId": job_id, "aliasKeys": len(aliases_idx)},
+            )
+
             windows = _windows(pages, _PAGE_WINDOW)
             diff_input: list[dict] = []
             items_saved = 0
@@ -204,7 +252,7 @@ class RunPriceBookIngestUseCase:
                     },
                 )
                 extraction = await asyncio.to_thread(self._extract_window, tmp_path, window)
-                source_chapters = _extraction_to_source_chapters(extraction)
+                source_chapters = _extraction_to_source_chapters(extraction, aliases_idx)
                 for it in extraction.items:
                     diff_input.append(
                         {

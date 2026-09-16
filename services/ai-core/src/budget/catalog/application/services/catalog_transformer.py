@@ -121,6 +121,7 @@ class CatalogTransformer:
             # NO al `code` (que ahora es el original COAATMCA y puede repetirse
             # entre items, ej. `mo055` aparece en cientos de partidas).
             breakdown_ids=[b.doc_id or b.code for b in bk_entries],
+            search_aliases=raw_item.get("search_aliases") or [],
             source_page=raw_item.get("page"),
         )
         return item_entry, bk_entries
