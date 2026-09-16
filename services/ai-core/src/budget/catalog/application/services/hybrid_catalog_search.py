@@ -172,10 +172,16 @@ class HybridCatalogSearch:
             base = cype_base_code(it.code)
             if base:
                 self._items_by_base_code.setdefault(base, it)
-        # Tokenizamos cada item con su descripción + unit_raw para que tanto
-        # texto descriptivo como unidad alimenten el BM25.
+        # Tokenizamos cada item con su descripción + unit_raw + search_aliases,
+        # para que el BM25 (lado keyword del híbrido) también matchee la jerga
+        # comercial/coloquial ("climalit", "riostra", "marés"…), no solo la
+        # redacción técnica oficial. Antes solo el vector se beneficiaba de los
+        # aliases; ahora también la búsqueda por palabra clave.
         self._tokenized: List[List[str]] = [
-            tokenize_es(f"{it.description} {it.unit_raw}")
+            tokenize_es(
+                f"{it.description} {it.unit_raw} "
+                f"{' '.join(getattr(it, 'search_aliases', None) or [])}"
+            )
             for it in self.catalog_items
         ]
         # BM25Okapi requires non-empty tokenization to avoid div-by-zero.
