@@ -1410,6 +1410,91 @@ class SwarmPricingService:
             needs_reconciliation=False,
         )
 
+    async def _build_composed_fallback(
+        self, item: RestructuredItem
+    ) -> Optional[BudgetPartida]:
+        """Fallback VALORADO para una partida que el swarm no resolvió: en vez de
+        dejarla a 0 (ver `_build_unresolved_fallback`), la construye con el
+        `FromScratchCompositor` (labor_rates + material_catalog → precio real
+        auditable). Devuelve `None` si no hay compositor o la composición no da
+        precio (> 0), para que el caller caiga al resguardo determinista a 0.
+
+        Motivación (diagnóstico empírico): los 0 son partidas OMITIDAS por el
+        evaluador LLM (drop de lote / 429), SIN candidatos del vector — pero SÍ
+        valorables: el compositor resuelve ~89% de los from_scratch. Así una
+        partida omitida sale con precio en vez de en 0."""
+        if self.compositor is None:
+            return None
+        desc = item.description or ""
+        unit = item.unit or "ud"
+        qty = item.quantity if item.quantity is not None else 0.0
+        try:
+            composed = await self.compositor.compose(
+                description=desc, unit=unit, quantity=qty or 1.0
+            )
+        except Exception as e:  # noqa: BLE001 — cae al resguardo a 0
+            logger.warning(f"[reconciliation] compose fallback falló para {item.code!r}: {e}")
+            return None
+        if not composed or (composed.unit_price or 0.0) <= 0.0:
+            return None
+
+        unit_price = float(composed.unit_price)
+        total_price = round(unit_price * qty, 2)
+        breakdown: List[BudgetBreakdownComponent] = []
+        for row in (composed.breakdown or []):
+            try:
+                breakdown.append(
+                    BudgetBreakdownComponent.model_validate(
+                        {
+                            "code": row.get("code"),
+                            "concept": row.get("concept") or "",
+                            "type": row.get("type") or "OTHER",
+                            "price": float(row.get("price") or 0.0),
+                            "yield": row.get("yield"),
+                            "waste": row.get("waste"),
+                            "total": float(row.get("total") or 0.0),
+                            "is_variable": row.get("is_variable"),
+                        }
+                    )
+                )
+            except Exception:  # noqa: BLE001 — un componente malformado no tumba la partida
+                continue
+
+        trace = (
+            "[fallback_composed] Partida no resuelta por el swarm (omitida del lote/429) "
+            "→ compuesta from_scratch (labor_rates + material_catalog, precio real "
+            "auditable). Marcada para revisión humana — nunca queda a 0 si es componible."
+        )
+        if composed.notes:
+            trace += " Notas: " + "; ".join(composed.notes[:3])
+        safe_code = item.code or ""
+        return BudgetPartida(
+            id=str(uuid.uuid4()),
+            order=0,
+            original_item=OriginalItem(
+                code=safe_code, description=desc, quantity=qty,
+                unit=unit, chapter=item.chapter or "Sin Capítulo",
+                raw_table_data="fallback_composed",
+            ),
+            ai_resolution=AIResolution(
+                reasoning_trace=trace,
+                calculated_unit_price=unit_price,
+                calculated_total_price=total_price,
+                confidence_score=40,
+                is_estimated=True,
+                needs_human_review=True,
+            ),
+            code=safe_code, description=desc, unit=unit,
+            quantity=qty, unitPrice=unit_price, totalPrice=total_price,
+            breakdown=breakdown or None,
+            isRealCost=False, matchConfidence=40.0, match_kind="from_scratch",
+            reasoning=trace,
+            ai_unit_price=unit_price,
+            active_price_source="ai",
+            measurements=getattr(item, "measurements", None),
+            needs_reconciliation=False,
+        )
+
     async def _evaluate_batch_inner(
         self,
         items: List[RestructuredItem],
@@ -2670,14 +2755,23 @@ class SwarmPricingService:
             if _exp_code in resolved_codes:
                 continue
             try:
-                _fb = self._build_unresolved_fallback(
-                    _exp_item, reason="no resuelta por el swarm (fallo/omisión del LLM)"
-                )
+                # 1) Intentar VALORARLA con el compositor from_scratch (los 0 son
+                #    omisiones del lote, sin candidatos, pero componibles ~89%).
+                _fb = await self._build_composed_fallback(_exp_item)
+                _recovery = "composed_from_scratch"
+                # 2) Si no se pudo componer (sin compositor / precio 0), resguardo
+                #    determinista a 0 (garantía anti-pérdida, marcado review).
+                if _fb is None:
+                    _fb = self._build_unresolved_fallback(
+                        _exp_item, reason="no resuelta por el swarm (fallo/omisión del LLM)"
+                    )
+                    _recovery = "salvage_zero"
                 fallback_partidas.append(_fb)
                 resolved_codes.add(_exp_code)
                 self._emit(budget_id, 'partida_fallback_recovered', {
                     "code": _exp_code,
                     "reason": "unresolved_by_swarm",
+                    "recovery": _recovery,
                     "unit_price": _fb.unitPrice,
                     "active_price_source": _fb.active_price_source,
                 })
