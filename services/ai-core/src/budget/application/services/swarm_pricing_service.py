@@ -1410,6 +1410,41 @@ class SwarmPricingService:
             needs_reconciliation=False,
         )
 
+    @staticmethod
+    def _align_cached_partida(
+        partida: BudgetPartida, item: RestructuredItem
+    ) -> BudgetPartida:
+        """Alinea una partida traída del pricing cache (keyed por DESCRIPCIÓN) con
+        la IDENTIDAD y MEDICIÓN del item ACTUAL: sobrescribe code/description/unit/
+        quantity/measurements/chapter y recalcula `totalPrice = unitPrice ×
+        quantity`. Reusa el PRICING cacheado (unitPrice, breakdown, match_kind,
+        reasoning, alternatives). Sin esto, la partida entra con el code+quantity
+        STALE del run donde se cacheó → la reconciliación de cobertura (por código)
+        cree que el item actual quedó "unresolved" y lo recupera/compone mal, y
+        además duplica el código stale con una medición vieja."""
+        partida.id = str(uuid.uuid4())
+        partida.code = item.code or ""
+        partida.description = item.description
+        partida.unit = item.unit or partida.unit
+        partida.quantity = (
+            item.quantity if item.quantity is not None else partida.quantity
+        )
+        partida.measurements = getattr(item, "measurements", None)
+        if partida.original_item is not None:
+            partida.original_item.code = item.code or ""
+            partida.original_item.description = item.description
+            partida.original_item.quantity = partida.quantity
+            partida.original_item.unit = partida.unit
+            partida.original_item.chapter = (
+                item.chapter or partida.original_item.chapter
+            )
+        partida.totalPrice = round(
+            (partida.unitPrice or 0.0) * (partida.quantity or 0.0), 2
+        )
+        if partida.ai_resolution is not None:
+            partida.ai_resolution.calculated_total_price = partida.totalPrice
+        return partida
+
     async def _build_composed_fallback(
         self, item: RestructuredItem
     ) -> Optional[BudgetPartida]:
@@ -1590,6 +1625,11 @@ class SwarmPricingService:
                     # `partida` viene como dict de `model_dump()` previo.
                     try:
                         partida = BudgetPartida.model_validate(hit.partida)
+                        # El cache está keyed por DESCRIPCIÓN, pero el payload trae la
+                        # IDENTIDAD del run donde se cacheó (code/quantity/measurements
+                        # de otra numeración NL-x). Alineamos con el item ACTUAL —
+                        # reusar el precio, no la identidad. Ver _align_cached_partida.
+                        partida = self._align_cached_partida(partida, it)
                         cached_partidas.append(partida)
                         self._emit(budget_id, 'pricing_cache_hit', {
                             "code": it.code,
