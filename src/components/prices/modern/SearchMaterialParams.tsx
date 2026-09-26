@@ -8,12 +8,14 @@ import { searchMaterialsAction } from '@/actions/material-catalog/search-materia
 import { MaterialItem } from '@/backend/material-catalog/domain/material-item';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { formatCurrency } from '@/lib/utils';
+import { useActiveMaterialRules } from '@/components/prices/rules/useActiveMaterialRules';
+import { EffectivePriceCell, AdjustmentBadge } from '@/components/prices/rules/PriceCells';
 
 export function SearchMaterialParams() {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<MaterialItem[]>([]);
     const [loading, setLoading] = useState(false);
+    const { computeEffective } = useActiveMaterialRules();
 
     const handleSearch = async () => {
         if (!query.trim()) return;
@@ -49,11 +51,14 @@ export function SearchMaterialParams() {
                             <TableRow>
                                 <TableHead>Producto</TableHead>
                                 <TableHead>Categoría</TableHead>
+                                <TableHead className="text-center">Regla</TableHead>
                                 <TableHead className="text-right">Precio</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {results.map((item) => (
+                            {results.map((item) => {
+                                const eff = computeEffective(item.sku, item.category, item.price);
+                                return (
                                 <TableRow key={item.id || item.sku}>
                                     <TableCell>
                                         <div className="font-medium">{item.name}</div>
@@ -66,11 +71,19 @@ export function SearchMaterialParams() {
                                             {item.category.split('>').pop()?.trim()}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-right font-mono font-bold">
-                                        {formatCurrency(item.price)} / {item.unit}
+                                    <TableCell className="text-center">
+                                        {eff.appliedRule && eff.adjustmentPct !== null ? (
+                                            <AdjustmentBadge pct={eff.adjustmentPct} />
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <EffectivePriceCell eff={eff} unit={item.unit} />
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </div>

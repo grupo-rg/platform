@@ -8,11 +8,13 @@ import { RefreshCw, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getLatestMaterialsAction } from '@/actions/material-catalog/get-latest-materials.action';
 import { MaterialItem } from '@/backend/material-catalog/domain/material-item';
-import { formatCurrency } from '@/lib/utils';
+import { useActiveMaterialRules } from '@/components/prices/rules/useActiveMaterialRules';
+import { EffectivePriceCell, AdjustmentBadge } from '@/components/prices/rules/PriceCells';
 
 export function LatestMaterialsList() {
     const [items, setItems] = useState<MaterialItem[]>([]);
     const [loading, setLoading] = useState(false);
+    const { computeEffective } = useActiveMaterialRules();
 
     const loadItems = async () => {
         setLoading(true);
@@ -43,18 +45,21 @@ export function LatestMaterialsList() {
                             <TableHead>SKU</TableHead>
                             <TableHead>Producto</TableHead>
                             <TableHead>Categoría</TableHead>
+                            <TableHead className="text-center">Regla</TableHead>
                             <TableHead className="text-right">Precio</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {items.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                                     No hay materiales recientes.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            items.map((item) => (
+                            items.map((item) => {
+                                const eff = computeEffective(item.sku, item.category, item.price);
+                                return (
                                 <TableRow key={item.id || item.sku}>
                                     <TableCell className="font-mono text-xs text-muted-foreground">{item.sku}</TableCell>
                                     <TableCell className="font-medium max-w-[300px] truncate" title={item.name}>
@@ -66,11 +71,19 @@ export function LatestMaterialsList() {
                                             {item.category.split('>').pop()?.trim() || item.category}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-right font-bold">
-                                        {formatCurrency(item.price)} / {item.unit}
+                                    <TableCell className="text-center">
+                                        {eff.appliedRule && eff.adjustmentPct !== null ? (
+                                            <AdjustmentBadge pct={eff.adjustmentPct} />
+                                        ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <EffectivePriceCell eff={eff} unit={item.unit} />
                                     </TableCell>
                                 </TableRow>
-                            ))
+                                );
+                            })
                         )}
                     </TableBody>
                 </Table>
