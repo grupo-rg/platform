@@ -53,8 +53,20 @@ export const routing = defineRouting({
             de: '/blog/[slug]',
             nl: '/blog/[slug]'
         },
-        '/privacy': '/privacy',
-        '/terms': '/terms',
+        '/privacy': {
+            es: '/privacidad',
+            en: '/privacy',
+            ca: '/privacitat',
+            de: '/datenschutz',
+            nl: '/privacybeleid'
+        },
+        '/terms': {
+            es: '/aviso-legal',
+            en: '/legal-notice',
+            ca: '/avis-legal',
+            de: '/impressum',
+            nl: '/juridische-kennisgeving'
+        },
         '/login': '/login',
         '/signup': '/signup',
         '/zonas/[zone]': {
