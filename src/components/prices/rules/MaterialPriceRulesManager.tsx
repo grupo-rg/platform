@@ -29,9 +29,10 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Loader2, Plus, Pencil, Trash2, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, RefreshCw, SlidersHorizontal, Info, ChevronDown } from 'lucide-react';
 import type { MaterialPriceRule } from '@/backend/material-catalog/domain/material-price-rule';
 import { MaterialRuleDialog, type RuleInput } from './MaterialRuleDialog';
 import { formatSignedPct } from './PriceCells';
@@ -208,6 +209,51 @@ export function MaterialPriceRulesManager({ categorySuggestions = [], onRulesCha
                 </div>
             </CardHeader>
             <CardContent>
+                {/* Banner explicativo — cómo funcionan las reglas de precio de material */}
+                <Collapsible defaultOpen className="mb-4">
+                    <div className="rounded-lg border border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/30">
+                        <CollapsibleTrigger className="group flex w-full items-center gap-2 px-4 py-3 text-left">
+                            <Info className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                            <span className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                                Cómo funcionan las reglas de precio
+                            </span>
+                            <span className="ml-auto hidden text-xs text-blue-700/80 dark:text-blue-300/80 sm:inline">
+                                Ajustan el % sin tocar el precio base del catálogo
+                            </span>
+                            <ChevronDown className="h-4 w-4 shrink-0 text-blue-600 transition-transform group-data-[state=closed]:-rotate-90 dark:text-blue-400" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                            <div className="space-y-3 px-4 pb-4 pt-1 text-sm leading-relaxed text-blue-900/90 dark:text-blue-100/90">
+                                <p>
+                                    Ajustan el precio de los materiales por un <strong>porcentaje</strong> (sube con{' '}
+                                    <code className="rounded bg-blue-100 px-1 dark:bg-blue-900/50">+</code>, descuenta con{' '}
+                                    <code className="rounded bg-blue-100 px-1 dark:bg-blue-900/50">−</code>). El{' '}
+                                    <strong>precio base del catálogo nunca se modifica</strong>: el ajuste se calcula al vuelo.
+                                </p>
+                                <div>
+                                    <p className="font-medium">Alcances (de más general a más específico):</p>
+                                    <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                                        <li><strong>Global</strong> — todos los materiales del catálogo.</li>
+                                        <li><strong>Categoría</strong> — los materiales de una categoría (y sus subcategorías).</li>
+                                        <li><strong>Material</strong> — un material concreto (por SKU/referencia).</li>
+                                        <li><strong>Cliente</strong> — los presupuestos de un cliente concreto.</li>
+                                        <li><strong>Presupuesto</strong> — un presupuesto concreto.</li>
+                                    </ul>
+                                </div>
+                                <p>
+                                    <strong>Precedencia — gana la más específica:</strong> Presupuesto › Cliente › Material › Categoría ›
+                                    Global. Si a un material le aplican varias reglas, solo se aplica <strong>una</strong>: la más
+                                    específica que exista.
+                                </p>
+                                <p>
+                                    <strong>Cuándo se aplica:</strong> en presupuestos <strong>nuevos</strong> y al re-tasar en el editor.
+                                    Los presupuestos ya guardados <strong>no</strong> se recalculan (conservan su precio). Puedes{' '}
+                                    <strong>desactivar</strong> una regla sin borrarla.
+                                </p>
+                            </div>
+                        </CollapsibleContent>
+                    </div>
+                </Collapsible>
                 <div className="rounded-md border">
                     <Table>
                         <TableHeader>
