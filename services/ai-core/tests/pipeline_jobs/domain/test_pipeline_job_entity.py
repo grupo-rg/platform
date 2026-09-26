@@ -55,6 +55,7 @@ class TestJobTypeEnum:
             "measurements",
             "vision-extract",
             "nl-budget",
+            "price-book-extract",
         }
 
 

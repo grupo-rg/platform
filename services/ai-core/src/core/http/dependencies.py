@@ -44,6 +44,9 @@ from src.budget.catalog.application.services.catalog_lookup_service import (
 from src.budget.catalog.infrastructure.adapters.firestore_material_catalog import (
     FirestoreMaterialCatalogAdapter,
 )
+from src.budget.catalog.infrastructure.adapters.firestore_material_price_rules import (
+    FirestoreMaterialPriceRulesReader,
+)
 from src.budget.application.services.from_scratch_compositor import (
     FromScratchCompositor,
 )
@@ -122,6 +125,13 @@ _from_scratch_compositor = FromScratchCompositor(
 # Phase 17.8 — repo de price_book (kind='item' + kind='breakdown') usado para
 # heredar el descompuesto del catálogo en partidas 1:1.
 _price_book_repo = FirestorePriceBookRepository(db=_db_client)
+
+# Reglas de ajuste de precio de material por % (capa NO destructiva). Reader
+# de la colección `material_price_rules` (admin SDK). El swarm carga
+# `list_active()` UNA vez por batch y lo pasa al compositor from_scratch, que
+# aplica el factor por material sobre el precio del catálogo en memoria (el
+# precio BASE en `material_catalog` queda intacto).
+_material_price_rules_reader = FirestoreMaterialPriceRulesReader(db=_db_client)
 
 # Normas + DAG (v005)
 _rules_md = load_rules()
@@ -276,6 +286,7 @@ _swarm_pricing = SwarmPricingService(
     pricing_cache=_pricing_cache_singleton,
     compositor=_from_scratch_compositor,
     calibration_service=_calibration_service_singleton,
+    material_price_rules_reader=_material_price_rules_reader,
 )
 _architect = ArchitectService(llm_provider=_llm_adapter)
 _budget_metadata_extractor = BudgetMetadataExtractor(llm_provider=_llm_adapter)

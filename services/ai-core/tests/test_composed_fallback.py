@@ -23,7 +23,8 @@ class _FakeCompositor:
         self._up = unit_price
         self._bd = breakdown or []
 
-    async def compose(self, *, description, unit, quantity=1.0):
+    async def compose(self, *, description, unit, quantity=1.0,
+                      material_price_rules=None, budget_id=None, lead_id=None):
         return ComposedResult(
             unit_price=self._up,
             breakdown=self._bd,

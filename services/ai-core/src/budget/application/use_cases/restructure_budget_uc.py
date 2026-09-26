@@ -102,6 +102,7 @@ class RestructureBudgetUseCase:
             restructured_items,
             budget_id,
             metrics,
+            lead_id=lead_id,
             resume_from=resume_from,
             on_partida_resolved=on_partida_resolved,
             cancellation_event=cancellation_event,

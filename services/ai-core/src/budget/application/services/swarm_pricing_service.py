@@ -836,6 +836,7 @@ class SwarmPricingService:
         pricing_cache: Optional[PricingCache] = None,
         compositor: Optional[FromScratchCompositor] = None,
         calibration_service: Optional[CalibrationService] = None,
+        material_price_rules_reader: Optional[Any] = None,
     ):
         self.llm = llm_provider
         self.vector_search = vector_search
@@ -875,6 +876,13 @@ class SwarmPricingService:
         # inyecta, la tabla se carga UNA vez por batch (como pricing_cache) y se
         # aplica al PEM antes de bakear GG+BI.
         self.calibration_service = calibration_service
+        # Reglas de ajuste de precio de material por % (capa NO destructiva).
+        # Duck-typed: solo se le llama `list_active()`. Opcional para
+        # backward-compat: cuando es None, el compositor from_scratch no aplica
+        # ningún factor (comportamiento legacy). Cuando se inyecta, la lista de
+        # reglas activas se carga UNA vez por batch (como `calibration_service`)
+        # y se pasa por parámetro al compositor, que la aplica por material.
+        self.material_price_rules_reader = material_price_rules_reader
 
     async def _rerank_candidates(
         self,
@@ -1278,6 +1286,7 @@ class SwarmPricingService:
         budget_id: str,
         metrics: Dict,
         *,
+        lead_id: Optional[str] = None,
         resume_from: Optional[List[BudgetPartida]] = None,
         on_partida_resolved: Optional[Callable[[BudgetPartida], Awaitable[None]]] = None,
         cancellation_event: Optional[asyncio.Event] = None,
@@ -1321,6 +1330,7 @@ class SwarmPricingService:
                 items=items,
                 budget_id=budget_id,
                 metrics=metrics,
+                lead_id=lead_id,
                 resume_from=resume_from or [],
                 on_partida_resolved=on_partida_resolved,
                 _resolved_telemetry=_resolved_telemetry,
@@ -1446,7 +1456,12 @@ class SwarmPricingService:
         return partida
 
     async def _build_composed_fallback(
-        self, item: RestructuredItem
+        self,
+        item: RestructuredItem,
+        *,
+        material_price_rules: Optional[List[Any]] = None,
+        budget_id: Optional[str] = None,
+        lead_id: Optional[str] = None,
     ) -> Optional[BudgetPartida]:
         """Fallback VALORADO para una partida que el swarm no resolvió: en vez de
         dejarla a 0 (ver `_build_unresolved_fallback`), la construye con el
@@ -1465,7 +1480,10 @@ class SwarmPricingService:
         qty = item.quantity if item.quantity is not None else 0.0
         try:
             composed = await self.compositor.compose(
-                description=desc, unit=unit, quantity=qty or 1.0
+                description=desc, unit=unit, quantity=qty or 1.0,
+                material_price_rules=material_price_rules,
+                budget_id=budget_id,
+                lead_id=lead_id,
             )
         except Exception as e:  # noqa: BLE001 — cae al resguardo a 0
             logger.warning(f"[reconciliation] compose fallback falló para {item.code!r}: {e}")
@@ -1539,6 +1557,7 @@ class SwarmPricingService:
         on_partida_resolved: Optional[Callable[[BudgetPartida], Awaitable[None]]],
         _resolved_telemetry: List[Dict[str, Any]],
         _tier_per_code: Dict[str, Dict[str, str]],
+        lead_id: Optional[str] = None,
         cancellation_event: Optional[asyncio.Event] = None,
     ) -> List[BudgetPartida]:
         """Original `evaluate_batch` body extracted verbatim. Wrapped by the
@@ -1573,6 +1592,24 @@ class SwarmPricingService:
                     f"{_cal_load_err}); calibration disabled for this batch"
                 )
                 calibration_table = None
+
+        # Reglas de ajuste de precio de material por % (capa NO destructiva): se
+        # cargan UNA vez por batch (como la tabla de calibración) y se pasan por
+        # parámetro al compositor from_scratch, que resuelve el factor por material
+        # y lo aplica al precio del catálogo en memoria. Non-fatal / AI-First: si
+        # el reader no está inyectado o Firestore falla, la lista queda vacía y el
+        # compositor no aplica ningún ajuste (comportamiento legacy).
+        material_price_rules: List[Any] = []
+        if self.material_price_rules_reader is not None:
+            try:
+                material_price_rules = self.material_price_rules_reader.list_active() or []
+            except Exception as _rules_load_err:  # pragma: no cover - reader ya es defensivo
+                logger.warning(
+                    f"[material_price_rules] load failed "
+                    f"({type(_rules_load_err).__name__}: {_rules_load_err}); "
+                    f"material price adjustment disabled for this batch"
+                )
+                material_price_rules = []
 
         resumed_codes = {p.code for p in resume_from if p.code}
         if resumed_codes:
@@ -2285,6 +2322,9 @@ class SwarmPricingService:
                             composed_result = await self.compositor.compose(
                                 description=safe_description, unit=safe_unit,
                                 quantity=safe_quantity,
+                                material_price_rules=material_price_rules,
+                                budget_id=budget_id,
+                                lead_id=lead_id,
                             )
                             if composed_result and composed_result.unit_price > 0:
                                 final_price = composed_result.unit_price
@@ -2797,7 +2837,12 @@ class SwarmPricingService:
             try:
                 # 1) Intentar VALORARLA con el compositor from_scratch (los 0 son
                 #    omisiones del lote, sin candidatos, pero componibles ~89%).
-                _fb = await self._build_composed_fallback(_exp_item)
+                _fb = await self._build_composed_fallback(
+                    _exp_item,
+                    material_price_rules=material_price_rules,
+                    budget_id=budget_id,
+                    lead_id=lead_id,
+                )
                 _recovery = "composed_from_scratch"
                 # 2) Si no se pudo componer (sin compositor / precio 0), resguardo
                 #    determinista a 0 (garantía anti-pérdida, marcado review).

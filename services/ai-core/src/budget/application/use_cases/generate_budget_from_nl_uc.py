@@ -181,7 +181,9 @@ class GenerateBudgetFromNlUseCase:
 
         # Fase 2: Pricing — reusa SwarmPricingService sin cambios.
         restructured = [_task_to_restructured(t) for t in tasks]
-        partidas = await self.pricing_service.evaluate_batch(restructured, budget_id, metrics)
+        partidas = await self.pricing_service.evaluate_batch(
+            restructured, budget_id, metrics, lead_id=lead_id
+        )
 
         # La marca "[MATERIAL EXPLÍCITO: X]" ya cumplió su función (hint de búsqueda
         # del Swarm). La movemos a `explicitMaterial` y limpiamos el texto para que no

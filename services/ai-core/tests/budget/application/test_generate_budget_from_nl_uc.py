@@ -41,7 +41,7 @@ class _FakeArchitect:
 
 
 class _FakeSwarm:
-    async def evaluate_batch(self, items, budget_id: str, metrics: Dict[str, Any]) -> List[BudgetPartida]:
+    async def evaluate_batch(self, items, budget_id: str, metrics: Dict[str, Any], lead_id: str | None = None) -> List[BudgetPartida]:
         partidas: List[BudgetPartida] = []
         for i, it in enumerate(items, start=1):
             partidas.append(
@@ -185,7 +185,7 @@ def test_user_specific_material_is_propagated_to_description():
     captured: List[Any] = []
 
     class _CapturingSwarm:
-        async def evaluate_batch(self, items, budget_id, metrics):
+        async def evaluate_batch(self, items, budget_id, metrics, lead_id=None):
             captured.extend(items)
             return []
 

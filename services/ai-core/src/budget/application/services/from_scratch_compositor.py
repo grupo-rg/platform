@@ -34,6 +34,8 @@ from src.budget.catalog.application.ports.material_search import IMaterialSearch
 from src.budget.catalog.application.services.catalog_lookup_service import (
     CatalogLookupService,
 )
+from src.budget.catalog.domain.material_price_rule import MaterialPriceRule
+from src.budget.catalog.domain.material_price_resolver import resolve_material_factor
 
 logger = logging.getLogger(__name__)
 
@@ -337,9 +339,29 @@ class FromScratchCompositor:
         # cantidad alucinada por el LLM, ej. 350× cable en "5 luces").
         self.dominance_threshold = dominance_threshold
 
-    async def compose(self, *, description: str, unit: str, quantity: float = 1.0) -> ComposedResult:
+    async def compose(
+        self,
+        *,
+        description: str,
+        unit: str,
+        quantity: float = 1.0,
+        material_price_rules: Optional[List[MaterialPriceRule]] = None,
+        budget_id: Optional[str] = None,
+        lead_id: Optional[str] = None,
+    ) -> ComposedResult:
+        """Compone la partida. `material_price_rules` (+ `budget_id`/`lead_id`)
+        habilitan el ajuste de precio de material por % (regla NO destructiva):
+        el factor se resuelve por material y se aplica al precio del catálogo en
+        memoria, UNA sola vez, en `_value`. Cuando `material_price_rules` es None
+        o vacío, la composición es idéntica a la de siempre (no-op)."""
         plan = await self._decompose(description, unit)
-        return await self._value(plan, unit=unit)
+        return await self._value(
+            plan,
+            unit=unit,
+            material_price_rules=material_price_rules,
+            budget_id=budget_id,
+            lead_id=lead_id,
+        )
 
     # ---- 1. Descomposición (LLM, solo recursos) --------------------------
     async def _decompose(self, description: str, unit: str) -> CompositionPlan:
@@ -353,7 +375,15 @@ class FromScratchCompositor:
         return res or CompositionPlan(main_task=description)
 
     # ---- 2. Valoración (determinista, contra tablas reales) --------------
-    async def _value(self, plan: CompositionPlan, unit: str = "") -> ComposedResult:
+    async def _value(
+        self,
+        plan: CompositionPlan,
+        unit: str = "",
+        *,
+        material_price_rules: Optional[List[MaterialPriceRule]] = None,
+        budget_id: Optional[str] = None,
+        lead_id: Optional[str] = None,
+    ) -> ComposedResult:
         breakdown: List[Dict[str, Any]] = []
         notes: List[str] = []
         needs_review = False
@@ -458,6 +488,32 @@ class FromScratchCompositor:
                 price = float(cand.get("price") or 0.0)
                 code = cand.get("sku")
                 m_unit = mat.unit or cand.get("unit")
+
+            # Ajuste de precio de material por % (regla NO destructiva). ÚNICO
+            # punto donde se aplica el factor: aquí, sobre el precio del catálogo
+            # que se materializa en el breakdown compuesto. El precio BASE del
+            # `material_catalog` queda intacto en Firestore — el factor vive en
+            # memoria en el pricing. Se resuelve la regla "más específica" por
+            # material (budget>client>material>category>global) con el SKU y la
+            # categoría del candidato + el `budget_id`/`lead_id` del run. Sin
+            # reglas (o sin precio) es un no-op idéntico al comportamiento previo.
+            if cand is not None and price > 0 and material_price_rules:
+                factor, applied_rule = resolve_material_factor(
+                    sku=cand.get("sku"),
+                    category=cand.get("category"),
+                    budget_id=budget_id,
+                    lead_id=lead_id,
+                    rules=material_price_rules,
+                )
+                if applied_rule is not None and factor != 1.0:
+                    base_price = price
+                    price = round(base_price * factor, 4)
+                    notes.append(
+                        f"Ajuste de precio de material '{concept}' "
+                        f"×{factor:.4f} (regla {applied_rule.scope}/{applied_rule.id}, "
+                        f"{applied_rule.adjustmentPct:+g}%): "
+                        f"{base_price:.4f} → {price:.4f} €"
+                    )
             breakdown.append(self._row(
                 concept=concept, type_="MATERIAL",
                 price=price, yield_=mat.quantity, unit=m_unit, code=code,
