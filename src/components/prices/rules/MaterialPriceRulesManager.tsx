@@ -39,6 +39,7 @@ import { formatSignedPct } from './PriceCells';
 import { listMaterialPriceRulesAction } from '@/actions/material-catalog/list-material-price-rules.action';
 import { toggleMaterialPriceRuleAction } from '@/actions/material-catalog/toggle-material-price-rule.action';
 import { deleteMaterialPriceRuleAction } from '@/actions/material-catalog/delete-material-price-rule.action';
+import { listMaterialCategoriesAction } from '@/actions/material-catalog/list-materials.action';
 
 const SCOPE_LABEL: Record<MaterialPriceRule['scope'], string> = {
     global: 'Global',
@@ -115,6 +116,22 @@ export function MaterialPriceRulesManager({ categorySuggestions = [], onRulesCha
     useEffect(() => {
         void load();
     }, [load]);
+
+    // Categorías REALES del catálogo (nivel padre) para el selector del diálogo.
+    const [catSuggestions, setCatSuggestions] = useState<string[]>(categorySuggestions);
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            const res = await listMaterialCategoriesAction();
+            if (!cancelled && res.success && res.categories.length > 0) {
+                const fromCatalog = res.categories.map((c) => c.parent).filter(Boolean);
+                setCatSuggestions(Array.from(new Set([...categorySuggestions, ...fromCatalog])).sort());
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [categorySuggestions]);
 
     const afterMutation = useCallback(() => {
         void load();
@@ -343,7 +360,7 @@ export function MaterialPriceRulesManager({ categorySuggestions = [], onRulesCha
                 mode={dialog.mode}
                 editingId={dialog.editingId}
                 initial={dialog.initial}
-                categorySuggestions={categorySuggestions}
+                categorySuggestions={catSuggestions}
                 onSaved={afterMutation}
             />
 
