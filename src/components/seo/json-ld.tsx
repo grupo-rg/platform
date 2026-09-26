@@ -52,7 +52,16 @@ export async function OrganizationJsonLd(props: OrganizationSchemaProps = {}) {
     const alternateName = props.alternateName ?? company.alternateName ?? 'Constructores en Mallorca';
     const description = props.description ?? company.tagline ?? '';
     const url = props.url ?? company.web;
-    const logo = props.logo ?? company.logoUrl ?? '/logo.webp';
+    // El `logo` del schema DEBE ser una URL hospedada (Google lo exige) y NUNCA
+    // un data-URI base64: un logo base64 en config inflaba el HTML ~160KB por
+    // página (×3 en el payload RSC → ~486KB, incidente 2026-09-26). Si la config
+    // trae base64 (o nada), cae a un asset hospedado (/icon-512.png).
+    const logoRaw = props.logo ?? company.logoUrl;
+    const logoBase = url && url.startsWith('http')
+        ? url.replace(/\/$/, '')
+        : (process.env.NEXT_PUBLIC_SITE_URL || 'https://constructoresenmallorca.com').replace(/\/$/, '');
+    const logoPath = !logoRaw || logoRaw.startsWith('data:') ? '/icon-512.png' : logoRaw;
+    const logo = logoPath.startsWith('http') ? logoPath : `${logoBase}${logoPath.startsWith('/') ? '' : '/'}${logoPath}`;
     const areaServed = props.areaServed ?? ['Mallorca', 'Menorca', 'Ibiza', 'Formentera', 'Islas Baleares'];
     const telephone = props.telephone || company.phone || CONTACT_PHONE_E164;
     const email = props.email ?? company.email;
@@ -87,7 +96,7 @@ export async function OrganizationJsonLd(props: OrganizationSchemaProps = {}) {
         ...(alternateName && { alternateName }),
         description,
         url,
-        logo: logo.startsWith('http') ? logo : `${url}${logo}`,
+        logo,
         areaServed: areaServed.map(area => ({ '@type': 'Place', name: area })),
         address,
         geo,
