@@ -16,6 +16,10 @@ import { ContactStrip } from '@/components/home/sections/contact-strip';
 import { FaqSection } from '@/components/home/faq-section';
 import { ProcessSteps } from '@/components/home/process-steps';
 
+// ISR: la home lee Firestore/diccionarios pero NO usa cookies/headers → se puede
+// prerenderizar y revalidar cada hora (mejora TTFB/LCP y evita SSR por request).
+export const revalidate = 3600;
+
 // Service icons mapping
 const serviceIcons: Record<string, React.ReactNode> = {
   'Obra Nueva': <Building2 className="w-8 h-8" />,

@@ -1,7 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { motion, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
+import { useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
+import { m, MotionProvider } from '@/components/home/lazy-motion';
+import Image from 'next/image';
 import { ArrowRight, Star, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -70,32 +72,38 @@ export function HeroHybrid({
     const floatingYReverse = useSpring(useTransform(mouseY, [-0.5, 0.5], [15, -15]), { stiffness: 150, damping: 20 });
 
     return (
+        <MotionProvider>
         <section
             className="relative h-[110vh] w-full overflow-hidden flex items-center justify-center bg-black"
             onMouseMove={handleMouseMove}
         >
 
             {/* Background Image with Parallax & Scale */}
-            <motion.div
+            <m.div
                 style={{ y: yOutput, opacity: opacityOutput, scale: scaleOutput }}
                 className="absolute inset-0 z-0"
             >
-                <div
-                    className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-1000 ease-out"
-                    style={{
-                        backgroundImage: 'url(https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2666&auto=format&fit=crop)',
-                    }}
+                {/* LCP image: next/image con priority (preload) + fill + sizes.
+                    Sustituye al background-image CSS de 2666px que era el LCP (~10.7s en móvil).
+                    Next optimiza Unsplash (remotePatterns) y sirve el tamaño adecuado por breakpoint. */}
+                <Image
+                    src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=75&w=1920&auto=format&fit=crop"
+                    alt=""
+                    fill
+                    priority
+                    sizes="100vw"
+                    className="object-cover -z-10"
                 />
                 <div className="absolute inset-0 bg-black/40" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20" />
-            </motion.div>
+            </m.div>
 
             {/* Main Content & Floating Bento Grid */}
             {/* Added max-w-[80vw] constraint directly here as requested */}
             <div className="container-limited max-w-[80vw] mx-auto relative z-10 w-full h-full flex flex-col md:flex-row items-center md:items-end pb-32 md:pb-40 gap-10 md:gap-20">
 
                 {/* Left Side: Typography & Main Actions */}
-                <motion.div
+                <m.div
                     className="flex-1 text-center md:text-left pt-32 md:pt-0"
                     initial={{ opacity: 0, x: -50 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -142,20 +150,27 @@ export function HeroHybrid({
                         {/* Terciario: abre el video corporativo en un modal */}
                         {videoCtaText && <VideoModalButton label={videoCtaText} />}
                     </div>
-                </motion.div>
+                </m.div>
 
                 {/* Right Side: Floating Bento Cards (Asymmetrical) */}
                 <div className="relative w-full md:w-1/3 h-[400px] hidden md:block perspective-1000">
 
                     {/* Floating Card 1: Featured Project Preview */}
-                    <motion.div
+                    <m.div
                         style={{ x: floatingX, y: floatingY }}
                         className="absolute top-0 right-0 w-64 h-80 rounded-2xl overflow-hidden glass shadow-2xl z-20"
                         initial={{ opacity: 0, y: 50, rotate: -5 }}
                         animate={{ opacity: 1, y: 0, rotate: -5 }}
                         transition={{ delay: 0.2, duration: 0.8 }}
                     >
-                        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=500&auto=format&fit=crop)' }} />
+                        {/* Imagen de tarjeta: next/image lazy (sin priority) — tamaño real 256px (w-64). */}
+                        <Image
+                            src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=75&w=500&auto=format&fit=crop"
+                            alt=""
+                            fill
+                            sizes="256px"
+                            className="object-cover"
+                        />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
                         <div className="absolute bottom-0 left-0 p-5 w-full">
                             <span className="text-primary text-xs font-bold uppercase tracking-wider mb-1 block">{floatingCards.featured}</span>
@@ -166,10 +181,10 @@ export function HeroHybrid({
                                 </div>
                             </div>
                         </div>
-                    </motion.div>
+                    </m.div>
 
                     {/* Floating Card 2: Quick Stat/Trust - CLICKABLE */}
-                    <motion.div
+                    <m.div
                         style={{ x: floatingXReverse, y: floatingYReverse }}
                         className="absolute bottom-10 left-0 w-64 p-5 rounded-2xl glass-subtle shadow-xl z-30 border-l-4 border-l-primary bg-black/80 cursor-pointer hover:scale-105 transition-transform"
                         initial={{ opacity: 0, y: 50, x: -20 }}
@@ -193,20 +208,21 @@ export function HeroHybrid({
                         <p className="text-white/60 text-xs italic">
                             {floatingCards.estimate}
                         </p>
-                    </motion.div>
+                    </m.div>
 
                 </div>
             </div>
 
             {/* Scroll Indicator */}
-            <motion.div
+            <m.div
                 animate={{ y: [0, 10, 0] }}
                 transition={{ repeat: Infinity, duration: 2 }}
                 className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/30 backdrop-blur-sm py-2 px-4 rounded-full border border-white/5 flex items-center gap-2 cursor-pointer hover:text-white hover:border-white/20 transition-all"
             >
                 <div className="w-1 h-1 rounded-full bg-primary" />
                 <span className="text-xs tracking-widest uppercase">{floatingCards.scroll}</span>
-            </motion.div>
+            </m.div>
         </section>
+        </MotionProvider>
     );
 }

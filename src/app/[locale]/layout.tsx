@@ -80,6 +80,12 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning>
+      <head>
+        {/* Preconnect a hosts de imágenes externas (hero Unsplash + Storage) para
+            adelantar el handshake TLS y acelerar la carga del LCP y otras imágenes. */}
+        <link rel="preconnect" href="https://images.unsplash.com" />
+        <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
+      </head>
       <body suppressHydrationWarning className={cn('font-body antialiased min-h-screen bg-background flex flex-col', gencha.variable, genchaDisplay.variable, inter.variable)}>
         {/* Organization/LocalBusiness schema site-wide: 1 por página, en todas.
             La home ya NO lo inyecta (evita duplicado). */}
