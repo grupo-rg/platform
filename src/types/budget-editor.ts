@@ -68,7 +68,7 @@ export interface BudgetConfig {
 }
 
 
-export type ExecutionMode = 'complete' | 'execution' | 'labor';
+export type ExecutionMode = 'complete' | 'execution' | 'labor' | 'material' | 'material_labor';
 
 export interface BudgetEditorState {
     items: EditableBudgetLineItem[];
@@ -113,6 +113,12 @@ export type BudgetEditorAction =
     | { type: 'SET_EXECUTION_MODE'; payload: ExecutionMode }
     | { type: 'UPDATE_CONFIG'; payload: Partial<BudgetConfig> }
     | { type: 'APPLY_MARKUP'; payload: { scope: 'global' | 'chapter' | 'item'; targetId?: string; percentage: number } }
+    // Fase 4 — ajuste de % SOLO sobre los componentes de material del descompuesto
+    // (MATERIAL_FIXED / MATERIAL_VARIABLE). No toca mano de obra, maquinaria,
+    // indirectos ni otros. Recalcula el unitPrice de la partida = Σ de totales de
+    // componentes. Partidas sin descompuesto quedan intactas (no se puede aislar el
+    // material de un agregado).
+    | { type: 'APPLY_MATERIAL_MARKUP'; payload: { scope: 'global' | 'chapter' | 'item'; targetId?: string; percentage: number } }
     | { type: 'SET_PRICE_SOURCE'; payload: { id: string; source: 'bc3' | 'ai' } }
     | { type: 'SAVE_START' }
     | { type: 'SAVE_SUCCESS'; payload: Date }

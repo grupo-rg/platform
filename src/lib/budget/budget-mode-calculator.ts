@@ -1,10 +1,12 @@
 /**
  * Fase 11.D — Cálculo del total de una partida según el modo de presupuesto.
  *
- * Tres modos canónicos que mapean al dropdown del editor (existente):
- *   - COMPLETE         ↔ executionMode='complete'
- *   - LABOR_AND_FIXED  ↔ executionMode='execution'  (todo excepto is_variable)
- *   - LABOR_ONLY       ↔ executionMode='labor'      (solo mo*)
+ * Modos canónicos que mapean al dropdown del editor:
+ *   - COMPLETE           ↔ executionMode='complete'
+ *   - LABOR_AND_FIXED    ↔ executionMode='execution'       (todo excepto is_variable)
+ *   - LABOR_ONLY         ↔ executionMode='labor'           (solo mano de obra)
+ *   - MATERIAL_ONLY      ↔ executionMode='material'        (solo material fijo+variable)
+ *   - MATERIAL_AND_LABOR ↔ executionMode='material_labor'  (mano de obra + material)
  *
  * Sin breakdown, modo COMPLETE devuelve el unitPrice; los modos parciales
  * devuelven 0 (no podemos descomponer un agregado).
@@ -16,6 +18,8 @@ export const BudgetMode = {
     COMPLETE: 'complete',
     LABOR_AND_FIXED: 'labor_and_fixed',
     LABOR_ONLY: 'labor_only',
+    MATERIAL_ONLY: 'material_only',
+    MATERIAL_AND_LABOR: 'material_and_labor',
 } as const;
 
 export type BudgetMode = (typeof BudgetMode)[keyof typeof BudgetMode];
@@ -24,6 +28,8 @@ export type BudgetMode = (typeof BudgetMode)[keyof typeof BudgetMode];
 export function executionModeToBudgetMode(em: string | null | undefined): BudgetMode {
     if (em === 'execution') return BudgetMode.LABOR_AND_FIXED;
     if (em === 'labor') return BudgetMode.LABOR_ONLY;
+    if (em === 'material') return BudgetMode.MATERIAL_ONLY;
+    if (em === 'material_labor') return BudgetMode.MATERIAL_AND_LABOR;
     return BudgetMode.COMPLETE;
 }
 
@@ -45,6 +51,17 @@ const _CATEGORIES_INCLUDED: Record<BudgetMode, Set<BreakdownCategory>> = {
     ]),
     [BudgetMode.LABOR_ONLY]: new Set<BreakdownCategory>([
         BreakdownCategory.LABOR,
+    ]),
+    // Solo material (fijo + variable). Excluye mano de obra, maquinaria e indirectos.
+    [BudgetMode.MATERIAL_ONLY]: new Set<BreakdownCategory>([
+        BreakdownCategory.MATERIAL_FIXED,
+        BreakdownCategory.MATERIAL_VARIABLE,
+    ]),
+    // Mano de obra + material (fijo + variable). Excluye maquinaria e indirectos.
+    [BudgetMode.MATERIAL_AND_LABOR]: new Set<BreakdownCategory>([
+        BreakdownCategory.LABOR,
+        BreakdownCategory.MATERIAL_FIXED,
+        BreakdownCategory.MATERIAL_VARIABLE,
     ]),
 };
 

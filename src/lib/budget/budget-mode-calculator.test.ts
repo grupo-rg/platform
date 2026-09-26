@@ -90,6 +90,74 @@ describe('computePartidaTotalForMode', () => {
     });
 });
 
+describe('MATERIAL_ONLY / MATERIAL_AND_LABOR — modos parciales de material', () => {
+    // Descompuesto mixto: mano de obra + material fijo + material variable + maquinaria.
+    const MIXED_BREAKDOWN = [
+        { code: 'mo112', type: 'LABOR', is_variable: false, total: 40.0 },      // LABOR
+        { code: 'mt10fix', type: 'MATERIAL', is_variable: false, total: 60.0 }, // MATERIAL_FIXED
+        { code: 'mt51var', type: 'MATERIAL', is_variable: true, total: 30.0 },  // MATERIAL_VARIABLE
+        { code: 'mq05pdm', type: 'MACHINERY', is_variable: false, total: 20.0 },// MACHINERY
+    ];
+
+    it('MATERIAL_ONLY suma solo material (fijo + variable)', () => {
+        // 60 (fijo) + 30 (variable) = 90. Excluye mo (40) y mq (20).
+        expect(computeUnitPriceForMode(MIXED_BREAKDOWN, 150, BudgetMode.MATERIAL_ONLY)).toBe(90);
+    });
+
+    it('MATERIAL_AND_LABOR suma mano de obra + material (fijo + variable)', () => {
+        // 40 (mo) + 60 (fijo) + 30 (variable) = 130. Excluye mq (20).
+        expect(computeUnitPriceForMode(MIXED_BREAKDOWN, 150, BudgetMode.MATERIAL_AND_LABOR)).toBe(130);
+    });
+
+    it('COMPLETE sigue sumando todo (150); LABOR_AND_FIXED excluye variable (120)', () => {
+        // Los modos existentes NO cambian con la adición de los nuevos.
+        expect(computeUnitPriceForMode(MIXED_BREAKDOWN, 150, BudgetMode.COMPLETE)).toBe(150);
+        expect(computeUnitPriceForMode(MIXED_BREAKDOWN, 150, BudgetMode.LABOR_AND_FIXED)).toBe(120);
+        expect(computeUnitPriceForMode(MIXED_BREAKDOWN, 150, BudgetMode.LABOR_ONLY)).toBe(40);
+    });
+
+    it('breakdown vacío → 0 (modos parciales no desglosan un agregado)', () => {
+        expect(computeUnitPriceForMode(null, 99, BudgetMode.MATERIAL_ONLY)).toBe(0);
+        expect(computeUnitPriceForMode([], 99, BudgetMode.MATERIAL_AND_LABOR)).toBe(0);
+    });
+
+    it('computePartidaTotalForMode multiplica por quantity', () => {
+        expect(computePartidaTotalForMode(MIXED_BREAKDOWN, 150, 3, BudgetMode.MATERIAL_ONLY)).toBe(270);        // 90 × 3
+        expect(computePartidaTotalForMode(MIXED_BREAKDOWN, 150, 3, BudgetMode.MATERIAL_AND_LABOR)).toBe(390);   // 130 × 3
+    });
+
+    describe('isApproximate — compuesto opaco (OTHER) marca aproximado', () => {
+        // Partida compuesta (DRA010) sin prefijo básico y type OTHER → categoría OTHER.
+        const MIXED_WITH_COMPOSITE = [
+            { code: 'mo112', type: 'LABOR', is_variable: false, total: 40.0 },
+            { code: 'mt10fix', type: 'MATERIAL', is_variable: false, total: 60.0 },
+            { code: 'DRA010', type: 'OTHER', total: 200.0 }, // opaco: reparto real un nivel abajo
+        ];
+
+        it('MATERIAL_ONLY: excluye el compuesto pero marca aproximado', () => {
+            const detailed = computeUnitPriceForModeDetailed(MIXED_WITH_COMPOSITE, 300, BudgetMode.MATERIAL_ONLY);
+            expect(detailed.unitPrice).toBe(60); // solo mt10fix; OTHER fuera
+            expect(detailed.isApproximate).toBe(true);
+        });
+
+        it('MATERIAL_AND_LABOR: excluye el compuesto pero marca aproximado', () => {
+            const detailed = computeUnitPriceForModeDetailed(MIXED_WITH_COMPOSITE, 300, BudgetMode.MATERIAL_AND_LABOR);
+            expect(detailed.unitPrice).toBe(100); // mo112 (40) + mt10fix (60); OTHER fuera
+            expect(detailed.isApproximate).toBe(true);
+        });
+
+        it('descompuesto de básicos NO es aproximado en los nuevos modos', () => {
+            expect(computeUnitPriceForModeDetailed(MIXED_BREAKDOWN, 150, BudgetMode.MATERIAL_ONLY).isApproximate).toBe(false);
+            expect(computeUnitPriceForModeDetailed(MIXED_BREAKDOWN, 150, BudgetMode.MATERIAL_AND_LABOR).isApproximate).toBe(false);
+        });
+
+        it('sin descompuesto + modo parcial + precio real → aproximado', () => {
+            expect(computeUnitPriceForModeDetailed(null, 300, BudgetMode.MATERIAL_ONLY).isApproximate).toBe(true);
+            expect(computeUnitPriceForModeDetailed([], 300, BudgetMode.MATERIAL_AND_LABOR).isApproximate).toBe(true);
+        });
+    });
+});
+
 describe('unidad % (medios auxiliares) — ×qty/100', () => {
     it('sin total guardado, unit "%" aplica price × qty/100', () => {
         // % medios auxiliares → categoría INDIRECT (incluida en COMPLETE y LABOR_AND_FIXED).
@@ -163,6 +231,11 @@ describe('executionModeToBudgetMode', () => {
         expect(executionModeToBudgetMode('complete')).toBe(BudgetMode.COMPLETE);
         expect(executionModeToBudgetMode('execution')).toBe(BudgetMode.LABOR_AND_FIXED);
         expect(executionModeToBudgetMode('labor')).toBe(BudgetMode.LABOR_ONLY);
+    });
+
+    it('mapea los nuevos modos de material', () => {
+        expect(executionModeToBudgetMode('material')).toBe(BudgetMode.MATERIAL_ONLY);
+        expect(executionModeToBudgetMode('material_labor')).toBe(BudgetMode.MATERIAL_AND_LABOR);
     });
 
     it('valores desconocidos caen a COMPLETE por defecto', () => {

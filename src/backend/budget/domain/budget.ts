@@ -4,6 +4,26 @@ import { PersonalInfo } from '@/backend/lead/domain/lead';
 export type BudgetLineItemType = 'PARTIDA' | 'MATERIAL';
 
 /**
+ * Modo de presupuesto elegido por el usuario en el editor (Fase 5).
+ * Determina qué categorías del descompuesto se suman al calcular el PEM y
+ * qué se exporta al cliente en el PDF:
+ * - `complete`        — presupuesto completo (comportamiento histórico).
+ * - `execution`       — mano de obra + materiales fijos.
+ * - `labor`           — sólo mano de obra.
+ * - `material`        — sólo material.
+ * - `material_labor`  — material + mano de obra.
+ *
+ * Definido en la capa de dominio (NO importar de `@/types/budget-editor`, que
+ * es capa de UI). El union de UI `ExecutionMode` debe mantenerse alineado.
+ */
+export type BudgetExecutionMode =
+  | 'complete'
+  | 'execution'
+  | 'labor'
+  | 'material'
+  | 'material_labor';
+
+/**
  * Fase 5.E — trazabilidad auditable del Judge v005.
  * `bridge` es un dict abierto porque las claves canonical dependen del tipo de
  * conversión: `thickness_m`, `density_kg_m3`, `piece_length_m`.
@@ -259,6 +279,15 @@ export interface Budget {
    * y breakdown[].rawPrice/rawTotal.
    */
   calibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked';
+
+  /**
+   * Fase 5 — modo de presupuesto elegido por el usuario en el editor
+   * (Completo / Solo M.O. / Solo material / Material + M.O. / …). Se persiste
+   * en `handleSave` y se lee de vuelta al cargar el editor (round-trip) para
+   * restaurar el modo seleccionado. Ausente en presupuestos históricos → el
+   * editor cae a `'complete'`.
+   */
+  executionMode?: BudgetExecutionMode;
 
   // Quick Consultation Response
   quickQuote?: {

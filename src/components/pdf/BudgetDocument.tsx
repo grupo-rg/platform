@@ -5,6 +5,9 @@ import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/
 import { formatCurrency, formatNumberES } from '@/lib/utils';
 import { stripExplicitMaterialTag } from '@/lib/budget/explicit-material';
 import type { CompanyConfig } from '@/backend/platform/domain/company-config';
+import type { ExecutionMode } from '@/types/budget-editor';
+import { executionModeToBudgetMode, computePartidaTotalForMode } from '@/lib/budget/budget-mode-calculator';
+import { BreakdownCategory, categorizeComponent } from '@/lib/budget/breakdown-category';
 
 const styles = StyleSheet.create({
     page: {
@@ -273,7 +276,7 @@ interface BudgetDocumentProps {
      * displayFactor = current/baked y refleja los cambios del admin sin
      * regenerar el budget desde IA. */
     bakedConfig?: { tax: number; marginGG: number; marginBI: number };
-    executionMode?: 'complete' | 'execution' | 'labor';
+    executionMode?: ExecutionMode;
     renders?: any[];
     /** IDs de renders seleccionados para incluir en el anexo visual. Vacío/undefined = sin anexo. */
     selectedRenderIds?: string[];
@@ -442,6 +445,18 @@ export const BudgetDocument = ({
                                     .filter((c: any) => c.code && String(c.code).toLowerCase().startsWith('mo'))
                                     .reduce((acc: number, c: any) => acc + (c.totalPrice || c.total || ((c.unitPrice || c.price || 0) * (c.quantity || c.yield || 1))), 0);
                                 bTotal = Math.max(0, laborCost * qTotal);
+                            } else if ((executionMode === 'material' || executionMode === 'material_labor') && activeBreakdown.length > 0) {
+                                // Fase 5 — modos nuevos: total por partida vía el calculador
+                                // canónico (misma fuente de verdad que el resumen del editor,
+                                // `calculateBreakdown`). Suma solo las categorías del descompuesto
+                                // incluidas por el modo (material fijo+variable [+ mano de obra]).
+                                const canonicalMode = executionModeToBudgetMode(executionMode);
+                                bTotal = computePartidaTotalForMode(
+                                    activeBreakdown,
+                                    item.item?.unitPrice || 0,
+                                    qTotal,
+                                    canonicalMode,
+                                );
                             }
 
                             // Phase 17.3 — display factor version-aware con soporte live-edit.
@@ -496,6 +511,15 @@ export const BudgetDocument = ({
                                             {activeBreakdown.map((b: any, bIdx: number) => {
                                                 if (executionMode === 'execution' && (b.is_variable === true || b.is_variable === 'true' || b.isVariable === true)) return null;
                                                 if (executionMode === 'labor' && !(b.code && String(b.code).toLowerCase().startsWith('mo'))) return null;
+                                                // Fase 5 — modos nuevos: filtramos las filas del descompuesto por
+                                                // categoría (categorizeComponent) igual que el calculador canónico.
+                                                if (executionMode === 'material' || executionMode === 'material_labor') {
+                                                    const bCat = categorizeComponent(b.code, b.type, b.is_variable ?? b.isVariable ?? null);
+                                                    const allowed = executionMode === 'material'
+                                                        ? (bCat === BreakdownCategory.MATERIAL_FIXED || bCat === BreakdownCategory.MATERIAL_VARIABLE)
+                                                        : (bCat === BreakdownCategory.MATERIAL_FIXED || bCat === BreakdownCategory.MATERIAL_VARIABLE || bCat === BreakdownCategory.LABOR);
+                                                    if (!allowed) return null;
+                                                }
                                                 // Phase 17 — aplicar markupFactor también a componentes para que
                                                 // sumen el unit_price total. En phase17 markupFactor=1 (no-op porque
                                                 // ya viene baked); en phase15 multiplica igual que el header (fix asimetría).

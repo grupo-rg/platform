@@ -1,7 +1,8 @@
 import { useReducer, useCallback, useEffect, useState } from 'react';
 import { BudgetLineItem, BudgetCostBreakdown } from '@/backend/budget/domain/budget';
 import { BudgetEditorState, BudgetEditorAction, EditableBudgetLineItem, BudgetConfig, ExecutionMode } from '@/types/budget-editor';
-import { categorizeComponent, BreakdownCategory } from '@/lib/budget/breakdown-category';
+import { BudgetMode, computeUnitPriceForMode, executionModeToBudgetMode } from '@/lib/budget/budget-mode-calculator';
+import { BreakdownCategory, categorizeComponent } from '@/lib/budget/breakdown-category';
 
 // Simple ID generator
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -15,44 +16,34 @@ const calculateBreakdown = (
     calibrationVersion: CalibrationVersion = undefined,
     bakedConfig?: BudgetConfig,
 ): BudgetCostBreakdown => {
-    // 1. Calculate base execution price (Complete Mode)
+    // 1. PEM completo (Modo COMPLETE): suma de los totales por partida tal cual.
     const rawMaterialExecutionPrice = items.reduce((sum, item) => sum + parseFloat(String(item.item?.totalPrice || 0)), 0);
-
-    // 2. Calculate deductions based on executionMode
-    let variableCostsToDeduct = 0;
-
-    if (executionMode === 'execution') {
-        variableCostsToDeduct = items.reduce((sum, item) => {
-            if (!item.item?.breakdown) return sum;
-            const vCost = item.item.breakdown
-                .filter((comp: any) => comp.is_variable === true || comp.is_variable === 'true' || comp.isVariable === true)
-                .reduce((acc: number, comp: any) => {
-                    const cPrice = comp.unitPrice || comp.price || 0;
-                    const cQuantity = comp.quantity || comp.yield || 1;
-                    return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
-                }, 0);
-            return sum + (vCost * (item.item?.quantity || 1));
-        }, 0);
-    } else if (executionMode === 'labor') {
-        const laborCosts = items.reduce((sum, item) => {
-            if (!item.item?.breakdown) return sum;
-            const moCost = item.item.breakdown
-                // Mano de obra por categoría (code mo*/labor-* + fallback type=LABOR),
-                // no solo por prefijo 'mo' — así las from_scratch (labor-*) cuentan.
-                .filter((comp: any) => categorizeComponent(comp.code, comp.type, comp.is_variable ?? comp.isVariable) === BreakdownCategory.LABOR)
-                .reduce((acc: number, comp: any) => {
-                    const cPrice = comp.unitPrice || comp.price || 0;
-                    const cQuantity = comp.quantity || comp.yield || 1;
-                    return acc + (comp.totalPrice || comp.total || (cPrice * cQuantity));
-                }, 0);
-            return sum + (moCost * (item.item?.quantity || 1));
-        }, 0);
-        variableCostsToDeduct = rawMaterialExecutionPrice - laborCosts;
-    }
 
     const round = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
     const pemComplete = isNaN(rawMaterialExecutionPrice) ? 0 : rawMaterialExecutionPrice;
-    const activePem = Math.max(0, pemComplete - variableCostsToDeduct);
+
+    // 2. PEM activo según el modo de presupuesto.
+    //    COMPLETE mantiene el PEM completo tal cual (comportamiento histórico intacto).
+    //    Los modos parciales (execution/labor/material/material_labor) se reparten POR
+    //    PARTIDA con la primitiva probada `computeUnitPriceForMode`, que suma solo las
+    //    categorías del descompuesto incluidas por el modo. Unifica el cálculo (una única
+    //    fuente de verdad) y elimina las deducciones ad-hoc previas. El modo opera siempre
+    //    sobre el PEM RAW por partida: el markup GG/BI (calibrationVersion) se aplica
+    //    DESPUÉS, igual que en COMPLETE — sin doble contar.
+    const mode = executionModeToBudgetMode(executionMode);
+    let activePem = pemComplete;
+    if (mode !== BudgetMode.COMPLETE) {
+        const partialPem = items.reduce((sum, item) => {
+            const unitForMode = computeUnitPriceForMode(
+                item.item?.breakdown as any,
+                Number(item.item?.unitPrice || 0),
+                mode,
+            );
+            const quantity = Number(item.item?.quantity || 1);
+            return sum + unitForMode * quantity;
+        }, 0);
+        activePem = Math.max(0, partialPem);
+    }
 
     const isMarkupBaked = calibrationVersion === 'phase17-markup-baked';
 
@@ -102,7 +93,7 @@ const calculateBreakdown = (
     const activeSubtotal = calcSubtotal(activePem);
     const activeTax = activeSubtotal * (config.tax / 100);
     const completeTotal = calcSubtotal(pemComplete) * (1 + (config.tax / 100));
-    const executionOnlyTotal = calcSubtotal(Math.max(0, pemComplete - variableCostsToDeduct)) * (1 + (config.tax / 100));
+    const executionOnlyTotal = calcSubtotal(activePem) * (1 + (config.tax / 100));
 
     return {
         materialExecutionPrice: round(activePem),
@@ -679,6 +670,103 @@ export function budgetEditorReducer(state: BudgetEditorState, action: BudgetEdit
             };
         }
 
+        case 'APPLY_MATERIAL_MARKUP': {
+            // Fase 4 — ajuste de % SOLO materiales. Análogo a APPLY_MARKUP pero
+            // multiplica exclusivamente los componentes del descompuesto cuya
+            // categoría (categorizeComponent) sea MATERIAL_FIXED / MATERIAL_VARIABLE.
+            // NO toca LABOR / MACHINERY / INDIRECT / OTHER. Opera sobre valores RAW
+            // almacenados (mismo invariante que APPLY_MARKUP/handleBreakdownEdit): el
+            // markupFactor GG/BI es un escalado relativo que se aplica DESPUÉS en el
+            // display, por lo que multiplicar el raw por `factor` escala el PVP igual.
+            const { scope, targetId, percentage } = action.payload;
+            const factor = 1 + (percentage / 100);
+
+            const MATERIAL_CATEGORIES = new Set<BreakdownCategory>([
+                BreakdownCategory.MATERIAL_FIXED,
+                BreakdownCategory.MATERIAL_VARIABLE,
+            ]);
+
+            // Total efectivo de un componente: prefiere el `total`/`totalPrice`
+            // almacenado (autoritativo, puede incluir multiplicadores ocultos ×
+            // dimensión × ICL embebidos por el agente), con fallback a price×qty y
+            // soporte de medios auxiliares (unit '%'). Espeja compEffectiveTotal de
+            // AIReasoningSheet para que el unitPrice recomputado cuadre con lo mostrado.
+            const compTotal = (comp: any): number => {
+                if (typeof comp.total === 'number' && comp.total > 0) return comp.total;
+                if (typeof comp.totalPrice === 'number' && comp.totalPrice > 0) return comp.totalPrice;
+                const price = comp.price ?? comp.unitPrice ?? 0;
+                const qty = comp.yield ?? comp.quantity ?? 1;
+                if (comp.unit === '%') return price * (qty / 100);
+                return price * qty;
+            };
+
+            const newItems = state.items.map(item => {
+                let apply = false;
+                if (scope === 'global') apply = true;
+                else if (scope === 'chapter' && item.chapter === targetId) apply = true;
+                else if (scope === 'item' && item.id === targetId) apply = true;
+
+                if (!apply || !item.item) return item;
+
+                const currentBreakdown = item.item.breakdown;
+                // Partidas SIN descompuesto: no se puede aislar el material de un
+                // agregado → se dejan intactas (aplicar el % al total tocaría también
+                // mano de obra/maquinaria/indirectos). Documentado en el tipo de acción.
+                if (!currentBreakdown || currentBreakdown.length === 0) return item;
+
+                let touchedMaterial = false;
+                const newBreakdown = currentBreakdown.map((comp: any) => {
+                    const isVariable = comp.is_variable ?? comp.isVariable ?? null;
+                    const category = categorizeComponent(comp.code, comp.type, isVariable);
+                    if (!MATERIAL_CATEGORIES.has(category)) return comp;
+                    touchedMaterial = true;
+                    const basePrice = comp.price ?? comp.unitPrice ?? 0;
+                    const newCompPrice = basePrice * factor;
+                    const newTotal = compTotal(comp) * factor;
+                    return {
+                        ...comp,
+                        price: newCompPrice,
+                        unitPrice: newCompPrice,
+                        total: newTotal,
+                        totalPrice: newTotal,
+                    };
+                });
+
+                // Sin componentes de material en esta partida → nada que ajustar.
+                if (!touchedMaterial) return item;
+
+                // Recompute unitPrice = Σ de totales de componentes (mismo patrón que
+                // handleBreakdownEdit). Preserva multiplicadores ocultos vía compTotal.
+                const newUnitPrice = newBreakdown.reduce((acc: number, c: any) => acc + compTotal(c), 0);
+                const quantity = Number(item.item.quantity || 1);
+
+                return {
+                    ...item,
+                    isDirty: true,
+                    item: {
+                        ...item.item,
+                        breakdown: newBreakdown,
+                        unitPrice: newUnitPrice,
+                        totalPrice: newUnitPrice * quantity,
+                    },
+                };
+            });
+
+            const breakdown = calculateBreakdown(newItems, state.config, state.executionMode, state.calibrationVersion, state.bakedConfig);
+
+            const newHistory = state.history.slice(0, state.historyIndex + 1);
+            newHistory.push({ items: newItems, timestamp: Date.now() });
+
+            return {
+                ...state,
+                items: newItems,
+                costBreakdown: breakdown,
+                history: newHistory,
+                historyIndex: newHistory.length - 1,
+                hasUnsavedChanges: true
+            };
+        }
+
         case 'SAVE_START':
             return { ...state, isSaving: true };
 
@@ -697,6 +785,7 @@ export function useBudgetEditor(
     initialItems: BudgetLineItem[] = [],
     initialConfig?: BudgetConfig,
     initialCalibrationVersion?: 'phase14' | 'phase15' | 'phase17-markup-baked',
+    initialExecutionMode?: ExecutionMode,
 ) {
     const [state, dispatch] = useReducer(budgetEditorReducer, initialState);
 
@@ -707,14 +796,14 @@ export function useBudgetEditor(
         if (!isInitialized) {
             if (initialItems && initialItems.length > 0) {
                 console.log('[useBudgetEditor] Initializing state with initialItems:', initialItems.length);
-                dispatch({ type: 'INIT_STATE', payload: { items: initialItems as any, config: initialConfig, calibrationVersion: initialCalibrationVersion } });
+                dispatch({ type: 'INIT_STATE', payload: { items: initialItems as any, config: initialConfig, calibrationVersion: initialCalibrationVersion, executionMode: initialExecutionMode } });
                 setIsInitialized(true);
             } else if (initialConfig && state.items.length === 0) {
-                dispatch({ type: 'INIT_STATE', payload: { items: [], config: initialConfig, calibrationVersion: initialCalibrationVersion } });
+                dispatch({ type: 'INIT_STATE', payload: { items: [], config: initialConfig, calibrationVersion: initialCalibrationVersion, executionMode: initialExecutionMode } });
                 setIsInitialized(true);
             }
         }
-    }, [initialItems, initialConfig, initialCalibrationVersion, isInitialized]);
+    }, [initialItems, initialConfig, initialCalibrationVersion, initialExecutionMode, isInitialized]);
 
     // Prevent accidental exit with unsaved changes
     useEffect(() => {
@@ -789,6 +878,10 @@ export function useBudgetEditor(
     const applyMarkup = useCallback((scope: 'global' | 'chapter' | 'item', percentage: number, targetId?: string) =>
         dispatch({ type: 'APPLY_MARKUP', payload: { scope, targetId, percentage } }), []);
 
+    // Fase 4 — ajuste de % SOLO sobre los componentes de material del descompuesto.
+    const applyMaterialMarkup = useCallback((scope: 'global' | 'chapter' | 'item', percentage: number, targetId?: string) =>
+        dispatch({ type: 'APPLY_MATERIAL_MARKUP', payload: { scope, targetId, percentage } }), []);
+
     // Feature: Duplicate
     const duplicateItem = useCallback((id: string) => dispatch({ type: 'DUPLICATE_ITEM', payload: id }), []);
 
@@ -814,6 +907,7 @@ export function useBudgetEditor(
         reorderChapters,
         setExecutionMode,
         updateConfig,
-        applyMarkup
+        applyMarkup,
+        applyMaterialMarkup
     };
 }

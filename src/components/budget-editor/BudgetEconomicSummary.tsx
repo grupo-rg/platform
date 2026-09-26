@@ -7,6 +7,8 @@ import { formatMoneyEUR } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Settings2, Check, ArrowRight, FileDown, Loader2, Download, Save, Images, Info, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PDFDownloadLink } from '@react-pdf/renderer';
@@ -24,6 +26,8 @@ interface BudgetEconomicSummaryProps {
     bakedConfig?: BudgetConfig;
     onUpdateConfig?: (config: { marginGG?: number; marginBI?: number; tax?: number; }) => void;
     applyMarkup?: (scope: 'global' | 'chapter' | 'item', percentage: number, targetId?: string) => void;
+    /** Fase 4 — ajuste de % SOLO sobre los materiales del descompuesto. */
+    applyMaterialMarkup?: (scope: 'global' | 'chapter' | 'item', percentage: number, targetId?: string) => void;
     isReadOnly?: boolean;
     onPdfDownloaded?: (hasLead: boolean) => void;
     initialPdfMeta?: Record<string, any>;
@@ -50,6 +54,7 @@ export const BudgetEconomicSummary = ({
     bakedConfig,
     onUpdateConfig,
     applyMarkup,
+    applyMaterialMarkup,
     isReadOnly,
     onPdfDownloaded,
     initialPdfMeta,
@@ -67,6 +72,9 @@ export const BudgetEconomicSummary = ({
 }: BudgetEconomicSummaryProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [globalMarkup, setGlobalMarkup] = useState<number | ''>('');
+    // Fase 4 — cuando está activo, el ajuste masivo escala SOLO los materiales del
+    // descompuesto (APPLY_MATERIAL_MARKUP) en vez de toda la partida.
+    const [globalMaterialOnly, setGlobalMaterialOnly] = useState(false);
     // Phase 15 — desglose GG/BI oculto por defecto (markup distribuido implícitamente).
     // El aparejador puede expandir para auditoría interna.
     const [showBreakdown, setShowBreakdown] = useState(false);
@@ -536,14 +544,30 @@ export const BudgetEconomicSummary = ({
                                 size="sm"
                                 className="h-8 px-3"
                                 onClick={() => {
-                                    if (applyMarkup && globalMarkup !== '') {
-                                        applyMarkup('global', Number(globalMarkup));
-                                        setGlobalMarkup('');
+                                    if (globalMarkup === '') return;
+                                    if (globalMaterialOnly) {
+                                        if (applyMaterialMarkup) applyMaterialMarkup('global', Number(globalMarkup));
+                                    } else {
+                                        if (applyMarkup) applyMarkup('global', Number(globalMarkup));
                                     }
+                                    setGlobalMarkup('');
                                 }}
                             >
                                 <ArrowRight className="w-4 h-4" />
                             </Button>
+                        </div>
+                        {/* Fase 4 — "Solo materiales": el ajuste masivo escala únicamente
+                            los materiales del descompuesto (no mano de obra/maquinaria/
+                            indirectos). Las partidas sin descompuesto quedan intactas. */}
+                        <div className="flex items-center gap-2 mt-2.5">
+                            <Checkbox
+                                id="global_material_only"
+                                checked={globalMaterialOnly}
+                                onCheckedChange={(v) => setGlobalMaterialOnly(v === true)}
+                            />
+                            <Label htmlFor="global_material_only" className="text-[11px] text-slate-600 dark:text-zinc-300 cursor-pointer leading-tight">
+                                Solo materiales <span className="text-slate-400">(no toca mano de obra ni indirectos)</span>
+                            </Label>
                         </div>
                     </div>
                 )}

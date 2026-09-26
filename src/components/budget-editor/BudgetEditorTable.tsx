@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { FolderPlus, FilePlus2 } from "lucide-react";
 import { EditableBudgetLineItem } from "@/types/budget-editor";
 import { AIReasoningSheet } from './table/AIReasoningSheet';
@@ -49,6 +51,7 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
         renameChapter,
         reorderChapters,
         applyMarkup,
+        applyMaterialMarkup,
         isAdmin,
         isReadOnly,
         leadId,
@@ -77,7 +80,10 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
     const [reconcileFocusedId, setReconcileFocusedId] = useState<string | null>(null);
 
     // Markup Dialog State
-    const [markupState, setMarkupState] = useState<{ open: boolean; scope: 'global' | 'chapter' | 'item'; targetId?: string; percentage: number }>({ open: false, scope: 'global', percentage: 0 });
+    // `materialOnly` (Fase 4) — cuando está activo, el ajuste % se aplica SOLO a los
+    // componentes de material del descompuesto (APPLY_MATERIAL_MARKUP); si no, escala
+    // toda la partida (APPLY_MARKUP, comportamiento histórico).
+    const [markupState, setMarkupState] = useState<{ open: boolean; scope: 'global' | 'chapter' | 'item'; targetId?: string; percentage: number; materialOnly: boolean }>({ open: false, scope: 'global', percentage: 0, materialOnly: false });
 
     const handleOpenBreakdown = (item: EditableBudgetLineItem) => {
         setBreakdownItemId(item.id);
@@ -148,7 +154,7 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                                 items={state.items.filter((i: any) => i.chapter === chapterName)}
                                 showGhostMode={showGhostMode}
                                 onOpenBreakdown={handleOpenBreakdown}
-                                onOpenMarkup={(chapterName: string) => setMarkupState({ open: true, scope: 'chapter', targetId: chapterName, percentage: 0 })}
+                                onOpenMarkup={(chapterName: string) => setMarkupState({ open: true, scope: 'chapter', targetId: chapterName, percentage: 0, materialOnly: false })}
                                 onOpenReconciliation={budgetId ? (partidaId: string) => setReconcileFocusedId(partidaId) : undefined}
                                 onAddPartida={openManualPartida}
                             />
@@ -213,11 +219,35 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                             />
                             <span className="absolute right-3 top-2.5 text-slate-400 font-medium">%</span>
                         </div>
+                        {/* Fase 4 — "Solo materiales": aplica el % únicamente a los
+                            componentes de material del descompuesto (no a mano de obra,
+                            maquinaria ni indirectos). Las partidas sin descompuesto no
+                            se ven afectadas por este modo. */}
+                        <div className="flex items-start gap-2 rounded-md border border-slate-200 dark:border-white/10 p-3">
+                            <Checkbox
+                                id="markup-material-only"
+                                checked={markupState.materialOnly}
+                                onCheckedChange={(v) => setMarkupState({ ...markupState, materialOnly: v === true })}
+                                className="mt-0.5"
+                            />
+                            <div className="grid gap-0.5">
+                                <Label htmlFor="markup-material-only" className="text-sm font-medium cursor-pointer">
+                                    Solo materiales
+                                </Label>
+                                <p className="text-xs text-slate-500">
+                                    Aplica el ajuste solo a los materiales del descompuesto. No afecta a mano de obra, maquinaria ni indirectos. Las partidas sin descompuesto no se modifican.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setMarkupState({ ...markupState, open: false })}>Cancelar</Button>
                         <Button onClick={() => {
-                            if (applyMarkup) applyMarkup(markupState.scope, markupState.percentage, markupState.targetId);
+                            if (markupState.materialOnly) {
+                                if (applyMaterialMarkup) applyMaterialMarkup(markupState.scope, markupState.percentage, markupState.targetId);
+                            } else {
+                                if (applyMarkup) applyMarkup(markupState.scope, markupState.percentage, markupState.targetId);
+                            }
                             setMarkupState({ ...markupState, open: false });
                         }}>Aplicar</Button>
                     </DialogFooter>

@@ -14,6 +14,7 @@ import {
     History,
     Layers,
     Wrench,
+    Package,
     BookOpen,
     Download,
     Trash,
@@ -140,6 +141,15 @@ export const BudgetEditorToolbar = ({
         return items.some(item => (item as any).item?.breakdown?.length > 0);
     }, [items]);
 
+    // Fase 5 — etiqueta corta del modo activo para el botón del dropdown.
+    const modeShortLabel: Record<ExecutionMode, string> = {
+        complete: 'Completo',
+        execution: 'M.O. + Mat. Fijos',
+        labor: 'Solo mano de obra',
+        material: 'Solo material',
+        material_labor: 'Material + M.O.',
+    };
+
     const statusText = isSaving ? 'Guardando...' :
         hasUnsavedChanges ? 'Cambios sin guardar' :
             lastSavedAt ? `Guardado ${lastSavedAt.toLocaleTimeString()}` : 'Listo';
@@ -186,12 +196,16 @@ export const BudgetEditorToolbar = ({
                                         ? "bg-amber-100/50 hover:bg-amber-100 text-amber-900 border-amber-200 dark:bg-amber-900/30 dark:text-amber-500 dark:border-amber-800"
                                         : executionMode === 'labor'
                                         ? "bg-blue-100/50 hover:bg-blue-100 text-blue-900 border-blue-200 dark:bg-blue-900/30 dark:text-blue-500 dark:border-blue-800"
+                                        : executionMode === 'material'
+                                        ? "bg-emerald-100/50 hover:bg-emerald-100 text-emerald-900 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-500 dark:border-emerald-800"
+                                        : executionMode === 'material_labor'
+                                        ? "bg-teal-100/50 hover:bg-teal-100 text-teal-900 border-teal-200 dark:bg-teal-900/30 dark:text-teal-500 dark:border-teal-800"
                                         : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
                                 )}
                                 title="Seleccionar modo de visualización"
                             >
-                                {executionMode === 'execution' ? <Wrench className="w-4 h-4 mr-2 text-amber-600" /> : executionMode === 'labor' ? <Wrench className="w-4 h-4 mr-2 text-blue-600" /> : <Layers className="w-4 h-4 mr-2 text-indigo-500" />}
-                                {executionMode === 'execution' ? 'M.O. + Mat. Fijos' : executionMode === 'labor' ? 'Sólo Mano de Obra' : 'Completo'}
+                                {executionMode === 'execution' ? <Wrench className="w-4 h-4 mr-2 text-amber-600" /> : executionMode === 'labor' ? <Wrench className="w-4 h-4 mr-2 text-blue-600" /> : executionMode === 'material' ? <Package className="w-4 h-4 mr-2 text-emerald-600" /> : executionMode === 'material_labor' ? <Package className="w-4 h-4 mr-2 text-teal-600" /> : <Layers className="w-4 h-4 mr-2 text-indigo-500" />}
+                                {modeShortLabel[executionMode]}
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-60">
@@ -210,8 +224,22 @@ export const BudgetEditorToolbar = ({
                             <DropdownMenuItem onClick={() => onSetExecutionMode('labor')} disabled={!hasAnyBreakdown} className={executionMode === 'labor' ? 'bg-blue-50 dark:bg-blue-900/20 font-semibold' : ''}>
                                 <Wrench className="w-4 h-4 mr-2 text-blue-600" />
                                 <div className="flex flex-col">
-                                    <span>Exclusivamente Mano de Obra</span>
+                                    <span>Solo mano de obra</span>
                                     <span className="text-[10px] text-slate-400 font-normal">{hasAnyBreakdown ? 'Solo componentes mo...' : 'Sin descompuestos disponibles'}</span>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onSetExecutionMode('material')} disabled={!hasAnyBreakdown} className={executionMode === 'material' ? 'bg-emerald-50 dark:bg-emerald-900/20 font-semibold' : ''}>
+                                <Package className="w-4 h-4 mr-2 text-emerald-600" />
+                                <div className="flex flex-col">
+                                    <span>Solo material</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{hasAnyBreakdown ? 'Solo componentes de material (fijo + variable)' : 'Sin descompuestos disponibles'}</span>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onSetExecutionMode('material_labor')} disabled={!hasAnyBreakdown} className={executionMode === 'material_labor' ? 'bg-teal-50 dark:bg-teal-900/20 font-semibold' : ''}>
+                                <Package className="w-4 h-4 mr-2 text-teal-600" />
+                                <div className="flex flex-col">
+                                    <span>Material + mano de obra</span>
+                                    <span className="text-[10px] text-slate-400 font-normal">{hasAnyBreakdown ? 'Material (fijo + variable) y mano de obra' : 'Sin descompuestos disponibles'}</span>
                                 </div>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -251,6 +279,20 @@ export const BudgetEditorToolbar = ({
                                         <span className="text-[10px] text-slate-400 font-normal">{hasVariableCosts ? 'Excluye materiales variables' : 'Sin materiales variables detectados'}</span>
                                     </div>
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport('material')} disabled={exportingMode !== null || !hasAnyBreakdown}>
+                                    <Package className="w-4 h-4 mr-2 text-emerald-600" />
+                                    <div className="flex flex-col">
+                                        <span>Solo material</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">{hasAnyBreakdown ? 'Solo componentes de material (fijo + variable)' : 'Sin descompuestos disponibles'}</span>
+                                    </div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport('material_labor')} disabled={exportingMode !== null || !hasAnyBreakdown}>
+                                    <Package className="w-4 h-4 mr-2 text-teal-600" />
+                                    <div className="flex flex-col">
+                                        <span>Material + mano de obra</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">{hasAnyBreakdown ? 'Material (fijo + variable) y mano de obra' : 'Sin descompuestos disponibles'}</span>
+                                    </div>
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleExport('complete')} disabled={exportingMode !== null}>
                                     <Layers className="w-4 h-4 mr-2 text-indigo-500" />
                                     <div className="flex flex-col">
@@ -280,8 +322,14 @@ export const BudgetEditorToolbar = ({
                                     <DropdownMenuItem onClick={() => onSetExecutionMode('execution')} disabled={!hasVariableCosts}>
                                         <Wrench className="w-4 h-4 mr-2 text-amber-600" /> Sólo Ejecución
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => onSetExecutionMode('labor')}>
-                                        <Wrench className="w-4 h-4 mr-2 text-blue-600" /> Sólo Mano de Obra
+                                    <DropdownMenuItem onClick={() => onSetExecutionMode('labor')} disabled={!hasAnyBreakdown}>
+                                        <Wrench className="w-4 h-4 mr-2 text-blue-600" /> Solo mano de obra
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onSetExecutionMode('material')} disabled={!hasAnyBreakdown}>
+                                        <Package className="w-4 h-4 mr-2 text-emerald-600" /> Solo material
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onSetExecutionMode('material_labor')} disabled={!hasAnyBreakdown}>
+                                        <Package className="w-4 h-4 mr-2 text-teal-600" /> Material + mano de obra
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>

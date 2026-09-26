@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { budgetEditorReducer, initialState } from './use-budget-editor';
-import type { EditableBudgetLineItem } from '@/types/budget-editor';
+import type { EditableBudgetLineItem, ExecutionMode } from '@/types/budget-editor';
+import type { Budget } from '@/backend/budget/domain/budget';
 
 // Partida con descompuesto a 0 (bug de precios perdidos), unitPrice válido.
 function makeStateWithZeroBreakdown() {
@@ -82,5 +83,71 @@ describe('UPDATE_ITEM breakdown handling', () => {
             payload: { id: 'p1', changes: { item: { ...(cur.item as any), quantity: 10 } } },
         });
         expect(next.items[0].item!.breakdown![0].total).toBe(50);
+    });
+});
+
+// Wave 4 — round-trip de executionMode: el modo de presupuesto elegido por el
+// usuario se persiste en `handleSave` (finalJson.executionMode) y debe leerse de
+// vuelta al cargar el editor (INIT_STATE). Antes se guardaba pero no se restauraba.
+describe('executionMode round-trip', () => {
+    const item: EditableBudgetLineItem = {
+        id: 'p1',
+        chapter: 'DEMOLICIONES',
+        originalTask: 'Demolición de tabique',
+        item: {
+            type: 'PARTIDA',
+            code: 'NL-1',
+            description: 'Demolición de tabique',
+            unit: 'm2',
+            quantity: 1,
+            unitPrice: 100,
+            totalPrice: 100,
+        } as any,
+    } as any;
+
+    it('INIT_STATE restaura el executionMode presente en el payload', () => {
+        const state = budgetEditorReducer(initialState, {
+            type: 'INIT_STATE',
+            payload: { items: [item], executionMode: 'material' },
+        });
+        expect(state.executionMode).toBe('material');
+    });
+
+    it('sin executionMode en el payload cae al default del estado ("complete")', () => {
+        const state = budgetEditorReducer(initialState, {
+            type: 'INIT_STATE',
+            payload: { items: [item] },
+        });
+        expect(state.executionMode).toBe('complete');
+    });
+
+    it('save → reload conserva el modo: SET_EXECUTION_MODE, persistir en Budget, re-INIT lo restaura', () => {
+        // 1. Usuario carga y cambia el modo en el editor.
+        const loaded = budgetEditorReducer(initialState, {
+            type: 'INIT_STATE',
+            payload: { items: [item], executionMode: 'complete' },
+        });
+        const edited = budgetEditorReducer(loaded, {
+            type: 'SET_EXECUTION_MODE',
+            payload: 'material_labor',
+        });
+        expect(edited.executionMode).toBe('material_labor');
+
+        // 2. handleSave persiste el modo en el dominio (finalJson.executionMode).
+        //    Simulamos el documento Budget que el repositorio hidrata al recargar.
+        const persisted: Pick<Budget, 'executionMode'> = {
+            executionMode: edited.executionMode,
+        };
+
+        // 3. Recarga: BudgetEditorWrapper pasa budget.executionMode al INIT_STATE
+        //    con fallback 'complete'. El modo guardado se restaura.
+        const reloaded = budgetEditorReducer(initialState, {
+            type: 'INIT_STATE',
+            payload: {
+                items: [item],
+                executionMode: (persisted.executionMode ?? 'complete') as ExecutionMode,
+            },
+        });
+        expect(reloaded.executionMode).toBe('material_labor');
     });
 });

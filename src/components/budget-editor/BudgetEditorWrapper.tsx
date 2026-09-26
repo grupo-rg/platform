@@ -74,7 +74,8 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
         reorderChapters,
         setExecutionMode,
         updateConfig,
-        applyMarkup
+        applyMarkup,
+        applyMaterialMarkup
     } = useBudgetEditor((budget as any).lineItems, (() => {
         // Phase 17 — budgets con markup baked en backend. Los precios ya incluyen
         // GG+BI, el editor NO multiplica. Mantenemos el config visible para que
@@ -91,7 +92,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
             return { marginGG: 0, marginBI: 0, tax };
         }
         return budget.config;
-    })(), budget.calibrationVersion);
+    })(), budget.calibrationVersion, budget.executionMode ?? 'complete');
 
     const { toast } = useToast();
     const router = useRouter();
@@ -261,7 +262,11 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                     executionOnlyTotal: state.costBreakdown.executionOnlyTotal,
                     completeTotal: state.costBreakdown.completeTotal
                 },
-                config: state.config
+                config: state.config,
+                // Fase 5 — persistir el modo de presupuesto elegido por el usuario
+                // (Completo / Solo M.O. / Solo material / Material + M.O. / …). Hoy
+                // no se leía de vuelta al cargar; se guarda para round-trip futuro.
+                executionMode: state.executionMode
             };
 
             if (isTraceMode) {
@@ -326,11 +331,15 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
             complete: 'Presupuesto completo',
             execution: 'Mano de obra + materiales fijos',
             labor: 'Solo mano de obra',
+            material: 'Solo material',
+            material_labor: 'Material + mano de obra',
         };
         const modeFileLabels: Record<ExecutionMode, string> = {
             complete: 'Completo',
             execution: 'MO-y-Materiales-Fijos',
             labor: 'Solo-Mano-de-Obra',
+            material: 'Solo-Material',
+            material_labor: 'Material-y-Mano-de-Obra',
         };
         try {
             const blob = await pdf(
@@ -425,7 +434,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
     const editorContextValue = {
         state, updateItem, addItem, reorderItems, setItemsOrder, removeItem, duplicateItem, undo, redo,
         saveStart, saveSuccess, saveError, canUndo, canRedo, addChapter, removeChapter,
-        renameChapter, reorderChapters, setExecutionMode, updateConfig, applyMarkup,
+        renameChapter, reorderChapters, setExecutionMode, updateConfig, applyMarkup, applyMaterialMarkup,
         isAdmin, isReadOnly: isDemoLocked,
         leadId: budget.leadId === 'unassigned' ? undefined : budget.leadId,
         // Sprint 3 — S3-07: budgetId disponible para los hijos que registran
@@ -541,6 +550,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                                                 bakedConfig={state.bakedConfig}
                                                 onUpdateConfig={updateConfig}
                                                 applyMarkup={applyMarkup}
+                                                applyMaterialMarkup={applyMaterialMarkup}
                                                 isReadOnly={isDemoLocked}
                                                 items={state.items}
                                                 chapters={state.chapters}
@@ -707,6 +717,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                                     bakedConfig={state.bakedConfig}
                                     onUpdateConfig={updateConfig}
                                     applyMarkup={applyMarkup}
+                                    applyMaterialMarkup={applyMaterialMarkup}
                                     isReadOnly={isDemoLocked}
                                     items={state.items}
                                     chapters={state.chapters}

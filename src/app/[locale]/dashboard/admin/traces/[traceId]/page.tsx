@@ -112,7 +112,7 @@ export default async function TraceViewerPage({ params }: TraceViewerPageProps) 
     return (
         <div className="h-screen w-full bg-background flex flex-col relative">
             <div className="absolute top-4 left-4 z-50">
-                <Link href="/dashboard/admin/traces" as="style">
+                <Link href={"/dashboard/admin/traces" as any}>
                     <Button variant="outline" size="sm" className="bg-[#121212] hover:bg-white/10 shadow-xl border-white/10">
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         Volver a Trazas
