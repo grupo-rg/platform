@@ -48,22 +48,10 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/**': ['./src/backend/ai/prompts/**/*.prompt'],
   },
-  async redirects() {
-    return [
-      // Canonicaliza www → no-www con 301 permanente.
-      {
-        source: '/:path*',
-        has: [
-          {
-            type: 'host',
-            value: 'www.constructoresenmallorca.com',
-          },
-        ],
-        destination: 'https://constructoresenmallorca.com/:path*',
-        permanent: true,
-      },
-    ];
-  },
+  // NOTA: la canonicalización www ↔ no-www la gestiona la plataforma (Vercel:
+  // Dominio principal en el panel) / DNS. NO añadir aquí un redirect por host:
+  // si la plataforma ya redirige apex↔www, un redirect Next en sentido contrario
+  // provoca un bucle infinito (ERR_TOO_MANY_REDIRECTS). Incidente 2026-09-26.
   async headers() {
     // Cabeceras de seguridad aplicadas a todas las rutas.
     // Nota: X-Frame-Options controla si NUESTRAS páginas pueden incrustarse en
