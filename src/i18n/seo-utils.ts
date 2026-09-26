@@ -31,6 +31,10 @@ export function generateAlternates(pathTemplate: string, currentLocale: string, 
         return acc;
     }, {} as Record<string, string>);
 
+    // x-default: destino de reserva para navegadores sin idioma coincidente.
+    // Apunta a la versión del locale por defecto (es) — no rompe los 5 idiomas.
+    languages['x-default'] = getLocalizedPath(pathTemplate, routing.defaultLocale, params);
+
     return {
         canonical,
         languages
@@ -54,6 +58,9 @@ export async function constructMetadata({ title, description, image, path, local
     const alternates = generateAlternates(path, locale, params);
     const company = await companyConfigService.get();
 
+    // Marca unificada: og:site_name muestra el display combinado (una entidad, dos nombres).
+    const siteName = company.alternateName ? `${company.name} | ${company.alternateName}` : company.name;
+
     // Default Social Image if none provided
     const socialImage = image || '/images/og-default.jpg';
 
@@ -65,7 +72,7 @@ export async function constructMetadata({ title, description, image, path, local
             title,
             description,
             url: alternates.canonical,
-            siteName: company.name,
+            siteName,
             images: [
                 {
                     url: socialImage,

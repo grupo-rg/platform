@@ -48,6 +48,49 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/**': ['./src/backend/ai/prompts/**/*.prompt'],
   },
+  async redirects() {
+    return [
+      // Canonicaliza www → no-www con 301 permanente.
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'www.constructoresenmallorca.com',
+          },
+        ],
+        destination: 'https://constructoresenmallorca.com/:path*',
+        permanent: true,
+      },
+    ];
+  },
+  async headers() {
+    // Cabeceras de seguridad aplicadas a todas las rutas.
+    // Nota: X-Frame-Options controla si NUESTRAS páginas pueden incrustarse en
+    // frames de terceros; NO afecta a que nuestras páginas incrusten iframes de
+    // terceros (p. ej. el embed de Google Maps en /contacto), que sigue funcionando.
+    const securityHeaders = [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      {
+        key: 'Strict-Transport-Security',
+        value: 'max-age=63072000; includeSubDomains; preload',
+      },
+      {
+        key: 'Permissions-Policy',
+        value: 'camera=(), microphone=(), geolocation=(), browsing-topics=(), interest-cohort=()',
+      },
+      { key: 'X-DNS-Prefetch-Control', value: 'on' },
+    ];
+
+    return [
+      {
+        source: '/:path*',
+        headers: securityHeaders,
+      },
+    ];
+  },
 };
 
 const createNextIntlPlugin = require('next-intl/plugin');

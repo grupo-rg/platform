@@ -3,12 +3,11 @@ import { routing } from '@/i18n/routing';
 import { services } from '@/lib/services';
 import { locations } from '@/lib/locations';
 import { getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
-import { companyConfigService } from '@/backend/platform/application/company-config-service';
 import { blogPostService } from '@/backend/marketing/application/blog-post-service';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    const company = await companyConfigService.get();
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || company.web || 'http://localhost:9002';
+    // Unificado con robots.ts / layout: nunca emitimos localhost en prod.
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://constructoresenmallorca.com';
     const entries: MetadataRoute.Sitemap = [];
 
     // Helper to get localized path
@@ -39,12 +38,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const staticPages = [
         '/',
         '/contact',
+        '/services',
         '/budget-request',
         '/blog',
         '/login',
-        '/signup',
-        '/privacy',
-        '/terms'
+        '/signup'
     ];
 
     staticPages.forEach(page => {
@@ -54,6 +52,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
                 lastModified: new Date(),
                 changeFrequency: page === '/' ? 'daily' : 'weekly',
                 priority: page === '/' ? 1.0 : 0.8,
+            });
+        });
+    });
+
+    // 1b. Legal Pages (indexables; baja prioridad y baja frecuencia de cambio).
+    const legalPages = ['/privacy', '/terms'];
+    legalPages.forEach(page => {
+        routing.locales.forEach(locale => {
+            entries.push({
+                url: `${baseUrl}${getLocalizedPath(page, locale)}`,
+                lastModified: new Date(),
+                changeFrequency: 'yearly',
+                priority: 0.3,
             });
         });
     });

@@ -33,6 +33,7 @@ interface FAQItem {
 
 interface OrganizationSchemaProps {
     name?: string;
+    alternateName?: string;
     description?: string;
     url?: string;
     logo?: string;
@@ -44,7 +45,11 @@ interface OrganizationSchemaProps {
 // Organization JSON-LD
 export async function OrganizationJsonLd(props: OrganizationSchemaProps = {}) {
     const company = await companyConfigService.get();
+    // Marca unificada: UNA entidad con dos nombres.
+    // name = razón comercial ("Grupo RG"); alternateName = marca de cara al público
+    // ("Constructores en Mallorca"). Evita que Google las trate como negocios distintos.
     const name = props.name ?? company.name;
+    const alternateName = props.alternateName ?? company.alternateName ?? 'Constructores en Mallorca';
     const description = props.description ?? company.tagline ?? '';
     const url = props.url ?? company.web;
     const logo = props.logo ?? company.logoUrl ?? '/logo.webp';
@@ -52,22 +57,127 @@ export async function OrganizationJsonLd(props: OrganizationSchemaProps = {}) {
     const telephone = props.telephone || company.phone || CONTACT_PHONE_E164;
     const email = props.email ?? company.email;
 
+    // sameAs solo con redes reales de la config; sin inventarlas.
+    const sameAs = company.social
+        ? Object.values(company.social).filter((u): u is string => Boolean(u && u.trim()))
+        : [];
+
+    // NAP local (LocalBusiness). Oficinas en Petra (07520), Illes Balears — dato
+    // que ya aparece en la ficha de contacto. `streetAddress` solo si la config
+    // lo tiene; NO se emite `openingHoursSpecification` porque company config no
+    // guarda horario (no inventamos horas).
+    const address = {
+        '@type': 'PostalAddress',
+        ...(company.address ? { streetAddress: company.address } : {}),
+        addressLocality: 'Petra',
+        postalCode: '07520',
+        addressRegion: 'Illes Balears',
+        addressCountry: 'ES',
+    };
+    const geo = {
+        '@type': 'GeoCoordinates',
+        latitude: 39.6139,
+        longitude: 3.1029,
+    };
+
     const schema = {
         '@context': 'https://schema.org',
         '@type': 'HomeAndConstructionBusiness',
         name,
+        ...(alternateName && { alternateName }),
         description,
         url,
         logo: logo.startsWith('http') ? logo : `${url}${logo}`,
         areaServed: areaServed.map(area => ({ '@type': 'Place', name: area })),
+        address,
+        geo,
         ...(telephone && { telephone }),
         ...(email && { email }),
         priceRange: '€€€',
-        aggregateRating: {
-            '@type': 'AggregateRating',
-            ratingValue: '4.8',
-            reviewCount: '127'
-        }
+        ...(sameAs.length > 0 && { sameAs }),
+    };
+
+    return (
+        <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+        />
+    );
+}
+
+interface ArticleSchemaProps {
+    /** Título del artículo (post.title / metaTitle). */
+    headline: string;
+    /** URL canónica absoluta del post. */
+    url: string;
+    description?: string;
+    /** Imagen social del post (ogImageUrl / heroImageUrl). Se absolutiza. */
+    image?: string;
+    datePublished?: string | Date;
+    dateModified?: string | Date;
+    /** Idioma del post (locale) para `inLanguage`. */
+    inLanguage?: string;
+    keywords?: string[];
+    /**
+     * Autor real (E-E-A-T) si existe. Si no se pasa, se usa la empresa
+     * (Organization) como autor — NO se inventa una persona.
+     */
+    author?: { name: string; url?: string };
+}
+
+// Article / BlogPosting JSON-LD (E-E-A-T)
+export async function ArticleJsonLd({
+    headline,
+    url,
+    description,
+    image,
+    datePublished,
+    dateModified,
+    inLanguage,
+    keywords,
+    author,
+}: ArticleSchemaProps) {
+    const company = await companyConfigService.get();
+
+    const logoSrc = company.logoUrl ?? '/logo.webp';
+    const logoUrl = absoluteUrl(logoSrc, company.web) ?? logoSrc;
+
+    // Publisher: siempre la empresa (Organization con logo).
+    const publisher = {
+        '@type': 'Organization',
+        name: company.name,
+        ...(company.alternateName && { alternateName: company.alternateName }),
+        url: company.web,
+        logo: {
+            '@type': 'ImageObject',
+            url: logoUrl,
+        },
+    };
+
+    // Autor: persona real si se aporta; en su defecto, la propia empresa.
+    // Nunca se inventa una persona.
+    const authorNode = author?.name
+        ? { '@type': 'Person', name: author.name, ...(author.url && { url: author.url }) }
+        : publisher;
+
+    const toIso = (d?: string | Date) => (d ? new Date(d).toISOString() : undefined);
+    const published = toIso(datePublished);
+    const modified = toIso(dateModified) ?? published;
+
+    const schema = {
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        headline,
+        ...(description && { description }),
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        url,
+        ...(image && { image: absoluteUrl(image, company.web) }),
+        ...(published && { datePublished: published }),
+        ...(modified && { dateModified: modified }),
+        author: authorNode,
+        publisher,
+        ...(inLanguage && { inLanguage }),
+        ...(keywords && keywords.length > 0 && { keywords: keywords.join(', ') }),
     };
 
     return (

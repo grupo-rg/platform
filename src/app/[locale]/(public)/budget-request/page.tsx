@@ -1,5 +1,27 @@
+import type { Metadata } from 'next';
 import { getDictionary } from '@/lib/dictionaries';
 import { BudgetRequestForm } from '@/components/budget-request/budget-request-form';
+import { constructMetadata } from '@/i18n/seo-utils';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
+
+// Sin este generateMetadata la página heredaba el canonical/hreflang del layout
+// (apuntando a la HOME). Lo generamos con el path propio '/budget-request' para que
+// canonical + alternates.languages apunten a su URL localizada real.
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const [dict, company] = await Promise.all([
+    getDictionary(locale as any),
+    companyConfigService.get(),
+  ]);
+  const t = dict.budgetRequest;
+
+  return constructMetadata({
+    title: `${t.page.title} | ${company.name}`,
+    description: t.page.description,
+    path: '/budget-request',
+    locale,
+  });
+}
 
 export default async function BudgetRequestPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;

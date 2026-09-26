@@ -1,15 +1,25 @@
-﻿import type { MetadataRoute } from 'next';
-import { companyConfigService } from '@/backend/platform/application/company-config-service';
+import type { MetadataRoute } from 'next';
 
-export default async function robots(): Promise<MetadataRoute.Robots> {
-    const company = await companyConfigService.get();
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || company.web || 'http://localhost:9002';
+export default function robots(): MetadataRoute.Robots {
+    // Unificado con el criterio del layout: no dependemos de company.web
+    // (puede venir vacío en prod y emitir localhost).
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://constructoresenmallorca.com';
 
     return {
         rules: {
             userAgent: '*',
+            // Permitimos '/' para todos los agentes (incl. crawlers de IA / GEO).
             allow: '/',
-            disallow: ['/private/', '/admin/', '/dashboard/'],
+            // Cubrimos tanto las rutas sin locale como las localizadas
+            // (/[locale]/dashboard/…) mediante wildcard por locale.
+            disallow: [
+                '/dashboard/',
+                '/admin/',
+                '/private/',
+                '/*/dashboard/',
+                '/*/admin/',
+                '/*/private/',
+            ],
         },
         sitemap: `${baseUrl}/sitemap.xml`,
     };

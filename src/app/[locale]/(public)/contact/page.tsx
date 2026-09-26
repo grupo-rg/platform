@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getDictionary } from '@/lib/dictionaries';
 import { Button } from '@/components/ui/button';
 import { Mail, MapPin, Phone, ArrowRight, MessageCircle } from 'lucide-react';
@@ -6,6 +7,27 @@ import { WebPageJsonLd, BreadcrumbJsonLd } from '@/components/seo/json-ld';
 import { SmartTriggerButton } from '@/components/contact/SmartTriggerButton';
 import * as motion from 'framer-motion/client';
 import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_HREF, CONTACT_WHATSAPP_URL } from '@/lib/contact';
+import { constructMetadata } from '@/i18n/seo-utils';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
+
+// Sin este generateMetadata la página heredaba el canonical/hreflang del layout
+// (apuntando a la HOME). Lo generamos con el path propio '/contact' para que
+// canonical + alternates.languages apunten a su URL localizada real.
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const [dict, company] = await Promise.all([
+    getDictionary(locale as any),
+    companyConfigService.get(),
+  ]);
+  const t = dict.contact;
+
+  return constructMetadata({
+    title: `${t.hero.title} | ${company.name}`,
+    description: t.hero.description,
+    path: '/contact',
+    locale,
+  });
+}
 
 export default async function ContactPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;

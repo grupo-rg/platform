@@ -1,0 +1,35 @@
+# Grupo RG | Constructores en Mallorca
+
+> Grupo RG es una empresa de construcción y reformas de alta gama en Mallorca y Baleares. Ejecutamos obra nueva, reformas integrales de viviendas y locales, y proyectos de construcción de lujo con acabados premium: obras, proyectos y construcciones llave en mano. Sede en Mallorca; atención en toda la isla y las Islas Baleares.
+
+Idioma principal: español (es). El sitio también está disponible en inglés (en), catalán (ca), alemán (de) y neerlandés (nl); cada ruta lleva prefijo de locale (p. ej. `/es/...`, `/en/...`).
+
+## Páginas principales
+
+- [Inicio — Constructores en Mallorca](https://constructoresenmallorca.com/es): presentación de Grupo RG, servicios de construcción y reformas de alta gama y zonas de actuación en Mallorca.
+- [Servicios](https://constructoresenmallorca.com/es/servicios): catálogo completo de servicios (construcción y reformas, reformas de interiores, piscinas, paramentos verticales, pintura, impermeabilización, electricidad, carpintería y fontanería).
+- [Solicitar presupuesto](https://constructoresenmallorca.com/es/presupuesto): formulario para solicitar un presupuesto personalizado de obra o reforma.
+- [Contacto](https://constructoresenmallorca.com/es/contacto): datos de contacto, teléfono (+34 663 955 854) y WhatsApp.
+- [Blog](https://constructoresenmallorca.com/es/blog): artículos sobre construcción, reformas, diseño de interiores y tendencias en Mallorca.
+
+## Servicios destacados
+
+- [Construcción y reformas](https://constructoresenmallorca.com/es/servicios/construccion-y-reformas/reformas-integrales-viviendas-locales): reformas integrales de viviendas y locales.
+- [Gestión integral de obra nueva](https://constructoresenmallorca.com/es/servicios/construccion-y-reformas/gestion-integral-obra-nueva): dirección y ejecución llave en mano de obra nueva.
+- [Ampliaciones y redistribución](https://constructoresenmallorca.com/es/servicios/construccion-y-reformas/ampliaciones-redistribucion): ampliaciones y redistribución de espacios.
+
+## Zonas de actuación
+
+- [Son Vida](https://constructoresenmallorca.com/es/zonas/son-vida)
+- [Portals Nous](https://constructoresenmallorca.com/es/zonas/portals-nous)
+- [Bendinat](https://constructoresenmallorca.com/es/zonas/bendinat)
+- [Santa Ponsa](https://constructoresenmallorca.com/es/zonas/santa-ponsa)
+- [Port d'Andratx](https://constructoresenmallorca.com/es/zonas/port-d'andratx)
+- [Camp de Mar](https://constructoresenmallorca.com/es/zonas/camp-de-mar)
+- [Palma Centro](https://constructoresenmallorca.com/es/zonas/palma-centro)
+- [Illetas](https://constructoresenmallorca.com/es/zonas/illetas)
+
+## Contacto
+
+- Teléfono / WhatsApp: +34 663 955 854
+- Web: https://constructoresenmallorca.com

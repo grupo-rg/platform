@@ -1,14 +1,14 @@
 import { notFound } from 'next/navigation';
-import { Header } from '@/components/layout/header';
 import { getDictionary } from '@/lib/dictionaries';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Link } from '@/i18n/navigation';
-import { ArrowRight, Calendar, Tag } from 'lucide-react';
+import { ArrowRight, Calendar, Tag, User } from 'lucide-react';
 import type { Metadata } from 'next';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import { constructMetadata } from '@/i18n/seo-utils';
+import { constructMetadata, getLocalizedPath } from '@/i18n/seo-utils';
+import { ArticleJsonLd } from '@/components/seo/json-ld';
 import { blogPostService } from '@/backend/marketing/application/blog-post-service';
 import type { BlogLocale } from '@/backend/marketing/domain/blog-post';
 import { companyConfigService } from '@/backend/platform/application/company-config-service';
@@ -50,9 +50,26 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     notFound();
   }
 
+  const company = await companyConfigService.get();
+  // URL canónica localizada del post (misma que usa el <link rel=canonical>).
+  const articleUrl = `${company.web}${getLocalizedPath('/blog/[slug]', locale, { slug })}`;
+  // Autoría E-E-A-T: el post solo guarda `authorId` (string), no hay entidad de
+  // autor con nombre/bio. Sin datos reales de persona, atribuimos a la empresa
+  // (Organization) — no inventamos un autor humano.
+  const authorName = company.name;
+
   return (
     <>
-      <Header t={dict} />
+      <ArticleJsonLd
+        headline={post.metaTitle || post.title}
+        url={articleUrl}
+        description={post.metaDescription}
+        image={post.ogImageUrl || post.heroImageUrl}
+        datePublished={post.publishedAt}
+        dateModified={post.updatedAt}
+        inLanguage={locale}
+        keywords={post.tags}
+      />
       <main className="flex-1">
         {post.heroImageUrl && (
           <section className="relative h-64 md:h-80 w-full">
@@ -84,6 +101,12 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
                       <span>{new Date(post.publishedAt).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                     </div>
                   )}
+                  {/* Autoría visible (E-E-A-T). Sin entidad de autor real, se
+                      atribuye a la empresa; coincide con el `author` del JSON-LD. */}
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    <span>{authorName}</span>
+                  </div>
                 </div>
                 <h1 className="font-headline text-4xl md:text-5xl font-bold !mb-4">
                   {post.title}

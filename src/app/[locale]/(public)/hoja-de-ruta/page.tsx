@@ -1,9 +1,15 @@
+import type { Metadata } from 'next';
 import { getDictionary } from '@/lib/dictionaries';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { CheckCircle, Users, GitMerge, Bot, BarChart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
+
+// Roadmap interno de cliente: no debe indexarse ni seguirse.
+export const metadata: Metadata = {
+    robots: { index: false, follow: false },
+};
 
 const phases = [
     {

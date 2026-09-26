@@ -16,6 +16,7 @@ import { SmartBudgetWrapper } from '@/components/budget-widget/smart-budget-wrap
 import localFont from 'next/font/local';
 import { getTranslations } from 'next-intl/server';
 import { constructMetadata } from '@/i18n/seo-utils';
+import { OrganizationJsonLd } from '@/components/seo/json-ld';
 
 import { Inter } from 'next/font/google';
 
@@ -80,6 +81,9 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <body suppressHydrationWarning className={cn('font-body antialiased min-h-screen bg-background flex flex-col', gencha.variable, genchaDisplay.variable, inter.variable)}>
+        {/* Organization/LocalBusiness schema site-wide: 1 por página, en todas.
+            La home ya NO lo inyecta (evita duplicado). */}
+        <OrganizationJsonLd />
         <ThemeProvider
           attribute="class"
           defaultTheme="theme-gold"

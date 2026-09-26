@@ -1,7 +1,7 @@
 import { getDictionary } from '@/lib/dictionaries';
 import { Building2, Hammer, Wrench, Palette, Zap, FileCheck } from 'lucide-react';
 import { constructMetadata } from '@/i18n/seo-utils';
-import { OrganizationJsonLd, FAQJsonLd } from '@/components/seo/json-ld';
+import { FAQJsonLd } from '@/components/seo/json-ld';
 import { companyConfigService } from '@/backend/platform/application/company-config-service';
 
 // New Modular Components
@@ -65,7 +65,8 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
   return (
     <>
-      <OrganizationJsonLd />
+      {/* OrganizationJsonLd se inyecta site-wide en [locale]/layout.tsx.
+          Aquí solo dejamos la FAQ para no duplicar la Organization. */}
       {t.faq?.items && <FAQJsonLd items={t.faq.items} />}
       <main className="flex-1 overflow-x-hidden">
         <Hero

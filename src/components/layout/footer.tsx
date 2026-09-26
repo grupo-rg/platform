@@ -34,6 +34,11 @@ export async function Footer({ t, locale: localeProp }: { t?: any; locale?: stri
   const email = company.email;
   const navLabels = dict.header?.nav ?? {};
 
+  // Marca unificada: UNA entidad con dos nombres. Mostramos el display combinado
+  // para eliminar la ambigüedad "Grupo RG" vs "Constructores en Mallorca".
+  const commercialName = company.alternateName ?? 'Constructores en Mallorca';
+  const brandDisplay = commercialName ? `${company.name} | ${commercialName}` : company.name;
+
   // Silos de servicio: categoría → subservicios. La categoría enlaza a su primer
   // subservicio porque /services/[category] redirige a él.
   const serviceSilos = services.map((service) => {
@@ -57,6 +62,17 @@ export async function Footer({ t, locale: localeProp }: { t?: any; locale?: stri
     slug: location.toLowerCase().replace(/\s+/g, '-'),
   }));
 
+  // Etiquetas del bloque legal, localizadas (auto-contenidas, sin depender del
+  // diccionario). Las rutas se resuelven vía pathnames localizados de routing.ts.
+  const legalLabelsByLocale: Record<string, { heading: string; privacy: string; terms: string }> = {
+    es: { heading: 'Legal', privacy: 'Privacidad', terms: 'Aviso legal' },
+    en: { heading: 'Legal', privacy: 'Privacy', terms: 'Legal notice' },
+    ca: { heading: 'Legal', privacy: 'Privacitat', terms: 'Avís legal' },
+    de: { heading: 'Rechtliches', privacy: 'Datenschutz', terms: 'Impressum' },
+    nl: { heading: 'Juridisch', privacy: 'Privacy', terms: 'Juridische kennisgeving' },
+  };
+  const legal = legalLabelsByLocale[locale] ?? legalLabelsByLocale.es;
+
   return (
     <footer className="w-full bg-[#0a0a0a] text-foreground border-t border-border">
       <div className="container mx-auto px-4 md:px-6 py-16">
@@ -64,6 +80,7 @@ export async function Footer({ t, locale: localeProp }: { t?: any; locale?: stri
         <div className="grid gap-10 lg:grid-cols-12">
           <div className="lg:col-span-4 flex flex-col gap-4">
             <Logo variant="light" className="mb-2" width={120} height={40} company={company} />
+            <p className="text-sm font-semibold text-foreground/90">{brandDisplay}</p>
             {company.tagline && (
               <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
                 {company.tagline}
@@ -196,17 +213,23 @@ export async function Footer({ t, locale: localeProp }: { t?: any; locale?: stri
             </ul>
           </nav>
 
-          <nav aria-label="Legal">
-            <h2 className="font-headline font-semibold text-primary mb-4">Legal</h2>
+          <nav aria-label={legal.heading}>
+            <h2 className="font-headline font-semibold text-primary mb-4">{legal.heading}</h2>
             <ul className="space-y-2">
               <li>
-                <Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                  Política de Privacidad
+                <Link
+                  href="/privacy"
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                >
+                  {legal.privacy}
                 </Link>
               </li>
               <li>
-                <Link href="/terms" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                  Términos de Servicio
+                <Link
+                  href="/terms"
+                  className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                >
+                  {legal.terms}
                 </Link>
               </li>
             </ul>

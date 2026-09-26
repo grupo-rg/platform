@@ -8,10 +8,11 @@ import { SafeImage } from '@/components/ui/safe-image';
 import { ChevronRight, CheckCircle2, ArrowRight } from 'lucide-react';
 import type { Metadata } from 'next';
 import { constructMetadata } from '@/i18n/seo-utils';
-import { ServiceJsonLd, BreadcrumbJsonLd } from '@/components/seo/json-ld';
+import { ServiceJsonLd, BreadcrumbJsonLd, FAQJsonLd } from '@/components/seo/json-ld';
 import { ServiceCTA } from '@/components/services/service-cta';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
+import { companyConfigService } from '@/backend/platform/application/company-config-service';
 import i18nConfig from '@/../i18nConfig';
 import { getOriginalCategoryId, getOriginalSubcategoryId, getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
 
@@ -55,8 +56,10 @@ export async function generateMetadata({ params }: { params: Promise<{ category:
 
     if (!subserviceTranslation) return {};
 
+    const company = await companyConfigService.get();
+
     return constructMetadata({
-        title: `${subserviceTranslation.title} en Mallorca | ${categoryTranslation.title} - Grupo RG`,
+        title: `${subserviceTranslation.title} en Mallorca | ${categoryTranslation.title} - ${company.name}`,
         description: subserviceTranslation.description,
         image: service.ogImage ?? service.image,
         path: '/services/[category]/[subcategory]',
@@ -74,6 +77,7 @@ export default async function SubServicePage({ params }: { params: Promise<{ cat
 
     const service = services.find((s) => s.id === categoryId);
     const dict = await getDictionary(locale as any);
+    const company = await companyConfigService.get();
 
     if (!service) notFound();
 
@@ -101,13 +105,18 @@ export default async function SubServicePage({ params }: { params: Promise<{ cat
                 areaServed="Mallorca, Islas Baleares"
             />
             <BreadcrumbJsonLd items={breadcrumbItems} />
+            {/* FAQPage schema: mismos datos que la sección FAQ visible (dict.services.common.faq).
+                Bueno para rich results y para GEO/citación por LLMs. */}
+            {dict.services?.common?.faq?.items?.length > 0 && (
+                <FAQJsonLd items={dict.services.common.faq.items} />
+            )}
 
             <main className="flex-1 bg-background">
                 {/* Cinematic Hero */}
                 <section className="relative h-[60vh] min-h-[500px] w-full flex items-end pb-16 overflow-hidden">
                     <SafeImage
                         src={service.image}
-                        alt={`${subserviceTranslation.title} en Mallorca - Grupo RG`}
+                        alt={`${subserviceTranslation.title} en Mallorca - ${company.name}`}
                         fill
                         className="object-cover animate-in fade-in duration-1000"
                         priority
@@ -156,7 +165,7 @@ export default async function SubServicePage({ params }: { params: Promise<{ cat
                                 {/* Bio / Intro */}
                                 <div className="prose prose-lg prose-slate dark:prose-invert max-w-none">
                                     <p className="text-lg leading-relaxed text-muted-foreground">
-                                        En <strong className="text-foreground font-medium">Grupo RG</strong>, abordamos cada proyecto de
+                                        En <strong className="text-foreground font-medium">{company.name}</strong>, abordamos cada proyecto de
                                         {' '}<span className="lowercase">{subserviceTranslation.title}</span> como una oportunidad para crear algo excepcional.
                                         Combinamos décadas de experiencia técnica con una gestión eficiente para garantizar resultados que superan las expectativas.
                                     </p>

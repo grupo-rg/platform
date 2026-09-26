@@ -9,7 +9,9 @@ export interface CompanyConfig {
     id: string; // 'company'
 
     // Identidad
-    name: string;              // "Grupo RG"
+    // Marca unificada: UNA entidad con dos nombres.
+    name: string;              // "Grupo RG" (razón comercial)
+    alternateName?: string;    // "Constructores en Mallorca" (marca de cara al público)
     legalName: string;         // "Grupo RG S.L."
     cif: string;               // B12345678
     logoUrl?: string;          // URL pública de Firebase Storage
@@ -47,6 +49,7 @@ export interface CompanyConfig {
 export const DEFAULT_COMPANY_CONFIG: CompanyConfig = {
     id: 'company',
     name: 'Grupo RG',
+    alternateName: 'Constructores en Mallorca',
     legalName: 'Grupo RG S.L.',
     cif: '',
     address: '',
