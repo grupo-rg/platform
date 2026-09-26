@@ -89,18 +89,18 @@ export async function Footer({ t, locale: localeProp }: { t?: any; locale?: stri
             <address className="not-italic text-sm text-muted-foreground space-y-2">
               {company.address && (
                 <span className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+                  <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-primary" aria-hidden="true" />
                   <span>{company.address}</span>
                 </span>
               )}
               <span className="flex items-center gap-2">
-                <Phone className="h-4 w-4 shrink-0 text-primary" />
+                <Phone className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                 <a href={telHref(phone)} className="hover:text-primary transition-colors font-medium">
                   {phone}
                 </a>
               </span>
               <span className="flex items-center gap-2">
-                <MessageCircle className="h-4 w-4 shrink-0 text-primary" />
+                <MessageCircle className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                 <a
                   href={CONTACT_WHATSAPP_URL}
                   target="_blank"
@@ -112,7 +112,7 @@ export async function Footer({ t, locale: localeProp }: { t?: any; locale?: stri
               </span>
               {email && (
                 <span className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 shrink-0 text-primary" />
+                  <Mail className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                   <a href={`mailto:${email}`} className="hover:text-primary transition-colors">
                     {email}
                   </a>

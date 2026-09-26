@@ -166,9 +166,10 @@ export function VisionSection({ t }: { t: any }) {
                             <div className="relative w-full h-full flex items-center justify-center">
                                 <button
                                     onClick={() => setIsVideoOpen(false)}
+                                    aria-label="Cerrar vídeo"
                                     className="absolute top-4 right-4 z-50 p-2 bg-black/50 rounded-full hover:bg-white/20 transition-colors"
                                 >
-                                    <X className="w-6 h-6" />
+                                    <X className="w-6 h-6" aria-hidden="true" />
                                 </button>
                                 <video
                                     src={videoUrl}

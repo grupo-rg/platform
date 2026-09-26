@@ -82,8 +82,8 @@ export function SmartBudgetTrigger({ dictionary }: { dictionary?: any }) {
                                 <span className="font-bold text-sm text-foreground">{t.trigger?.title || "Thinking of renovating?"}</span>
                                 <span className="text-xs text-muted-foreground">{t.trigger?.subtitle || "Get your free estimate."}</span>
                             </div>
-                            <Button size="icon" className={cn("h-12 w-12 rounded-full shadow-lg", config.color)}>
-                                <Icon className="h-6 w-6 text-white" />
+                            <Button size="icon" aria-label={config.label} className={cn("h-12 w-12 rounded-full shadow-lg", config.color)}>
+                                <Icon className="h-6 w-6 text-white" aria-hidden="true" />
                             </Button>
                         </div>
                     </div>
@@ -100,8 +100,8 @@ export function SmartBudgetTrigger({ dictionary }: { dictionary?: any }) {
                                 <span className="font-bold text-sm text-foreground">{t.trigger?.title || "Thinking of renovating?"}</span>
                                 <span className="text-xs text-muted-foreground">{t.trigger?.subtitle || "Get your free estimate."}</span>
                             </div>
-                            <Button size="icon" className={cn("h-11 w-11 shrink-0 rounded-full shadow-lg", config.color)}>
-                                <Icon className="h-5 w-5 text-white" />
+                            <Button size="icon" aria-label={config.label} className={cn("h-11 w-11 shrink-0 rounded-full shadow-lg", config.color)}>
+                                <Icon className="h-5 w-5 text-white" aria-hidden="true" />
                             </Button>
                         </div>
                     </div>

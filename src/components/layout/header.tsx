@@ -62,8 +62,8 @@ export function Header({ t }: { t: any }) {
           <div className="lg:hidden flex items-center">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="hover:bg-primary/10 relative z-50">
-                  <Menu className="h-6 w-6" />
+                <Button variant="ghost" size="icon" aria-label="Abrir menú" className="hover:bg-primary/10 relative z-50">
+                  <Menu className="h-6 w-6" aria-hidden="true" />
                 </Button>
               </SheetTrigger>
               <SheetContent

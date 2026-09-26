@@ -143,7 +143,7 @@ export function MobileMenu({ t, onLinkClick, user }: MobileMenuProps) {
                         className="group flex items-center gap-2 px-6 py-3.5 text-sm font-medium text-primary"
                     >
                         {t?.header?.megaMenu?.viewAll || 'Ver todos los servicios'}
-                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                     </Link>
                 </SheetClose>
 
@@ -203,7 +203,7 @@ export function MobileMenu({ t, onLinkClick, user }: MobileMenuProps) {
                         href={CONTACT_PHONE_HREF}
                         className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-primary"
                     >
-                        <Phone className="h-4 w-4 text-primary" />
+                        <Phone className="h-4 w-4 text-primary" aria-hidden="true" />
                         {CONTACT_PHONE_DISPLAY}
                     </a>
                     <a
@@ -213,7 +213,7 @@ export function MobileMenu({ t, onLinkClick, user }: MobileMenuProps) {
                         aria-label="WhatsApp"
                         className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-primary"
                     >
-                        <MessageCircle className="h-4 w-4 text-primary" />
+                        <MessageCircle className="h-4 w-4 text-primary" aria-hidden="true" />
                         WhatsApp
                     </a>
                 </div>

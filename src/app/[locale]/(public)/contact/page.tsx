@@ -202,7 +202,7 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/40 px-8 py-4 text-lg font-bold hover:bg-primary-foreground/10 transition-colors"
               >
-                <MessageCircle className="h-5 w-5" />
+                <MessageCircle className="h-5 w-5" aria-hidden="true" />
                 WhatsApp {CONTACT_PHONE_DISPLAY}
               </a>
             </div>

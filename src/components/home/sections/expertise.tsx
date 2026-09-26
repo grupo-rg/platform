@@ -62,7 +62,9 @@ export function ExpertiseSection({
                             backgroundImage={featuredItem.image || "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=70&w=1280&auto=format&fit=crop"}
                             className="group cursor-pointer relative overflow-hidden"
                         >
-                            <Link href={featuredItem.href as any} className="absolute inset-0 z-20" />
+                            <Link href={featuredItem.href as any} className="absolute inset-0 z-20">
+                                <span className="sr-only">{featuredItem.title}</span>
+                            </Link>
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-500" />
 
                             <div className="relative z-10 h-full flex flex-col justify-end p-8">

@@ -161,8 +161,8 @@ export function ContactStrip({ t }: { t: any }) {
 
                                     {/* Why choose */}
                                     <div className="flex items-start gap-2 mb-6 p-3 rounded-xl bg-white/[0.04] border border-white/5">
-                                        <CheckCircle2 className={`h-4 w-4 mt-0.5 shrink-0 ${option.accent}`} />
-                                        <p className="text-white/40 text-xs leading-relaxed">
+                                        <CheckCircle2 className={`h-4 w-4 mt-0.5 shrink-0 ${option.accent}`} aria-hidden="true" />
+                                        <p className="text-white/60 text-xs leading-relaxed">
                                             {option.whyChoose}
                                         </p>
                                     </div>
@@ -182,7 +182,7 @@ export function ContactStrip({ t }: { t: any }) {
                         initial={{ opacity: 0 }}
                         whileInView={{ opacity: 1 }}
                         transition={{ delay: 0.5 }}
-                        className="mt-12 pt-8 border-t border-white/5 flex flex-wrap justify-center gap-8 text-xs text-white/30"
+                        className="mt-12 pt-8 border-t border-white/5 flex flex-wrap justify-center gap-8 text-xs text-white/60"
                     >
                         <span className="flex items-center gap-2">
                             <CheckCircle2 className="h-3.5 w-3.5 text-primary/50" />

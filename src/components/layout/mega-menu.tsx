@@ -37,6 +37,7 @@ export function MegaMenu({ t }: { t: any }) {
                 >
                     {t.header?.nav?.services || "Servicios"}
                     <ChevronDown
+                        aria-hidden="true"
                         className={cn(
                             "h-4 w-4 transition-transform duration-200",
                             isOpen ? "rotate-180" : ""
