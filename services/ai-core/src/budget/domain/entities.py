@@ -1,6 +1,6 @@
 from typing import List, Optional, Literal, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- Enums & Literals ---
 BudgetLineItemType = Literal['PARTIDA', 'MATERIAL']
@@ -35,6 +35,11 @@ class PersonalInfo(BaseModel):
     billingCountry: Optional[str] = None
 
 class BudgetBreakdownComponent(BaseModel):
+    # `populate_by_name`: el swarm y el compositor construyen el componente con
+    # `yield_amount=...`; sin esto Pydantic solo aceptaba el alias `yield` y
+    # descartaba el rendimiento en silencio (las horas planificadas se perdían).
+    model_config = ConfigDict(populate_by_name=True)
+
     code: Optional[str] = None
     concept: str
     type: Literal['LABOR', 'MATERIAL', 'MACHINERY', 'OTHER']

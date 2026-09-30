@@ -823,6 +823,21 @@ def _is_medios_partida(item: Optional[RestructuredItem]) -> bool:
     return any(k in desc for k in ("auxiliares", "ejecución", "ejecucion"))
 
 
+# Ajustes comerciales (descuentos, bonificaciones, abonos): no son unidades de
+# obra. Ni se componen ni se valoran con IA — el compositor no puede
+# descomponerlos y el Judge llegaba a inventar precios negativos (-1.000 €).
+_COMMERCIAL_ADJUSTMENT_RE = re.compile(
+    r"^\W*(descuento|bonificaci[oó]n|rebaja|dto\b|abono|ajuste comercial)", re.IGNORECASE
+)
+
+
+def _is_commercial_adjustment(item: Optional[RestructuredItem]) -> bool:
+    """True si la partida es un ajuste comercial (p.ej. "Descuento 10%")."""
+    if item is None:
+        return False
+    return bool(_COMMERCIAL_ADJUSTMENT_RE.match((item.description or "").strip()))
+
+
 def _reason_from_tags(tags: list[str]) -> str | None:
     for t in tags:
         if t.lower().startswith("reason:"):
@@ -2540,12 +2555,29 @@ class SwarmPricingService:
                     reasoning_full = val.pensamiento_calculista
                     needs_human_review = val.needs_human_review
 
+                    is_adjustment = _is_commercial_adjustment(item)
+                    if is_adjustment:
+                        final_price = 0.0
+                        needs_human_review = True
+                        reasoning_full = (
+                            "Ajuste comercial (descuento/bonificación): no es una unidad de obra y no se "
+                            "valora con IA. Se conserva el importe del documento de origen si existe; "
+                            "revisar manualmente.\n\n" + (reasoning_full or "")
+                        )
+                    elif final_price is not None and final_price < 0:
+                        final_price = 0.0
+                        needs_human_review = True
+                        reasoning_full = (
+                            "Precio negativo descartado: una unidad de obra no puede tener precio "
+                            "negativo; revisar manualmente.\n\n" + (reasoning_full or "")
+                        )
+
                     # Fase 2 — from_scratch: reemplazar el precio ADIVINADO por el
                     # LLM por una composición AUDITABLE (labor_rates +
                     # material_catalog, precios reales). from_scratch va SIEMPRE a
                     # review; el borrador compuesto es el punto de partida.
                     composed_result = None
-                    if val.match_kind == "from_scratch" and self.compositor is not None:
+                    if val.match_kind == "from_scratch" and self.compositor is not None and not is_adjustment:
                         try:
                             composed_result = await self.compositor.compose(
                                 description=safe_description, unit=safe_unit,
@@ -2912,6 +2944,10 @@ class SwarmPricingService:
                     _bc3_price = getattr(item, 'bc3_unit_price', None)
                     _measurements = getattr(item, 'measurements', None)
                     _recon_active = recon.needs_review
+                    # Ajuste comercial: sin valoración IA; si el BC3 trae importe,
+                    # ése queda como precio activo.
+                    _adj_keep_bc3 = is_adjustment and _bc3_price is not None
+                    _active_price = _bc3_price if _adj_keep_bc3 else final_price
 
                     partida = BudgetPartida(
                         id=str(uuid.uuid4()), order=global_order,
@@ -2919,8 +2955,8 @@ class SwarmPricingService:
                         ai_resolution=ai_res_obj,
                         alternatives=alternatives,
                         code=safe_code, description=safe_description,
-                        unit=safe_unit, quantity=safe_quantity, unitPrice=final_price,
-                        totalPrice=final_price * safe_quantity,
+                        unit=safe_unit, quantity=safe_quantity, unitPrice=_active_price,
+                        totalPrice=_active_price * safe_quantity,
                         isRealCost=not needs_human_review,
                         matchConfidence=confidence,
                         reasoning=reasoning_for_trace,
@@ -2930,8 +2966,8 @@ class SwarmPricingService:
                         applied_fragments=fragment_ids,
                         # BC3 — doble precio + mediciones estructuradas.
                         bc3_unit_price=_bc3_price,
-                        ai_unit_price=final_price,
-                        active_price_source='ai',
+                        ai_unit_price=None if is_adjustment else final_price,
+                        active_price_source='bc3' if _adj_keep_bc3 else 'ai',
                         measurements=_measurements,
                         # Phase 17 — flags de reconciliación (breakdown IA vs unitPrice).
                         needs_reconciliation=_recon_active,
