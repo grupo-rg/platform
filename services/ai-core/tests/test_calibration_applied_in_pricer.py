@@ -1,8 +1,9 @@
 """Calibración aplicada en el pricer (swarm boundary).
 
 Verifica que ``_evaluate_batch_inner`` aplica el factor de calibración al PEM,
-escala el breakdown por el mismo factor, excluye ``from_scratch`` y BC3
-active-source, y puebla los campos nuevos de ``AIResolution``.
+escala el breakdown por el mismo factor, excluye ``from_scratch`` (las partidas
+BC3 se calibran: su fuente activa por defecto es la IA), y puebla los campos
+nuevos de ``AIResolution``.
 """
 from __future__ import annotations
 
@@ -225,9 +226,9 @@ def test_from_scratch_excluded_from_calibration(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# 4. BC3 active-source excluido                                               #
+# 4. Partida BC3: fuente activa por defecto = IA (motor), y se calibra        #
 # --------------------------------------------------------------------------- #
-def test_bc3_active_source_excluded_from_calibration(monkeypatch):
+def test_bc3_partida_defaults_to_ai_source_and_is_calibrated(monkeypatch):
     _patch_prompt(monkeypatch)
     valuations = {
         "BC3.1": PricingFinalResultDB(
@@ -249,12 +250,14 @@ def test_bc3_active_source_excluded_from_calibration(monkeypatch):
                              bc3_unit_price=50.0)]
     p = _run(svc, items)[0]
 
-    assert p.active_price_source == "bc3"
-    assert p.unitPrice == 50.0              # precio activo = BC3, intacto
-    assert p.ai_unit_price == 100.0         # estimación IA NO calibrada
+    assert p.active_price_source == "ai"
+    assert p.unitPrice == 142.0             # precio activo = motor (100 × 1.42)
+    assert p.totalPrice == 142.0 * 2.0
+    assert p.ai_unit_price == 142.0
+    assert p.bc3_unit_price == 50.0         # precio BC3 guardado para comparar
     ar = p.ai_resolution
-    assert ar.applied_calibration_factor == 1.0
-    assert not any(e["type"] == "calibration_applied" for e in emitter.events)
+    assert ar.applied_calibration_factor == 1.42
+    assert any(e["type"] == "calibration_applied" for e in emitter.events)
 
 
 # --------------------------------------------------------------------------- #
