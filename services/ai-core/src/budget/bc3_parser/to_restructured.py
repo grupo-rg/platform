@@ -51,6 +51,46 @@ def _extract_qty_from_text(text: str) -> Optional[Tuple[float, str, int]]:
     return qty, _normalize_bc3_unit(m.group(2)), m.start()
 
 
+def _document_order(tree: Bc3Tree) -> List[str]:
+    """Códigos de concepto en el ORDEN DEL DOCUMENTO: recorrido en profundidad del
+    árbol `~D` desde la raíz, respetando el orden de los hijos de cada `~D`.
+
+    No se puede usar el orden de `tree.concepts`: los exportadores (Presto, p.ej.)
+    escriben los `~C` ordenados alfabéticamente por código, no en el orden del
+    presupuesto. Además los `~D` referencian a los hijos SIN el marcador de
+    capítulo (`DINS01` frente al concepto `DINS01#`), así que se resuelve por
+    código normalizado. Los conceptos que el recorrido no alcanza (huérfanos) se
+    añaden al final en su orden original, para no perder ninguno."""
+    by_norm: dict[str, str] = {}
+    for code in tree.concepts:
+        by_norm.setdefault(code.rstrip("#").strip(), code)
+    decomp_by_norm = {pc.rstrip("#").strip(): d for pc, d in tree.decompositions.items()}
+    referenced = {cc.rstrip("#").strip() for d in tree.decompositions.values() for cc, _ in d.children}
+
+    # Raíz del documento: el concepto '##'; si no hay, los no referenciados en orden.
+    roots = [c for c in tree.concepts if c.rstrip().endswith("##")]
+    if not roots:
+        roots = [c for c in tree.concepts if c.rstrip("#").strip() not in referenced and c.rstrip("#").strip() in decomp_by_norm]
+
+    ordered: List[str] = []
+    seen: set[str] = set()
+    stack: List[str] = list(reversed(roots))
+    while stack:
+        code = stack.pop()
+        norm = code.rstrip("#").strip()
+        if norm in seen:
+            continue
+        seen.add(norm)
+        real = by_norm.get(norm)
+        if real is not None:
+            ordered.append(real)
+        decomp = decomp_by_norm.get(norm)
+        if decomp:
+            stack.extend(child for child, _ in reversed(decomp.children))
+    ordered.extend(c for c in tree.concepts if c.rstrip("#").strip() not in seen)
+    return ordered
+
+
 def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
     """Recorre el árbol BC3 y emite un RestructuredItem por cada partida medida.
 
@@ -74,8 +114,10 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
     for parent_code, decomp in tree.decompositions.items():
         for child_code, _factor in decomp.children:
             # Si un código aparece como hijo de varios padres, conservamos el
-            # primero visto (en BC3 bien formado esto no suele pasar).
+            # primero visto (en BC3 bien formado esto no suele pasar). Los `~D`
+            # citan a los hijos sin el marcador '#': se registran ambas formas.
             parent_of.setdefault(child_code, parent_code)
+            parent_of.setdefault(child_code.rstrip("#").strip() + "#", parent_code)
 
     def find_chapter_path(code: str) -> str:
         """Recorre hacia arriba y devuelve el primer ancestro CHAPTER."""
@@ -95,7 +137,8 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
         return "Sin Capítulo"
 
     items: List[RestructuredItem] = []
-    for code, concept in tree.concepts.items():
+    for code in _document_order(tree):
+        concept = tree.concepts[code]
         if concept.kind != Bc3ConceptKind.PARTIDA:
             continue
         # Una PARTIDA puede venir SIN `~M` en exports jerárquicos "en blanco"

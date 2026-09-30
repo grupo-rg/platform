@@ -19,6 +19,33 @@ from src.budget.application.services.markup_distributor import (
 
 logger = logging.getLogger(__name__)
 
+
+def _sort_by_source_order(partidas: List[BudgetPartida], source_items: List[Any]) -> List[BudgetPartida]:
+    """Ordena las partidas según su posición en el documento de origen y renumera
+    `order` (1..n). Se casa por (código, capítulo) y, si no, por código; las que no
+    casan conservan su orden relativo al final. Estable y sin pérdidas."""
+    by_code_chapter: Dict[tuple, int] = {}
+    by_code: Dict[str, int] = {}
+    for idx, it in enumerate(source_items or []):
+        code = (getattr(it, "code", None) or "").strip()
+        chapter = (getattr(it, "chapter", None) or "").strip()
+        by_code_chapter.setdefault((code, chapter), idx)
+        by_code.setdefault(code, idx)
+
+    def position(p: BudgetPartida) -> int:
+        oi = p.original_item
+        code = ((oi.code if oi else None) or p.code or "").strip()
+        chapter = ((oi.chapter if oi else None) or "").strip()
+        if (code, chapter) in by_code_chapter:
+            return by_code_chapter[(code, chapter)]
+        return by_code.get(code, len(by_code) + 1)
+
+    ordered = sorted(partidas, key=position)  # sorted es estable
+    for n, p in enumerate(ordered, start=1):
+        p.order = n
+    return ordered
+
+
 class RestructureBudgetUseCase:
     """
     Core AI Orchestrator that uses injected strategy services to extract and price budgets.
@@ -108,6 +135,12 @@ class RestructureBudgetUseCase:
             cancellation_event=cancellation_event,
         )
         
+        # El swarm devuelve las partidas en orden de RESOLUCIÓN (caché, lotes,
+        # segunda pasada de medios…), no en el del documento. Se reordenan por su
+        # posición en `restructured_items` para que capítulos y partidas respeten
+        # el orden del BC3/PDF de origen, y se renumera `order`.
+        partidas = _sort_by_source_order(partidas, restructured_items)
+
         # Phase 3: Assembly & Validation
         chapters_dict = {}
         for p in partidas:
