@@ -6,7 +6,7 @@
  * Output: Array of measurement items with code, description, unit, quantity
  */
 
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
 import { PDFDocument } from 'pdf-lib';
 import { emitGenerationEvent } from '@/backend/budget/events/budget-generation.emitter';
@@ -180,7 +180,7 @@ export const measurementExtractionFlow = ai.defineFlow(
                 try {
                     const promptText = getTextExtractionPrompt(chunk, currentChapter);
                     const { output } = await ai.generate({
-                        model: gemini25Flash,
+                        model: geminiFlash,
                         prompt: promptText,
                         output: { schema: PageExtractionOutputSchema },
                         config: { temperature: 0.1 }
@@ -235,7 +235,7 @@ export const measurementExtractionFlow = ai.defineFlow(
 
                 try {
                     const { output } = await ai.generate({
-                        model: gemini25Flash,
+                        model: geminiFlash,
                         prompt: [
                             { text: promptText },
                             {
@@ -299,7 +299,7 @@ export const measurementExtractionFlow = ai.defineFlow(
                     console.log(`[MeasurementExtraction] Dimensional Inference triggered for: ${item.description.substring(0, 50)}...`);
                     if (leadId) emitGenerationEvent(leadId, 'batch_progress', { message: `Infiriendo dimensiones para: ${item.description.substring(0, 40)}...` });
                     const { output } = await ai.generate({
-                        model: gemini25Flash,
+                        model: geminiFlash,
                         prompt: `
                         Eres una calculadora CYPE / Arquitectónica.
                         Esta partida tiene unidad genérica "ud" pero necesitamos dimensionarla físicamente para emparejarla con la base de datos (m2, m3, m, kg).

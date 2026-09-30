@@ -50,7 +50,7 @@ async def main():
     logger.info("Abriendo PDF (PyMuPDF)...")
     doc = fitz.open(pdf_path)
     
-    ai_adapter = GoogleGenerativeAIAdapter(model_name="gemini-2.5-flash")
+    ai_adapter = GoogleGenerativeAIAdapter(model_name="gemini-3.5-flash")
     
     system_prompt = (
         "Eres un notario auditor matemático super-preciso. Tu trabajo es leer imágenes de un presupuesto "

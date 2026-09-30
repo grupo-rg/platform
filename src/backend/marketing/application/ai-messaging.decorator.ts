@@ -75,12 +75,15 @@ REGLAS ESTRICTAS E INQUEBRANTABLES:
             // Migrado de la Gemini Developer API (REST key-in-URL, saldo prepago
             // agotado) a Vertex AI (pago por uso) vía el cliente @google/genai.
             const client = getGeminiClient();
+            const model = await resolveModel('marketing');
             const response = await client.models.generateContent({
-                model: (await resolveModel('marketing')).id,
+                model: model.id,
                 contents: [{ role: 'user', parts: [{ text: `Reescribe y devuelve el EMAIL COMPLETO de principio a fin adaptado a mi perfil ahora mismo.` }] }],
+                // Config por familia: en Gemini 3.x se ignora la temperatura
+                // (default 1.0 recomendado) y se añade thinkingLevel.
                 config: {
                     systemInstruction,
-                    temperature: 0.35, // Sin maxOutputTokens limitante
+                    ...model.config({ temperature: 0.35 }), // Sin maxOutputTokens limitante
                 },
             });
 

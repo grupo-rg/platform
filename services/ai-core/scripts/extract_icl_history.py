@@ -121,7 +121,7 @@ async def main():
     
     logger.info(f"Encontrados {len(golden_pairs)} proyectos con Pares Dorados (Medición + Presupuesto Valorado).")
     
-    llm = GoogleGenerativeAIAdapter(model_name="gemini-2.5-pro")
+    llm = GoogleGenerativeAIAdapter(model_name="gemini-3.1-pro-preview")
     
     all_golden_examples = []
     

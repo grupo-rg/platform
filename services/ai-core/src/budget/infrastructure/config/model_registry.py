@@ -5,8 +5,9 @@ Single source of truth for which Gemini model each *role* runs. Reads
 credentials already used by ``PricingCache`` / ``CalibrationService``) and
 resolves the model id per role. The Python swarm only needs three roles:
 
-  - ``pricing_flash``  → default ``gemini-2.5-flash``
-  - ``pricing_pro``    → default ``gemini-2.5-pro``
+  - ``pricing_flash``  → default ``gemini-3.5-flash``        (``GEMINI_FLASH_MODEL``)
+  - ``pricing_pro``    → default ``gemini-3.1-pro-preview``  (``GEMINI_PRO_MODEL``;
+    Juez de precios por defecto desde la migración a Gemini 3.x)
   - ``embedding``      → default ``gemini-embedding-001`` (outputDimensionality 768)
 
 Contract (identical to ``CalibrationService`` — AI-first, never hard-fail):
@@ -17,9 +18,13 @@ Contract (identical to ``CalibrationService`` — AI-first, never hard-fail):
     / any Firestore error → return the CODE DEFAULT for that role and log. The
     pipeline never raises because the registry is misconfigured or unreachable.
 
-**Phase 0 = ZERO behavior change:** the code defaults are the CURRENT ids, so
-with no ``model_registry`` document present the resolved ids are byte-identical
-to today's hardcoded ``MODEL_FLASH`` / ``MODEL_PRO`` / ``_MODEL`` constants.
+Migración Gemini 3.x (2026-09): los defaults de generación pasan a la familia
+3.x, servida SOLO en el endpoint ``global`` de Vertex (ver
+``GEMINI_GENERATION_LOCATION`` en ``gemini_generation_config``). Los embeddings NO
+cambian (``gemini-embedding-001`` @768 en ``GOOGLE_CLOUD_LOCATION`` =
+europe-southwest1): cambiarlos exigiría re-vectorizar. Sin documento
+``model_registry`` presente, los ids resueltos son exactamente ``MODEL_FLASH`` /
+``MODEL_PRO`` del swarm (== ``GEMINI_FLASH_MODEL`` / ``GEMINI_PRO_MODEL``).
 
 Shared schema (the Node side writes/seeds the SAME collection):
 ``model_registry/{role}`` → ``{ modelId, provider, region, params
@@ -45,6 +50,21 @@ MODEL_REGISTRY_COLLECTION = "model_registry"
 _CACHE_TTL_SECONDS: float = 60.0
 
 
+# --- Ids de modelo por familia (fuente única en Python) -----------------------
+# Reparto aprobado: Pro para lo que razona (Juez de precios, arquitecto), Flash
+# para lo de volumen (deconstrucción, rerank, compositor, extracción PDF...).
+GEMINI_FLASH_MODEL: str = "gemini-3.5-flash"
+GEMINI_PRO_MODEL: str = "gemini-3.1-pro-preview"
+# Rollback: la familia 2.5 sigue sirviéndose (en todas las regiones). Para
+# volver atrás basta con un doc ``model_registry/{role}`` o cambiar lo de arriba;
+# ``gemini_generation_config`` mantiene intacta la config 2.5.
+LEGACY_GEMINI_FLASH_MODEL: str = "gemini-2.5-flash"
+LEGACY_GEMINI_PRO_MODEL: str = "gemini-2.5-pro"
+EMBEDDING_MODEL: str = "gemini-embedding-001"
+# Región informativa de los roles de generación (la real la fija el adapter).
+GENERATION_REGION: str = "global"
+
+
 @dataclass(frozen=True)
 class ModelConfig:
     """Resolved model selection for a role.
@@ -67,10 +87,10 @@ class ModelConfig:
 # (``MODEL_FLASH`` / ``MODEL_PRO`` / ``_MODEL``); they are the fallback used
 # whenever the registry doc is absent, disabled, unparseable, or unreachable.
 _CODE_DEFAULTS: Dict[str, ModelConfig] = {
-    "pricing_flash": ModelConfig(model_id="gemini-2.5-flash"),
-    "pricing_pro": ModelConfig(model_id="gemini-2.5-pro"),
+    "pricing_flash": ModelConfig(model_id=GEMINI_FLASH_MODEL, region=GENERATION_REGION),
+    "pricing_pro": ModelConfig(model_id=GEMINI_PRO_MODEL, region=GENERATION_REGION),
     "embedding": ModelConfig(
-        model_id="gemini-embedding-001",
+        model_id=EMBEDDING_MODEL,
         params={"outputDimensionality": 768},
     ),
 }
@@ -96,7 +116,7 @@ def _code_default(role: str, default_model_id: Optional[str]) -> ModelConfig:
     base = _CODE_DEFAULTS.get(role)
     if base is None:
         # Unknown role: only reachable if a caller invents a role. Never raise.
-        return ModelConfig(model_id=default_model_id or "gemini-2.5-flash")
+        return ModelConfig(model_id=default_model_id or GEMINI_FLASH_MODEL)
     if default_model_id and default_model_id != base.model_id:
         return replace(base, model_id=default_model_id)
     return base

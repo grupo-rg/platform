@@ -1,12 +1,16 @@
 fastapi[all]==0.111.0
 uvicorn==0.30.1
-pydantic==2.7.4
+# Gemini 3.x: `thinking_level` llegó en google-genai 1.51, y google-genai>=1.47
+# exige pydantic>=2.9 (2.25 exige >=2.12.5). Con pydantic==2.7.4 pip resolvía
+# google-genai<=1.46 (sin thinking_level). Suite pytest validada con
+# pydantic 2.12.5 + google-genai 2.25.0.
+pydantic==2.12.5
 pdfplumber==0.11.0
 pytest==8.2.2
 pytest-asyncio==0.23.7
 firebase-admin>=6.5.0
-httpx>=0.27.0
-google-genai>=1.0.0
+httpx>=0.28.1
+google-genai>=1.51.0,<3
 python-multipart>=0.0.9
 PyMuPDF>=1.24.0
 google-cloud-run>=0.10.0

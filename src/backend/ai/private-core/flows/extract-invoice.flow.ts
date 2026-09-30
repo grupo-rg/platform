@@ -1,5 +1,5 @@
 import { z, Part } from 'genkit';
-import { ai, gemini25Flash } from '@/backend/ai/shared/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/shared/config/genkit.config';
 
 // --- Schemas ---
 
@@ -43,7 +43,7 @@ export type ExtractedInvoice = z.infer<typeof ExtractedInvoiceOutput>;
 /**
  * AI-powered invoice extraction flow.
  * Receives a PDF or image of an invoice and extracts structured data
- * using Gemini 2.5 Flash multimodal capabilities.
+ * using Gemini Flash multimodal capabilities.
  */
 export const extractInvoiceFlow = ai.defineFlow(
     {
@@ -101,7 +101,7 @@ IMPORTANTE:
         ];
 
         const result = await ai.generate({
-            model: gemini25Flash,
+            model: geminiFlash,
             prompt: parts,
             config: {
                 temperature: 0.1, // Low temperature for precision

@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { getVertexProjectId, getVertexLocation, getVertexGoogleAuth } from "../shared/config/vertex-auth";
+import { getVertexProjectId, getGenerationLocation, getVertexGoogleAuth } from "../shared/config/vertex-auth";
 
 /**
  * Cliente `@google/genai` en modo Vertex AI (Gemini Enterprise Agent Platform),
@@ -15,7 +15,8 @@ export const getGeminiClient = (): GoogleGenAI => {
         vertexClient = new GoogleGenAI({
             vertexai: true,
             project: getVertexProjectId(),
-            location: getVertexLocation(),
+            // Generación → `global` (único endpoint con Gemini 3.x).
+            location: getGenerationLocation(),
             // cast: @google/genai empaqueta su propia copia de google-auth-library
             // (genérico AnyAuthClient) distinta de la del helper; el shape es idéntico.
             googleAuthOptions: getVertexGoogleAuth() as any,

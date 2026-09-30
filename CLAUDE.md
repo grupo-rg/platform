@@ -43,7 +43,7 @@ When adding behaviour to a backend module, keep the dependency direction **infra
 
 ### AI layer (Genkit)
 Everything under [src/backend/ai/](src/backend/ai/). Organised by **audience**, not by type:
-- `core/` — shared config ([genkit.config.ts](src/backend/ai/core/config/genkit.config.ts) exports the singleton `ai`, `embeddingModel`, and `gemini25Flash`), shared agents/tools.
+- `core/` — shared config ([genkit.config.ts](src/backend/ai/core/config/genkit.config.ts) exports the singleton `ai`, `embeddingModel` (EU embedder), `geminiFlash` and `geminiPro`; per-family generation config in `shared/config/gemini-models.ts`), shared agents/tools.
 - `public/` — agents/flows/tools for the marketing site (triage, commercial chat, attachment analysis, audio transcription, invoice extraction).
 - `public-demo/` — demo-budget generation (anonymous visitors).
 - `private/` — authenticated contractor flows: the **construction architect** decomposes a project into chapters, `generate-budget-recurse.flow.ts` orchestrates chapter → item resolution, plus estimation / validation / search agents and the measurements pipeline.

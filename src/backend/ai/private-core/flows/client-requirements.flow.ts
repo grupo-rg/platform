@@ -1,5 +1,5 @@
 import { z } from 'genkit';
-import { ai, gemini25Flash } from '@/backend/ai/shared/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/shared/config/genkit.config';
 import { generateWithRetry } from '@/backend/ai/shared/utils/ai-retry';
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import { materialRetrieverTool } from '@/backend/ai/private-core/tools/material-retriever.tool';
@@ -144,7 +144,7 @@ export const clientRequirementsFlow = ai.defineFlow(
         });
 
         const llmResponse = await generateWithRetry({
-            model: gemini25Flash,
+            model: geminiFlash,
             prompt: analysisPrompt,
             tools: [materialRetrieverTool],
             output: { schema: extractionSchema },

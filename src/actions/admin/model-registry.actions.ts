@@ -24,8 +24,7 @@
  */
 
 import { verifyAuth } from '@/backend/auth/auth.middleware';
-import { ai } from '@/backend/ai/core/config/genkit.config';
-import { geminiEmbedding001 } from '@genkit-ai/vertexai';
+import { ai, embeddingModel } from '@/backend/ai/core/config/genkit.config';
 import {
     getAllModelConfigDocs,
     getModelConfigDoc,
@@ -76,8 +75,10 @@ async function probeModel(args: ProbeArgs): Promise<ProbeResult> {
 
         if (role === EMBEDDING_ROLE) {
             const dims = outputDimensionality ?? 768;
+            // gemini-embedding-001 → embedder UE (europe-southwest1); otro id →
+            // el del plugin de generación (endpoint global).
             const embedder =
-                modelId === 'gemini-embedding-001' ? geminiEmbedding001 : `vertexai/${modelId}`;
+                modelId === 'gemini-embedding-001' ? embeddingModel : `vertexai/${modelId}`;
             const res: any = await ai.embed({
                 embedder: embedder as any,
                 content: 'ping',
@@ -107,7 +108,8 @@ async function probeModel(args: ProbeArgs): Promise<ProbeResult> {
             };
         }
 
-        // LLM roles — 1-token generate.
+        // LLM roles — short generate. `ai.generate` aplica la config por familia
+        // (en Gemini 3.x maxOutputTokens incluye el thinking → se añade margen).
         const result: any = await ai.generate({
             model: `vertexai/${modelId}`,
             prompt: 'Reply with the single word: ok',

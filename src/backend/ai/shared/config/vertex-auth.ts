@@ -23,9 +23,26 @@ export interface VertexPluginConfig {
 
 const VERTEX_SCOPES = ['https://www.googleapis.com/auth/cloud-platform'];
 
-/** Región de Vertex. Por defecto Madrid (residencia UE); override vía env. */
+/**
+ * Región de Vertex para EMBEDDINGS (y cualquier uso "regional" legacy). Por
+ * defecto Madrid (residencia UE); override vía env `GOOGLE_CLOUD_LOCATION`.
+ * Los embeddings (gemini-embedding-001 @768) NO se mueven: ver `eu-embedder.ts`.
+ */
 export function getVertexLocation(): string {
     return process.env.GOOGLE_CLOUD_LOCATION || 'europe-southwest1';
+}
+
+/** Alias explícito: región de los embeddings. */
+export const getEmbeddingLocation = getVertexLocation;
+
+/**
+ * Región de Vertex para GENERACIÓN. Gemini 3.x SOLO se sirve en el endpoint
+ * `global` (sondeo 2026-09-30: 404 en europe-southwest1/west1/west4), así que el
+ * default es `global` (decisión aprobada: se pierde residencia UE para
+ * generación). Override vía `GEMINI_GENERATION_LOCATION`.
+ */
+export function getGenerationLocation(): string {
+    return process.env.GEMINI_GENERATION_LOCATION || 'global';
 }
 
 /** Proyecto GCP donde vive Vertex. */
@@ -64,11 +81,14 @@ export function getVertexGoogleAuth(): GoogleAuthOptions | undefined {
     return undefined;
 }
 
-/** Config lista para pasar a `vertexAI(...)`. */
+/**
+ * Config lista para pasar a `vertexAI(...)` de `@genkit-ai/google-genai`
+ * (plugin de GENERACIÓN → `getGenerationLocation()`, `global` por defecto).
+ */
 export function getVertexPluginConfig(): VertexPluginConfig {
     return {
         projectId: getVertexProjectId(),
-        location: getVertexLocation(),
+        location: getGenerationLocation(),
         googleAuth: getVertexGoogleAuth(),
     };
 }

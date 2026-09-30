@@ -24,6 +24,15 @@ from src.budget.application.ports.ports import ILLMProvider
 
 logger = logging.getLogger(__name__)
 
+# Migración Gemini 3.x — el Arquitecto (descomposición del brief en tareas) es un
+# rol que RAZONA → Pro (== GEMINI_PRO_MODEL del registry). Override por env
+# `ARCHITECT_MODEL` (p.ej. `gemini-3.5-flash`) sin redeploy de código.
+DEFAULT_ARCHITECT_MODEL = "gemini-3.1-pro-preview"
+
+
+def _architect_model() -> str:
+    return (os.environ.get("ARCHITECT_MODEL") or "").strip() or DEFAULT_ARCHITECT_MODEL
+
 
 # Lista idéntica a MAIN_CHAPTERS del agent Node para mantener compatibilidad
 # con la validación del catálogo. Usamos str en lugar de Enum en el schema para
@@ -186,8 +195,8 @@ Cada tarea debe tener: `taskId` (int), `dependsOn` (int[]), `chapter` (string de
             system_prompt="",
             user_prompt=prompt,
             response_schema=ArchitectResponse,
-            temperature=0.1,
-            model="gemini-2.5-flash",
+            temperature=0.1,  # solo aplica a 2.5; en 3.x rige el default 1.0
+            model=_architect_model(),
             max_output_tokens=32768,
         )
         return response, usage

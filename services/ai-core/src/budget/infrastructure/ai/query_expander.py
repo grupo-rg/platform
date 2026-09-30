@@ -16,7 +16,7 @@ class QueryExpansionResult(BaseModel):
 
 class QueryExpander:
     """
-    Agente Intermedio (Gemini 2.5 Flash) que intercepta la partida humana
+    Agente Intermedio (Gemini Flash) que intercepta la partida humana
     y genera un enjambre de 3 a 5 consultas semánticas divergentes.
     Sirve para evitar la ceguera del RAG tradicional.
     """

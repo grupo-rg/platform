@@ -162,8 +162,10 @@ function listActiveModels(): ActiveModel[] {
         },
         {
             component: 'Pricing evaluator (Judge)',
-            name: process.env.PRICING_MODEL_VERSION || 'gemini-2.5-flash',
-            version: process.env.PRICING_MODEL_VERSION || 'gemini-2.5-flash',
+            // Juez del swarm = Pro por defecto desde la migración a Gemini 3.x
+            // (PRICING_JUDGE_TIER=flash en ai-core → gemini-3.5-flash).
+            name: process.env.PRICING_MODEL_VERSION || 'gemini-3.1-pro-preview',
+            version: process.env.PRICING_MODEL_VERSION || 'gemini-3.1-pro-preview',
             source: process.env.PRICING_MODEL_VERSION ? 'env' : 'default',
         },
         {

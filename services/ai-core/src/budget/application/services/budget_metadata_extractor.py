@@ -104,7 +104,7 @@ class BudgetMetadataExtractor:
                 user_prompt=_USER_PROMPT,
                 response_schema=ExtractedBudgetMetadata,
                 temperature=0.0,
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash",
                 image_base64=image_base64,
             )
             assert isinstance(result, ExtractedBudgetMetadata)

@@ -46,10 +46,12 @@ export const generateRenderFlow = ai.defineFlow(
 
         let finalPrompt = basePromptText;
         
-        // AUTO-PROMPTING with Gemini 2.5 Flash (Translator/Enhancer)
+        // AUTO-PROMPTING with Gemini Flash (Translator/Enhancer)
         // Taking the simplistic user intention and blowing it up into a master prompt
+        const translatorModel = await resolveModel('chat');
         const promptTranslatorResponse = await client.models.generateContent({
-            model: (await resolveModel('chat')).id,
+            model: translatorModel.id,
+            config: translatorModel.config(),
             contents: [{
                 role: 'user', 
                 parts: [{ text: `Actúa como un director de arte arquitectónico experto en prompts para motores fotorealistas como Midjourney v6 y Vertex Imagen 3. 
@@ -64,7 +66,7 @@ Devuelve ÚNICAMENTE el texto en inglés del prompt sin comentarios ni comillas.
         });
         
         const promptCandidate = promptTranslatorResponse.candidates?.[0];
-        const textPart = promptCandidate?.content?.parts?.find(p => p.text);
+        const textPart = promptCandidate?.content?.parts?.find(p => p.text && !p.thought);
         if (textPart?.text) {
             finalPrompt = textPart.text;
             console.log("[Prompt Master] Enhanced Image Prompt:", finalPrompt);

@@ -1,4 +1,4 @@
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
 import { processMeasurementDocumentTool } from '../tools/process-measurement-document.tool';
 import { generateRenovationRenderTool } from '../tools/generate-renovation-render.tool';
@@ -230,7 +230,7 @@ Ejemplo (LISTO — siempre incluye finalBrief y detectedNeeds):
         let response;
         try {
             response = await ai.generate({
-                model: gemini25Flash,
+                model: geminiFlash,
                 system: systemPrompt,
                 messages: messages,
                 tools: [processMeasurementDocumentTool, generateRenovationRenderTool],
@@ -351,7 +351,7 @@ export async function* streamPrivateWizardAgent(
 
     try {
         const { stream, response } = ai.generateStream({
-            model: gemini25Flash,
+            model: geminiFlash,
             system: systemPrompt,
             messages,
             tools: [processMeasurementDocumentTool, generateRenovationRenderTool],

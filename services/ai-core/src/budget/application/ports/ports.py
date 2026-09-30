@@ -18,9 +18,9 @@ class IHeuristicsRepository(ABC):
         pass
 
 class ILLMProvider(ABC):
-    """Port for Language Model interactions (e.g. Gemini 2.5 Flash)."""
+    """Port for Language Model interactions (e.g. Gemini 3.5 Flash / 3.1 Pro)."""
     @abstractmethod
-    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: Type[BaseModel], temperature: float = 0.2, model: str = "gemini-2.5-flash", image_base64: Optional[str] = None) -> tuple[BaseModel, Dict[str, int]]:
+    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: Type[BaseModel], temperature: float = 0.2, model: str = "gemini-3.5-flash", image_base64: Optional[str] = None) -> tuple[BaseModel, Dict[str, int]]:
         """Generate structured output obeying a Pydantic schema. Can use an explicit cached context."""
         pass
 

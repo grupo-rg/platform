@@ -92,7 +92,7 @@ def test_uses_architect_response_schema_and_flash_model():
     svc = ArchitectService(llm_provider=stub)
     asyncio.run(svc.decompose_request("Reforma baño"))
     assert stub.last_call["response_schema"] is ArchitectResponse
-    assert stub.last_call["model"] == "gemini-2.5-flash"
+    assert stub.last_call["model"] == "gemini-3.1-pro-preview"  # Arquitecto = Pro (Gemini 3.x)
     assert stub.last_call["temperature"] == 0.1
 
 

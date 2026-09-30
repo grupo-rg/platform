@@ -1,7 +1,8 @@
 ---
-model: vertexai/gemini-2.5-flash
+model: vertexai/gemini-3.5-flash
 config:
-  temperature: 0.1
+  thinkingConfig:
+    thinkingLevel: LOW
   topK: 40
   topP: 0.95
 input:

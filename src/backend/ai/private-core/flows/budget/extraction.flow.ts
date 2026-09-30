@@ -1,6 +1,6 @@
 import { z } from 'genkit';
 import { ai } from '@/backend/ai/shared/config/genkit.config';
-import { gemini25Flash } from '@/backend/ai/shared/config/genkit.config';
+import { geminiFlash } from '@/backend/ai/shared/config/genkit.config';
 import { Prompts, SubtaskExtractionSchema } from '@/backend/ai/shared/prompts/prompt-registry';
 
 /**
@@ -14,7 +14,7 @@ export const subtaskExtractionPrompt = {
         const { system, fewShotHistory, buildUserMessage } = Prompts.SubtaskExtraction;
 
         const result = await ai.generate({
-            model: gemini25Flash,
+            model: geminiFlash,
             system: system,
             messages: fewShotHistory,
             prompt: buildUserMessage(input.userRequest),

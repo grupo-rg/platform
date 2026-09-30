@@ -1,5 +1,5 @@
 import { z, Part } from 'genkit';
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 
 const TranscriptionInput = z.object({
     audioBase64: z.string(),
@@ -35,7 +35,7 @@ export const transcribeAudioFlow = ai.defineFlow(
         };
 
         const result = await ai.generate({
-            model: gemini25Flash,
+            model: geminiFlash,
             prompt: [
                 { text: prompt },
                 audioPart

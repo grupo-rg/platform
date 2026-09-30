@@ -95,7 +95,8 @@ export const aparejadorOrchestratorAgent = ai.defineFlow(
         const { safeGenerate } = await import('@/backend/ai/core/utils/safe-generation');
 
         const result = await safeGenerate({
-            model: (await resolveModel('chat')).prefixed,
+            // Orquestador de presupuesto = rol que RAZONA → 'architect' (Pro 3.x).
+            model: (await resolveModel('architect')).prefixed,
             prompt: prompt,
             output: {
                 format: 'json',

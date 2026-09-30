@@ -10,15 +10,19 @@
  * error, it returns the CODE DEFAULT for the role (the current production id)
  * and warns. Module init does NO async read — resolution is lazy per call.
  *
- * Phase 0 note: the two `genkit.config.ts` singletons (`gemini25Flash`,
- * `embeddingModel`) stay exported as pure code defaults and are unchanged, so
- * every call site that has not been migrated behaves exactly as before.
+ * Phase 0 note: the two `genkit.config.ts` singletons (`geminiFlash`/`geminiPro`,
+ * `embeddingModel`) stay exported as pure code defaults.
+ *
+ * Gemini 3.x migration (2026-09): role DEFAULTS moved to the 3.x family (see
+ * `model-registry.types.ts`); `ResolvedModel.config(base)` builds the per-family
+ * generation config (no temperature + thinkingLevel on 3.x, untouched on 2.5).
+ * The aparejador orchestrator moved from `chat` to `architect` (Pro).
  *
  * Phase-0 inline sweep — DONE (spec §1B): each site below now resolves its id via
  * `resolveModel(role)` at the async call point, keeping the exact id shape the site
  * needs. Role defaults == today's ids, so behaviour is unchanged.
  *   #7  private/agents/validation.agent.ts               → chat        / prefixed
- *   #8  core/agents/aparejador-orchestrator.agent.ts     → chat        / prefixed
+ *   #8  core/agents/aparejador-orchestrator.agent.ts     → architect   / prefixed
  *   #9  private-core/tools/web-price-search.tool.ts       → chat        / prefixed
  *   #10 core/tools/web-price-search.tool.ts (dup)         → chat        / prefixed
  *   #12 private/agents/construction-architect.agent.ts    → architect   / prefixed
@@ -41,13 +45,14 @@
  *   #5  src/genkit/index.ts (legacy genkit-instance default `model:`) — a module-
  *       init (sync) object literal with no async call point, so it stays a pure code
  *       default like the `genkit.config.ts` singletons above.
- *   + the ~20 `gemini25Flash` consumers (spec §1A) — move when that singleton is
+ *   + the ~20 `geminiFlash` consumers (spec §1A) — move when that singleton is
  *     eventually resolved through the registry.
  *   NOTE: embedding call sites (#1,3,22) are deliberately NOT migrated — a swap
  *   must go through the gated re-vectorization flow (spec §6).
  */
 
-import { gemini } from '@genkit-ai/vertexai';
+import { vertexAI } from '@genkit-ai/google-genai';
+import { geminiConfig } from '@/backend/ai/shared/config/gemini-models';
 import {
     buildDefaultDoc,
     type ModelConfigDoc,
@@ -75,10 +80,18 @@ function toResolved(doc: ModelConfigDoc): ResolvedModel {
     const id = doc.modelId;
     return {
         id,
-        genkitRef: gemini(id),
+        genkitRef: vertexAI.model(id),
         prefixed: doc.provider === 'vertexai' ? `vertexai/${id}` : id,
         params: doc.params,
         region: doc.region,
+        // Config por familia (2.5 intacta / 3.x sin temperatura + thinkingLevel).
+        // `params.temperature` del registry actúa como temperatura "histórica".
+        config: (base = {}) =>
+            geminiConfig(id, {
+                temperature: doc.params?.temperature ?? undefined,
+                maxOutputTokens: doc.params?.maxOutputTokens ?? undefined,
+                ...base,
+            }),
     };
 }
 

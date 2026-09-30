@@ -1,6 +1,6 @@
 
 import { z } from 'zod';
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import { PriceBookItem } from '../domain/price-book-item';
 import { createRequire } from 'module';
@@ -53,7 +53,7 @@ export class LLMPriceBookParser {
     }
 
     /**
-     * Parses a PDF file using Gemini 2.5 Flash to extract structured data.
+     * Parses a PDF file using Gemini Flash to extract structured data.
      * Uses "Vision/Multimodal" capabilities by passing PDF pages directly to the model.
      */
     async parsePdf(
@@ -129,7 +129,7 @@ export class LLMPriceBookParser {
 
                 const result = await ai.generate({
                     // model-registry role 'extraction' (spec §5.1, site #20); falls
-                    // back to the code default (gemini-2.5-flash) on any registry error.
+                    // back to the code default (gemini-3.5-flash) on any registry error.
                     model: (await resolveModel('extraction')).prefixed,
                     prompt: [
                         { text: promptText },

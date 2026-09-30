@@ -1,4 +1,4 @@
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'genkit';
 import { BudgetPartida, BudgetBreakdownComponent } from '@/backend/budget/domain/budget';
 import '@/backend/ai/private/flows/budget/extraction.flow'; // Register 'SubtaskExtractionSchema' for Dotprompt
@@ -232,7 +232,7 @@ export const constructionAnalystAgent = ai.defineFlow(
                             // Using generate directly for speed/simplicity in this inner loop
                             // In production, use structuredOutput safely
                             const result = await ai.generate({
-                                model: gemini25Flash,
+                                model: geminiFlash,
                                 prompt: verificationPrompt,
                                 output: { format: 'json' }
                             });

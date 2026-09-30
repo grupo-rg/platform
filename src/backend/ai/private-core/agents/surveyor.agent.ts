@@ -1,4 +1,4 @@
-import { gemini25Flash } from '../../shared/config/genkit.config';
+import { geminiFlash } from '../../shared/config/genkit.config';
 import { generateWithRetry } from '../../shared/utils/ai-retry';
 import { FirestorePriceBookRepository } from '../../../../backend/price-book/infrastructure/firestore-price-book-repository';
 import { RestApiVectorizerAdapter } from '../../../../backend/price-book/infrastructure/ai/rest-api-vectorizer.adapter';
@@ -17,7 +17,7 @@ export class SurveyorAgent {
         this.vectorizer = new RestApiVectorizerAdapter();
     }
 
-    private readonly model = gemini25Flash; // Use a faster model for simple expansion
+    private readonly model = geminiFlash; // Use a faster model for simple expansion
 
     /**
      * TDD Strategy: Tests the core reasoning logic of the Surveyor Agent before hitting an expensive Vector DB.
