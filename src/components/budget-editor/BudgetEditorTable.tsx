@@ -126,7 +126,7 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                     focusedPartidaId={reconcileFocusedId}
                 />
             )}
-            <div className="flex flex-col" style={{ minWidth: hasDualPrice ? 900 : 800 }}>
+            <div className="flex flex-col" style={{ minWidth: hasDualPrice ? 920 : 800 }}>
                 {/* Header Grid */}
                 <div className="flex bg-slate-50/50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-sm font-medium text-slate-500">
                     <div className="w-[40px] shrink-0 p-3"></div>
@@ -136,8 +136,8 @@ export function BudgetEditorTable({ showGhostMode, budgetId }: BudgetEditorTable
                     <div className="w-[100px] shrink-0 text-right p-3">Cant.</div>
                     {hasDualPrice ? (
                         <>
-                            <div className="w-[110px] shrink-0 text-right p-3">Precio BC3</div>
-                            <div className="w-[110px] shrink-0 text-right p-3">Precio IA</div>
+                            <div className="w-[120px] shrink-0 text-right p-3">Precio BC3</div>
+                            <div className="w-[120px] shrink-0 text-right p-3">Precio IA</div>
                         </>
                     ) : (
                         <div className="w-[120px] shrink-0 text-right p-3">Precio</div>

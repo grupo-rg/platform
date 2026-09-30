@@ -8,13 +8,17 @@ import time
 import unicodedata
 import uuid
 import inspect
-from typing import Awaitable, Callable, List, Dict, Any, Optional, Literal
+from typing import Awaitable, Callable, List, Dict, Any, Optional, Literal, Tuple
 from pydantic import BaseModel, Field
 
 from src.budget.application.ports.ports import ILLMProvider, IVectorSearch, IGenerationEmitter
 from src.budget.application.services.pdf_extractor_service import RestructuredItem
 from src.budget.catalog.application.services.catalog_lookup_service import CatalogLookupService
-from src.budget.catalog.application.services.hybrid_catalog_search import HybridCatalogSearch
+from src.budget.catalog.application.services.hybrid_catalog_search import (
+    HybridCatalogSearch,
+    reciprocal_rank_fusion,
+)
+from src.budget.catalog.domain.unit import Unit, dimension_mismatch
 from src.budget.catalog.application.ports.price_book_repository import IPriceBookRepository
 from src.budget.catalog.domain.construction_dag import ConstructionDag
 from src.budget.domain.entities import BudgetPartida, AIResolution, OriginalItem, BudgetBreakdownComponent, HeuristicFragment
@@ -649,9 +653,8 @@ def _select_tier(
 
 
 # S1-A-05 — capítulos que NO aportan señal estructural y por tanto no se
-# usan como filtro pre-vector (el filtro degradaría la cobertura del
-# retrieval sin reducir ruido). Coincide con la lista que ``stabilize_chapter_name``
-# considera alucinación o sin valor.
+# usan como pista de capítulo en el retrieval. Coincide con la lista que
+# ``stabilize_chapter_name`` considera alucinación o sin valor.
 _LOW_CONFIDENCE_CHAPTERS: set = {
     "VARIOS",
     "VARIOS Y OTROS",
@@ -660,19 +663,24 @@ _LOW_CONFIDENCE_CHAPTERS: set = {
     "SIN CAPITULO",
     "OTROS",
     "GENERAL",
+    "UNCLASSIFIED",
 }
 
 
 def _derive_structural_filters(item: RestructuredItem) -> Dict[str, Optional[str]]:
-    """S1-A-05 — Construye filtros estructurales pre-vector para una partida.
+    """S1-A-05 — Señales estructurales para el retrieval de una partida.
 
-    Reduce el espacio de búsqueda al BM25/vector limitándolos a:
-      - el ``chapter`` cuando es confiable (no está en ``_LOW_CONFIDENCE_CHAPTERS``
-        y no contiene marcadores de alucinación);
-      - la ``unit_dimension`` cuando la partida la tiene clara.
+    Desde los arreglos de recuperación (2026-09) NO son filtros duros sino
+    SEÑALES BLANDAS que aplica ``HybridCatalogSearch``:
+      - ``chapter_filter``: capítulo de la partida cuando es confiable (no está
+        en ``_LOW_CONFIDENCE_CHAPTERS`` ni contiene marcadores de alucinación).
+        Da un pequeño bonus a candidatos del mismo capítulo del libro, si casa.
+      - ``unit_dimension_filter``: dimensión física de la partida (la declarada
+        o, si falta, la derivada de ``item.unit``). Penaliza (sin excluir)
+        candidatos de dimensión incompatible.
 
-    Ambos filtros son opcionales: cuando faltan, el retrieval cae al
-    comportamiento original (sin filtro).
+    Se conservan los nombres de clave por compatibilidad con la telemetría
+    ``structural_filters_applied`` y con ``calibration_service``.
     """
     chapter_filter: Optional[str] = None
     raw_chapter = (item.chapter or "").strip()
@@ -686,11 +694,93 @@ def _derive_structural_filters(item: RestructuredItem) -> Dict[str, Optional[str
         if not is_hallucination and upper not in _LOW_CONFIDENCE_CHAPTERS:
             chapter_filter = raw_chapter
 
-    unit_dimension_filter: Optional[str] = item.unit_dimension or None
+    unit_dimension_filter: Optional[str] = (
+        item.unit_dimension or Unit.dimension_of(item.unit) or None
+    )
     return {
         "chapter_filter": chapter_filter,
         "unit_dimension_filter": unit_dimension_filter,
     }
+
+
+# ---------------------------------------------------------------------------
+# Consulta de recuperación (retrieval query)
+# ---------------------------------------------------------------------------
+# Con resumen (BC3 ~C): "{resumen} {unidad}" + primeros N caracteres del texto
+# largo (sin repetir el resumen). El resumen es la señal más limpia; el texto
+# largo aporta materiales/espesores sin diluir el embedding con el pliego.
+_RETRIEVAL_LONG_TEXT_CHARS = 300
+# Sin resumen: la descripción recortada. Descripciones de 1.500+ caracteres
+# (pliegos completos) diluyen el embedding y el BM25.
+_RETRIEVAL_DESCRIPTION_CHARS = 600
+
+
+def _truncate_at_word(text: str, max_chars: int) -> str:
+    """Recorta a ``max_chars`` sin partir la última palabra."""
+    text = (text or "").strip()
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars]
+    space = cut.rfind(" ")
+    if space >= max_chars // 2:
+        cut = cut[:space]
+    return cut.rstrip(" ,;:.-")
+
+
+def build_retrieval_query(item: RestructuredItem) -> str:
+    """Consulta "cruda" (primaria) para recuperar candidatos del libro.
+
+    - Con ``item.summary``: ``f"{summary} {unit}"`` + los primeros
+      ~``_RETRIEVAL_LONG_TEXT_CHARS`` caracteres del texto largo, quitando el
+      resumen si la descripción empieza por él (BC3: ``"{~C}. {~T}"``).
+    - Sin ``summary``: descripción recortada a ~``_RETRIEVAL_DESCRIPTION_CHARS``
+      caracteres + unidad.
+
+    Solo afecta a la RECUPERACIÓN: el Judge sigue recibiendo la descripción
+    COMPLETA de la partida.
+    """
+    unit = (item.unit or "").strip()
+    description = (item.description or "").strip()
+    summary = (getattr(item, "summary", None) or "").strip()
+
+    if summary:
+        long_text = description
+        if long_text.casefold().startswith(summary.casefold()):
+            long_text = long_text[len(summary):]
+        long_text = long_text.lstrip(" .,:;-–—\n\t")
+        head = f"{summary} {unit}".strip()
+        snippet = _truncate_at_word(long_text, _RETRIEVAL_LONG_TEXT_CHARS)
+        return f"{head} {snippet}".strip() if snippet else head
+
+    trimmed = _truncate_at_word(description, _RETRIEVAL_DESCRIPTION_CHARS)
+    return f"{trimmed} {unit}".strip()
+
+
+# Deconstrucción LLM en sub-consultas: solo para descripciones largas (las
+# cortas no esconden oficios compuestos y la llamada es coste/latencia pura).
+_DECONSTRUCT_MIN_DESCRIPTION_CHARS = 120
+# Máximo de sub-consultas SUPLEMENTARIAS (además de la cruda).
+_MAX_SUPPLEMENTARY_QUERIES = 3
+# RRF multi-consulta en `_firestore_vector_swarm`: la consulta cruda pesa doble
+# frente a cada sub-consulta atómica del deconstructor.
+_RAW_QUERY_RRF_WEIGHT = 2.0
+_SUBQUERY_RRF_WEIGHT = 1.0
+# Constante k del RRF multi-consulta (valor clásico del paper, igual que el híbrido).
+_SWARM_RRF_K = 60
+# Tamaño del pool final de candidatos por partida.
+_RETRIEVAL_POOL_SIZE = 15
+# Concurrencia de recuperaciones (deconstrucción + embeddings + búsquedas) por
+# lote. Override por env `SWARM_RETRIEVAL_CONCURRENCY`.
+_DEFAULT_RETRIEVAL_CONCURRENCY = 16
+
+
+def _read_retrieval_concurrency() -> int:
+    raw = os.getenv("SWARM_RETRIEVAL_CONCURRENCY", "")
+    try:
+        value = int(raw) if raw.strip() else _DEFAULT_RETRIEVAL_CONCURRENCY
+    except ValueError:
+        value = _DEFAULT_RETRIEVAL_CONCURRENCY
+    return max(1, value)
 
 
 def _is_medios_partida(item: Optional[RestructuredItem]) -> bool:
@@ -1179,30 +1269,48 @@ class SwarmPricingService:
 
     # --- 1. Deconstructor FLASH ---
     async def _analyze_and_deconstruct(self, item: RestructuredItem, metrics: Dict) -> List[str]:
+        # Cambio #1 — la consulta CRUDA es SIEMPRE la query primaria (y la
+        # primera de la lista). Validado empíricamente: la descripción gana o
+        # empata a la reformulación en el 93% de las partidas y evita la deriva
+        # de capítulo de la fragmentación en "oficios atómicos". Las
+        # sub-queries atómicas son solo SUPLEMENTO para partidas compuestas (1:N).
+        # Arreglos de recuperación: la cruda es ahora `build_retrieval_query`
+        # (resumen ~C + unidad + extracto, o descripción recortada).
+        raw_query = build_retrieval_query(item)
+
+        # Descripciones cortas: no esconden oficios compuestos → sin LLM.
+        if len((item.description or "").strip()) < _DECONSTRUCT_MIN_DESCRIPTION_CHARS:
+            return [raw_query]
+
         sys_instruction = "Eres un Quantity Surveyor. Extrae los oficios ATÓMICOS de esta partida bruta para buscar en BBDD."
-        res, usage = await self.llm.generate_structured(
+        # (Llamada construida fuera del try para no re-indentar sus argumentos.)
+        deconstruct_call = self.llm.generate_structured(
             system_prompt=sys_instruction,
             user_prompt=f"Partida: {item.description} (U: {item.unit})",
             response_schema=DeconstructResult,
             temperature=0.0,
             model="gemini-2.5-flash"
         )
+        try:
+            res, usage = await deconstruct_call
+        except Exception as e:
+            # Un 429 / breaker abierto / timeout NO puede dejar la partida sin
+            # candidatos: seguimos solo con la consulta cruda.
+            logger.warning(
+                "[deconstruct] %s: LLM falló (%s: %s) → solo consulta cruda",
+                item.code, type(e).__name__, e,
+            )
+            return [raw_query]
         if usage: self._track_telemetry(metrics, usage)
 
-        # Cambio #1 — la descripción CRUDA es SIEMPRE la query primaria.
-        # Validado empíricamente (muestreo aleatorio, 5 proyectos): la
-        # descripción completa gana o empata a la reformulación en el 93% de
-        # las partidas (+0.07 de coseno de media) y evita la deriva de
-        # capítulo que provoca la fragmentación en "oficios atómicos". Las
-        # sub-queries atómicas se conservan SOLO como SUPLEMENTO para
-        # descubrir componentes en partidas compuestas (1:N) — nunca
-        # reemplazan a la cruda.
-        raw_query = f"{item.description} {item.unit}"
         if res and res.queries and res.is_complex:
             supplements: List[str] = []
             for q in res.queries:
+                q = (q or "").strip()
                 if q and q != raw_query and q not in supplements:
                     supplements.append(q)
+                if len(supplements) >= _MAX_SUPPLEMENTARY_QUERIES:
+                    break
             return [raw_query, *supplements]
         return [raw_query]
 
@@ -1214,13 +1322,17 @@ class SwarmPricingService:
         *,
         chapter_filter: Optional[str] = None,
     ) -> List[Dict]:
-        """Resolver candidatos del catálogo por una o más subqueries.
+        """Resolver candidatos del catálogo por una o más consultas.
 
-        S1-A-02: si ``self.hybrid_search`` está inyectado, cada subquery se
-        resuelve combinando BM25 in-memory + vector search + RRF
-        (``HybridCatalogSearch.search``). Si no, fallback al vector search
-        directo (path legacy, mantenido para backward-compat con tests que
-        no inyectan hybrid).
+        ``queries[0]`` es la consulta CRUDA (``build_retrieval_query``); el
+        resto, sub-consultas suplementarias del deconstructor. Los resultados
+        se fusionan por RRF ponderado (cruda ×2) y se cortan a 15.
+
+        S1-A-02: si ``self.hybrid_search`` está inyectado, cada consulta se
+        resuelve con BM25 in-memory + vector search + RRF + señales blandas
+        (``HybridCatalogSearch.search``; ``chapter_filter`` y
+        ``partida_unit_dimension`` son pistas, no filtros). Si no, fallback al
+        vector search directo (path legacy, backward-compat con tests).
         """
         if not queries:
             return []
@@ -1237,22 +1349,19 @@ class SwarmPricingService:
                     cands = await self.hybrid_search.search(
                         query=q,
                         query_vector=vector,
-                        top_k=15,
+                        top_k=_RETRIEVAL_POOL_SIZE,
                         chapter_filter=chapter_filter,
                         unit_dimension_filter=partida_unit_dimension,
                     )
                 else:
-                    # Path legacy.
-                    # S1-A-05 — propagamos chapter_filter al adapter legacy
-                    # también; el adapter Firestore acepta `chapter_filters` (lista).
-                    legacy_chapter_filters = (
-                        [chapter_filter] if chapter_filter else None
-                    )
+                    # Path legacy. El capítulo YA NO se pasa como pre-filtro
+                    # vectorial (no hay índice kind+chapter+embedding y la
+                    # taxonomía del cliente rara vez casa con la del libro).
                     res = self.vector_search.search_similar_items(
                         query_vector=vector,
                         query_text=q,
                         limit=4,
-                        chapter_filters=legacy_chapter_filters,
+                        chapter_filters=None,
                         partida_unit_dimension=partida_unit_dimension,
                     )
                     cands = await res if inspect.isawaitable(res) else (res or [])
@@ -1263,21 +1372,104 @@ class SwarmPricingService:
 
         results = await asyncio.gather(*(_fetch_one(q) for q in queries))
 
-        # Dedup determinista (preservando orden de queries originales) +
-        # marcar el query de origen.
-        all_candidates: List[Dict] = []
-        seen_ids: set = set()
-        for q, cands in results:
-            for c in cands:
+        # Fusión multi-consulta por RRF ponderado: la consulta cruda (la
+        # primera) pesa doble. Antes se ordenaba por `matchScore`, que mezclaba
+        # cosenos inflados por el boost léxico de consultas distintas y dejaba
+        # que una sub-consulta atómica desplazara al match de la partida entera.
+        rankings: List[List[str]] = []
+        weights: List[float] = []
+        first_seen: Dict[str, Dict] = {}
+        best_origin: Dict[str, Tuple[float, str]] = {}
+        rrf_k = _SWARM_RRF_K
+        for idx, (q, cands) in enumerate(results):
+            weight = _RAW_QUERY_RRF_WEIGHT if idx == 0 else _SUBQUERY_RRF_WEIGHT
+            ranking: List[str] = []
+            for c in cands or []:
                 cid = c.get('id') or c.get('code')
-                if cid and cid not in seen_ids:
-                    seen_ids.add(cid)
-                    c["__query_origin"] = q
-                    all_candidates.append(c)
+                if not cid or cid in ranking:
+                    continue
+                contribution = weight / (rrf_k + len(ranking))
+                ranking.append(cid)
+                first_seen.setdefault(cid, c)
+                prev = best_origin.get(cid)
+                if prev is None or contribution > prev[0]:
+                    best_origin[cid] = (contribution, q)
+            rankings.append(ranking)
+            weights.append(weight)
 
-        # Limitar para no saturar contextos enormes.
-        all_candidates.sort(key=lambda x: x.get('matchScore', 0), reverse=True)
-        return all_candidates[:15]
+        fused = reciprocal_rank_fusion(rankings, rrf_k=rrf_k, weights=weights)
+
+        all_candidates: List[Dict] = []
+        for cid, score in fused[:_RETRIEVAL_POOL_SIZE]:
+            c = first_seen[cid]
+            # Trazabilidad: consulta que más aportó al candidato. NO viaja al
+            # prompt del Judge (le inducía a error, ver `clean_cands`).
+            c["__query_origin"] = best_origin[cid][1]
+            c["_swarm_rrf_score"] = score
+            all_candidates.append(c)
+        return all_candidates
+
+    def _exact_code_candidate(
+        self, item: RestructuredItem, partida_unit_dimension: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Código primero (pool): candidato del libro cuyo código coincide
+        EXACTAMENTE con el de la partida (no por código base CYPE) y con
+        dimensión de unidad compatible (misma regla blanda del retrieval).
+        None si no aplica. No sustituye al override code-first posterior."""
+        if self.hybrid_search is None or not getattr(item, "code", None):
+            return None
+        try:
+            match = self.hybrid_search.lookup_by_code(item.code)
+        except Exception as e:  # nunca romper la recuperación por esto
+            logger.warning("[code_first_pool] lookup %s falló: %s", item.code, e)
+            return None
+        if not match or match.get("match_kind_code") != "exact":
+            return None
+        if dimension_mismatch(partida_unit_dimension, match.get("unit_dimension")):
+            return None
+        cand = dict(match)
+        cand["__query_origin"] = "code_first"
+        cand["_code_first_pool"] = True
+        return cand
+
+    async def retrieve_candidates(
+        self, item: RestructuredItem, metrics: Dict
+    ) -> Tuple[List[str], List[Dict]]:
+        """Recuperación de candidatos del libro para UNA partida.
+
+        1. Código primero: si el código de la partida existe EXACTO en el libro
+           (y la unidad es compatible) ese candidato encabeza el pool.
+        2. Consultas: la cruda (``build_retrieval_query``) + hasta 3
+           sub-consultas del deconstructor (con fallback a solo la cruda).
+        3. Búsqueda (híbrida o legacy) por consulta + fusión RRF ponderada.
+
+        Devuelve ``(consultas_usadas, pool)`` con el pool ordenado y cortado a
+        ``_RETRIEVAL_POOL_SIZE`` (15), deduplicado por id.
+        """
+        filters = _derive_structural_filters(item)
+        unit_dim = filters["unit_dimension_filter"]
+        code_cand = self._exact_code_candidate(item, unit_dim)
+
+        queries = await self._analyze_and_deconstruct(item, metrics)
+        candidates = await self._firestore_vector_swarm(
+            queries,
+            partida_unit_dimension=unit_dim,
+            chapter_filter=filters["chapter_filter"],
+        )
+
+        if code_cand is not None:
+            cid = code_cand.get("id") or code_cand.get("code")
+            candidates = [code_cand] + [
+                c for c in candidates if (c.get("id") or c.get("code")) != cid
+            ]
+            candidates = candidates[:_RETRIEVAL_POOL_SIZE]
+
+        logger.debug(
+            "[retrieval] %s queries=%d top=%s",
+            item.code, len(queries),
+            [c.get("id") or c.get("code") for c in candidates[:5]],
+        )
+        return queries, candidates
 
     # --- 3. Ejecución Orquestada de Pricing (Public Method) ---
     async def evaluate_batch(
@@ -1379,6 +1571,8 @@ class SwarmPricingService:
         Nunca se descarta una partida medida: se conserva marcada para revisión
         humana (`match_kind='from_scratch'`, `needs_human_review=True`,
         `confidence=40`). Precio activo = precio del propio BC3 si viene, si no 0.0.
+        Es la única excepción a "IA por defecto": aquí la IA no dio precio, así que
+        `ai_unit_price` queda vacío en vez de duplicar el precio BC3.
         Coste 0 (ni una llamada al LLM) — seguro a escala (500+ partidas)."""
         safe_code = item.code or ""
         safe_description = item.description or ""
@@ -1415,7 +1609,8 @@ class SwarmPricingService:
             quantity=safe_quantity, unitPrice=unit_price, totalPrice=total_price,
             isRealCost=False, matchConfidence=40.0, match_kind="from_scratch",
             reasoning=trace,
-            bc3_unit_price=bc3_price, ai_unit_price=unit_price,
+            bc3_unit_price=bc3_price,
+            ai_unit_price=None if bc3_price is not None else unit_price,
             active_price_source=active_source, measurements=measurements,
             needs_reconciliation=False,
         )
@@ -1440,6 +1635,13 @@ class SwarmPricingService:
             item.quantity if item.quantity is not None else partida.quantity
         )
         partida.measurements = getattr(item, "measurements", None)
+        # BC3 doble precio: el precio BC3 es el del item ACTUAL (no el del
+        # presupuesto donde se cacheó) y el activo por defecto es el del motor.
+        # Entradas antiguas se cachearon con unitPrice = precio BC3 de otro cliente.
+        if partida.ai_unit_price is not None:
+            partida.unitPrice = partida.ai_unit_price
+        partida.bc3_unit_price = getattr(item, "bc3_unit_price", None)
+        partida.active_price_source = "ai"
         if partida.original_item is not None:
             partida.original_item.code = item.code or ""
             partida.original_item.description = item.description
@@ -1542,6 +1744,7 @@ class SwarmPricingService:
             breakdown=breakdown or None,
             isRealCost=False, matchConfidence=40.0, match_kind="from_scratch",
             reasoning=trace,
+            bc3_unit_price=getattr(item, "bc3_unit_price", None),
             ai_unit_price=unit_price,
             active_price_source="ai",
             measurements=getattr(item, "measurements", None),
@@ -1763,30 +1966,30 @@ class SwarmPricingService:
             item_start_times[code] = time.monotonic()
             item_pre_call_cost[code] = float(metrics.get("cost") or 0.0)
 
-        # Obtenemos candidatos masivos
+        # Obtenemos candidatos masivos. Semáforo: acota las recuperaciones
+        # concurrentes (deconstrucción LLM + embeddings + Firestore) del lote;
+        # antes era un fan-out sin límite (ver memoria "swarm colapsa a escala").
+        retrieval_semaphore = asyncio.Semaphore(_read_retrieval_concurrency())
+
         async def fetch_item_candidates(item: RestructuredItem):
-            queries = await self._analyze_and_deconstruct(item, metrics)
-            # S1-A-05 — Filtros estructurales pre-vector. Reducen el pool de
-            # candidatos antes del retrieval, lo que ahorra coste en partidas
-            # con `chapter` confiable (la mayoría tras `stabilize_chapter_name`).
-            filters = _derive_structural_filters(item)
-            chapter_filter = filters["chapter_filter"]
-            unit_dim_filter = filters["unit_dimension_filter"]
-            # Trazabilidad post-filter para validar la reducción de ≥30% que
-            # menciona el plan. ``candidates`` ya viene filtrado por la propia
-            # query; aquí solo emitimos los filtros aplicados.
-            self._emit(budget_id, 'structural_filters_applied', {
-                "code": item.code,
-                "chapter_filter": chapter_filter,
-                "unit_dimension_filter": unit_dim_filter,
-            })
-            candidates = await self._firestore_vector_swarm(
-                queries,
-                partida_unit_dimension=unit_dim_filter,
-                chapter_filter=chapter_filter,
-            )
-            return item, candidates
-            
+            async with retrieval_semaphore:
+                # S1-A-05 — señales estructurales (capítulo/unidad), ahora
+                # BLANDAS: se emiten para trazabilidad.
+                filters = _derive_structural_filters(item)
+                self._emit(budget_id, 'structural_filters_applied', {
+                    "code": item.code,
+                    "chapter_filter": filters["chapter_filter"],
+                    "unit_dimension_filter": filters["unit_dimension_filter"],
+                    "mode": "soft",
+                })
+                queries, candidates = await self.retrieve_candidates(item, metrics)
+                self._emit(budget_id, 'retrieval_debug', {
+                    "code": item.code,
+                    "queries": queries,
+                    "top_codes": [c.get("id") or c.get("code") for c in candidates],
+                })
+                return item, candidates
+
         vector_tasks = [fetch_item_candidates(i) for i in items]
         vector_results = await asyncio.gather(*vector_tasks, return_exceptions=True)
         
@@ -1899,7 +2102,11 @@ class SwarmPricingService:
         for item, candidates in reranked_pairs:
             candidates_map[item.code] = {"item": item, "candidates": candidates}
 
-            clean_cands = [{"id": c['id'], "desc": c['description'], "price": c.get('priceTotal'), "unit": c.get('unit'), "origen_swam": c.get("__query_origin")} for c in candidates]
+            # `__query_origin` se conserva en el candidato para trazabilidad pero
+            # NO se envía al Judge: el diagnóstico mostró que el campo
+            # `origen_swam` le inducía a error (sesgaba la elección por la
+            # sub-consulta de origen en vez de por la partida).
+            clean_cands = [{"id": c['id'], "desc": c['description'], "price": c.get('priceTotal'), "unit": c.get('unit')} for c in candidates]
 
             prompt_block = (
                 f"--- PARTIDA CÓDIGO: {item.code} ---\n"
@@ -2349,21 +2556,18 @@ class SwarmPricingService:
                     # Excluidos (factor 1.0, pero se registra pre/factor para
                     # transparencia §8):
                     #   - `from_scratch`: su base son tarifas compuestas, no catálogo.
-                    #   - BC3 active-source: el precio activo es el del BC3, no la
-                    #     estimación IA; no se calibra ni se cosecha corrección.
                     #   - sin tabla inyectada (backward-compat / tests).
+                    # Las partidas BC3 SÍ se calibran: el precio activo por defecto
+                    # es la valoración del motor, igual que sin BC3.
                     cal_key = normalize_chapter_key(safe_chapter)
                     cal_pre_price = final_price
                     cal_factor = 1.0
                     cal_source = "none"
                     cal_sample_count = 0
-                    _cal_bc3_price = getattr(item, "bc3_unit_price", None)
                     if calibration_table is None:
                         cal_source = "disabled"
                     elif val.match_kind == "from_scratch":
                         cal_source = "excluded:from_scratch"
-                    elif _cal_bc3_price is not None:
-                        cal_source = "excluded:bc3"
                     else:
                         _eff = calibration_table.effective_factor(cal_key)
                         cal_factor = _eff.factor
@@ -2680,16 +2884,13 @@ class SwarmPricingService:
                         else None
                     )
 
-                    # BC3 doble precio: si la partida trae precio del propio BC3,
-                    # ese es el precio ACTIVO por defecto (importar tal cual); la
-                    # estimación IA (final_price) queda guardada para comparar.
+                    # BC3 doble precio: el precio ACTIVO por defecto es siempre la
+                    # valoración del motor (final_price); el precio del propio BC3
+                    # se guarda para comparar y el usuario puede elegirlo por
+                    # partida en el editor.
                     _bc3_price = getattr(item, 'bc3_unit_price', None)
                     _measurements = getattr(item, 'measurements', None)
-                    _active_source = 'bc3' if _bc3_price is not None else 'ai'
-                    _active_price = _bc3_price if _active_source == 'bc3' else final_price
-                    # La reconciliación (breakdown IA vs unitPrice) sólo aplica
-                    # cuando el precio activo ES el de la IA.
-                    _recon_active = (_active_source == 'ai') and recon.needs_review
+                    _recon_active = recon.needs_review
 
                     partida = BudgetPartida(
                         id=str(uuid.uuid4()), order=global_order,
@@ -2697,8 +2898,8 @@ class SwarmPricingService:
                         ai_resolution=ai_res_obj,
                         alternatives=alternatives,
                         code=safe_code, description=safe_description,
-                        unit=safe_unit, quantity=safe_quantity, unitPrice=_active_price,
-                        totalPrice=_active_price * safe_quantity,
+                        unit=safe_unit, quantity=safe_quantity, unitPrice=final_price,
+                        totalPrice=final_price * safe_quantity,
                         isRealCost=not needs_human_review,
                         matchConfidence=confidence,
                         reasoning=reasoning_for_trace,
@@ -2709,9 +2910,9 @@ class SwarmPricingService:
                         # BC3 — doble precio + mediciones estructuradas.
                         bc3_unit_price=_bc3_price,
                         ai_unit_price=final_price,
-                        active_price_source=_active_source,
+                        active_price_source='ai',
                         measurements=_measurements,
-                        # Phase 17 — flags de reconciliación (sólo si el activo es IA).
+                        # Phase 17 — flags de reconciliación (breakdown IA vs unitPrice).
                         needs_reconciliation=_recon_active,
                         divergence_pct=recon.divergence_pct if _recon_active else None,
                         divergence_amount=recon.divergence_amount if _recon_active else None,

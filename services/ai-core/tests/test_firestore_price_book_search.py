@@ -1,14 +1,22 @@
-"""Fase 4 — tests del adapter de búsqueda `FirestorePriceBookAdapter` ampliado.
+"""Tests del adapter de búsqueda `FirestorePriceBookAdapter`.
 
-Cambios vs v004:
-  - La colección ahora guarda DOS kinds (`item` + `breakdown`). El adapter
-    debe devolverlos tal cual, con el campo `kind` intacto en el dict
-    resultado — el Judge aguas abajo razona distinto según el kind.
-  - Nuevo param opcional `partida_unit_dimension`. Si se pasa, candidatos
-    con `unit_dimension` distinta se degradan (score × 0.3) — el Judge
-    decide igualmente, pero los compatibles dimensionalmente suben arriba.
-  - `db` inyectable en el constructor para que los tests no requieran
-    Firebase Admin arrancado.
+Historia:
+  - Fase 4: la colección guarda DOS kinds (`item` + `breakdown`) y el adapter
+    los devolvía ambos. Param opcional `partida_unit_dimension` (score × 0.3
+    para dimensiones incompatibles). `db` inyectable.
+  - Arreglos de recuperación (2026-09) — CAMBIO de contrato:
+      * El vector search se restringe a `kind == "item"` con un pre-filtro
+        nativo (índice `kind + embedding`). Los breakdowns (86 % del índice)
+        ocupaban el top-K y se descartaban después → llegaban 8-14 de 15.
+      * `chapter_filters` ya NO se aplica (no hay índice
+        `kind + chapter + embedding`); el capítulo es señal blanda del híbrido.
+      * El coseno sale de la distancia de Firestore (`distance_result_field`,
+        coseno = 1 − distancia) con proyección `select` sin embeddings; si no
+        hay distancia se recalcula desde el embedding (fakes/legacy).
+      * `_cosine_raw` (coseno puro) separado de `matchScore` (con boosts).
+      * Boost léxico con tokens sin stopwords, tildes plegadas y len ≥ 3.
+      * La degradación dimensional no penaliza pares puenteables ni partidas
+        pa/%/h.
 """
 
 from __future__ import annotations
@@ -36,32 +44,48 @@ class _FakeDocSnapshot:
 
 
 class _FakeVectorQuery:
-    def __init__(self, snapshots: list[_FakeDocSnapshot]):
+    def __init__(self, snapshots: list[_FakeDocSnapshot], collection: "_FakeCollection"):
         self._snapshots = snapshots
+        self._collection = collection
 
     def get(self):
+        if self._collection.fail_projection and self._collection.selected is not None:
+            raise RuntimeError("projection not supported with find_nearest")
         return self._snapshots
 
 
 class _FakeCollection:
-    def __init__(self, snapshots: list[_FakeDocSnapshot]):
+    def __init__(self, snapshots: list[_FakeDocSnapshot], *, fail_projection: bool = False):
         self._snapshots = snapshots
+        self.fail_projection = fail_projection
+        self.filters: list[Any] = []
+        self.selected: Any = None
+        self.find_nearest_kwargs: dict = {}
 
-    def find_nearest(self, **_kwargs):
-        return _FakeVectorQuery(self._snapshots)
-
-    def where(self, **_kwargs):
-        # Simulamos el chain para chapter_filters; devuelve self.
+    def where(self, filter=None, **_kwargs):
+        self.filters.append(filter)
         return self
+
+    def select(self, fields):
+        self.selected = list(fields)
+        return self
+
+    def find_nearest(self, **kwargs):
+        self.find_nearest_kwargs = kwargs
+        return _FakeVectorQuery(self._snapshots, self)
 
 
 class _FakeDb:
-    def __init__(self, snapshots: list[_FakeDocSnapshot]):
+    def __init__(self, snapshots: list[_FakeDocSnapshot], **coll_kwargs):
         self._snapshots = snapshots
+        self._coll_kwargs = coll_kwargs
+        self.collections: list[_FakeCollection] = []
 
     def collection(self, name: str):
         assert name == "price_book_2025"
-        return _FakeCollection(self._snapshots)
+        coll = _FakeCollection(self._snapshots, **self._coll_kwargs)
+        self.collections.append(coll)
+        return coll
 
 
 def _snap(doc_id: str, **fields) -> _FakeDocSnapshot:
@@ -80,32 +104,125 @@ def _snap(doc_id: str, **fields) -> _FakeDocSnapshot:
     return _FakeDocSnapshot(doc_id, base)
 
 
+_Q = [1.0] + [0.0] * 767
+
+
 # -------- Tests ----------------------------------------------------------------
 
 
-class TestKindFieldSurvivesInResult:
-    def test_returns_kind_field_for_items_and_breakdowns(self) -> None:
+class TestKindItemPreFilter:
+    def test_query_prefilters_kind_item_and_requests_distance(self) -> None:
+        db = _FakeDb([_snap("item-A")])
+        adapter = FirestorePriceBookAdapter(db=db)
+        adapter.search_similar_items(query_vector=_Q, limit=5)
+
+        coll = db.collections[0]
+        assert len(coll.filters) == 1
+        f = coll.filters[0]
+        assert (f.field_path, f.op_string, f.value) == ("kind", "==", "item")
+        assert coll.find_nearest_kwargs.get("distance_result_field")
+        # Proyección sin embedding.
+        assert coll.selected is not None and "embedding" not in coll.selected
+        assert coll.find_nearest_kwargs["distance_result_field"] in coll.selected
+
+    def test_breakdowns_are_not_returned(self) -> None:
+        """Defensa en profundidad: aunque un breakdown se colara, no sale."""
         snaps = [
             _snap("item-A", kind="item"),
             _snap("bk-B", kind="breakdown", description="component"),
         ]
         adapter = FirestorePriceBookAdapter(db=_FakeDb(snaps))
+        results = adapter.search_similar_items(query_vector=_Q, limit=5)
+        assert [r["id"] for r in results] == ["item-A"]
 
-        query_vec = [1.0] + [0.0] * 767
-        results = adapter.search_similar_items(query_vector=query_vec, limit=5)
-
-        kinds = {r.get("kind") for r in results}
-        assert kinds == {"item", "breakdown"}
+    def test_chapter_filters_are_ignored(self) -> None:
+        """Antes `chapter_filters` añadía `where(chapter in [...])`. Ahora se
+        ignora: combinado con kind exigiría un índice inexistente."""
+        db = _FakeDb([_snap("X")])
+        adapter = FirestorePriceBookAdapter(db=db)
+        results = adapter.search_similar_items(
+            query_vector=_Q, limit=5, chapter_filters=["03 HORMIGONES"]
+        )
+        assert len(results) == 1
+        fields = [f.field_path for f in db.collections[0].filters]
+        assert fields == ["kind"]
 
     def test_embedding_is_stripped_but_kind_remains(self) -> None:
         snaps = [_snap("X", kind="item")]
         adapter = FirestorePriceBookAdapter(db=_FakeDb(snaps))
-        results = adapter.search_similar_items(
-            query_vector=[1.0] + [0.0] * 767, limit=5
-        )
+        results = adapter.search_similar_items(query_vector=_Q, limit=5)
         assert "embedding" not in results[0]
         assert results[0]["kind"] == "item"
         assert results[0]["id"] == "X"
+
+
+class TestCosineFromDistance:
+    def test_cosine_raw_is_one_minus_distance_without_embedding(self) -> None:
+        snap = _snap("X", _vector_distance=0.25)
+        snap._data.pop("embedding")
+        adapter = FirestorePriceBookAdapter(db=_FakeDb([snap]))
+        results = adapter.search_similar_items(query_vector=_Q, limit=5)
+        assert results[0]["_cosine_raw"] == pytest.approx(0.75)
+        assert results[0]["matchScore"] == pytest.approx(0.75)
+        assert "_vector_distance" not in results[0]
+
+    def test_projection_rejected_falls_back_to_full_query(self) -> None:
+        db = _FakeDb([_snap("X")], fail_projection=True)
+        adapter = FirestorePriceBookAdapter(db=db)
+        results = adapter.search_similar_items(query_vector=_Q, limit=5)
+        assert [r["id"] for r in results] == ["X"]
+        assert results[0]["_cosine_raw"] == pytest.approx(1.0)  # desde embedding
+        assert adapter._projection_supported is False
+        # Siguientes búsquedas ya no intentan la proyección.
+        adapter.search_similar_items(query_vector=_Q, limit=5)
+        assert db.collections[-1].selected is None
+
+
+class TestLexicalBoost:
+    def test_boost_uses_folded_tokens_without_stopwords(self) -> None:
+        snaps = [
+            _snap("hit", description="Solera de hormigón armado"),
+            _snap("miss", description="Pintura plástica"),
+        ]
+        adapter = FirestorePriceBookAdapter(db=_FakeDb(snaps))
+        results = adapter.search_similar_items(
+            query_vector=_Q, query_text="solera de HORMIGON", limit=5,
+        )
+        hit = next(r for r in results if r["id"] == "hit")
+        miss = next(r for r in results if r["id"] == "miss")
+        # "de" es stopword → tokens {solera, hormigon}; ambos presentes (tildes plegadas).
+        assert hit["_lexical_coverage"] == pytest.approx(1.0)
+        assert hit["matchScore"] == pytest.approx(1.5)
+        assert hit["_cosine_raw"] == pytest.approx(1.0)  # el coseno puro no cambia
+        assert miss["matchScore"] == pytest.approx(1.0)
+        assert results[0]["id"] == "hit"
+
+    def test_plural_and_singular_match(self) -> None:
+        snaps = [_snap("tab", description="Tabique de ladrillo")]
+        adapter = FirestorePriceBookAdapter(db=_FakeDb(snaps))
+        results = adapter.search_similar_items(
+            query_vector=_Q, query_text="tabiques ladrillos", limit=5,
+        )
+        assert results[0]["_lexical_coverage"] == pytest.approx(1.0)
+
+
+class TestBridgeableDimensions:
+    @pytest.mark.parametrize("partida,cand", [
+        ("superficie", "volumen"),
+        ("volumen", "superficie"),
+        ("lineal", "discreto"),
+        ("discreto", "lineal"),
+        ("importe", "superficie"),
+        ("porcentaje", "discreto"),
+        ("tiempo", "volumen"),
+    ])
+    def test_not_degraded(self, partida, cand) -> None:
+        adapter = FirestorePriceBookAdapter(db=_FakeDb([_snap("X", unit_dimension=cand)]))
+        results = adapter.search_similar_items(
+            query_vector=_Q, limit=5, partida_unit_dimension=partida,
+        )
+        assert results[0]["matchScore"] == pytest.approx(1.0)
+
 
 
 class TestDimensionalDegradation:

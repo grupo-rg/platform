@@ -14,7 +14,8 @@
  *   - De-bake the corrected price: `corrected_raw = unitPrice / bakeFactor`,
  *     `bakeFactor = 1 + (GG+BI)/100` from the budget's baked config.
  *   - Chapter key via `normalizeChapterKey` (matches the pricer/UI key).
- *   - Skip `active_price_source === 'bc3'` and `match_kind === 'from_scratch'`.
+ *   - Skip `active_price_source === 'bc3'` (unless the user edited the BC3
+ *     price by hand — see `isManualOverBc3`) and `match_kind === 'from_scratch'`.
  *   - Only harvest partidas whose price actually moved off the AI value.
  *   - Idempotent: correction docs keyed by (budget, partida); re-saving
  *     recomputes from all included corrections (no double count).
@@ -30,6 +31,7 @@ import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budge
 import { CalibrationLearningService } from '@/backend/calibration/application/calibration-learning-service';
 import { FirestoreCalibrationRepository } from '@/backend/calibration/infrastructure/firestore-calibration.repository';
 import { FirestoreCalibrationCorrectionsRepository } from '@/backend/calibration/infrastructure/firestore-calibration-corrections.repository';
+import { isManualOverBc3 } from '@/lib/budget/bc3-price';
 
 export interface RecordPriceCorrectionsResult {
     success: boolean;
@@ -129,7 +131,9 @@ export async function recordPriceCorrectionsAction(
                 processed++;
 
                 // Exclusions (spec §8): BC3 active-source + from_scratch partidas.
-                if (item?.active_price_source === 'bc3') {
+                // Salvo que el usuario haya editado a mano el precio de la partida
+                // BC3: entonces es una corrección humana real y se aprende.
+                if (item?.active_price_source === 'bc3' && !isManualOverBc3(item, bakeFactor)) {
                     skipped++;
                     continue;
                 }

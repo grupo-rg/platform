@@ -1,12 +1,13 @@
-"""S1-A-05 — Filtros estructurales pre-vector en SwarmPricingService.
+"""S1-A-05 — Señales estructurales del retrieval en SwarmPricingService.
 
 Antes del retrieval, derivamos:
   - ``chapter_filter`` cuando ``RestructuredItem.chapter`` es confiable
     (no alucinación, no en la lista de baja confianza).
-  - ``unit_dimension_filter`` cuando la partida lo trae.
+  - ``unit_dimension_filter`` de la partida (declarada o derivada de ``unit``).
 
-Estos filtros se pasan al ``HybridCatalogSearch`` (o al vector search
-legacy) para reducir el pool antes del retrieval.
+CAMBIO (arreglos de recuperación 2026-09): ya NO son filtros duros. Se pasan
+al ``HybridCatalogSearch`` como señales blandas (bonus de capítulo,
+penalización de unidad) y el vector search legacy ya no recibe capítulo.
 
 Tests:
   1. ``_derive_structural_filters`` con casos puros (capítulo confiable,
@@ -84,13 +85,32 @@ def test_derive_filters_unit_dimension_passed_when_present():
     assert f["unit_dimension_filter"] == "surface_area"
 
 
-def test_derive_filters_unit_dimension_none_when_missing():
+def test_derive_filters_unit_dimension_derived_from_unit_when_missing():
+    """CAMBIO (arreglos de recuperación): si la partida no trae
+    `unit_dimension` se deriva de `unit` (antes quedaba None y BC3 nunca
+    recibía la señal de unidad)."""
     item = RestructuredItem(
         code="X.1", description="d", quantity=1.0, unit="m2",
         chapter="03 HORMIGONES",
     )
     f = _derive_structural_filters(item)
+    assert f["unit_dimension_filter"] == "superficie"
+
+
+def test_derive_filters_unit_dimension_none_when_unit_unknown():
+    item = RestructuredItem(
+        code="X.1", description="d", quantity=1.0, unit="zz",
+        chapter="03 HORMIGONES",
+    )
+    f = _derive_structural_filters(item)
     assert f["unit_dimension_filter"] is None
+
+
+def test_unclassified_is_low_confidence():
+    item = RestructuredItem(
+        code="X.1", description="d", quantity=1.0, unit="m2", chapter="UNCLASSIFIED",
+    )
+    assert _derive_structural_filters(item)["chapter_filter"] is None
 
 
 # ---- Integration: filters reach the adapter ------------------------------
@@ -150,8 +170,12 @@ class _SpyEmitter(IGenerationEmitter):
         self.events.append({"type": event_type, "data": data})
 
 
-def test_swarm_propagates_chapter_filter_to_vector_search(monkeypatch):
-    """Con un capítulo confiable, el vector_search adapter recibe el filtro."""
+def test_swarm_no_longer_prefilters_vector_by_chapter(monkeypatch):
+    """CAMBIO (arreglos de recuperación): antes, con un capítulo confiable, el
+    adapter vectorial recibía `chapter_filters=[capítulo]` (filtro duro). Ya no:
+    no existe índice `kind + chapter + embedding` y la taxonomía del cliente
+    casi nunca casa con la del libro. El capítulo es una señal blanda del
+    híbrido; la dimensión de unidad sí se sigue pasando (penalización)."""
     monkeypatch.setattr(
         SwarmPricingService,
         "_load_prompt",
@@ -172,7 +196,7 @@ def test_swarm_propagates_chapter_filter_to_vector_search(monkeypatch):
     asyncio.run(svc.evaluate_batch(items, budget_id="b-flt", metrics=metrics))
 
     assert vs.last_call_kwargs is not None
-    assert vs.last_call_kwargs.get("chapter_filters") == ["03 HORMIGONES"]
+    assert vs.last_call_kwargs.get("chapter_filters") is None
     assert vs.last_call_kwargs.get("partida_unit_dimension") == "surface_area"
 
 

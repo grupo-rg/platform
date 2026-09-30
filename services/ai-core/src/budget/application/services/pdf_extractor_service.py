@@ -6,6 +6,7 @@ import os
 import re
 import unicodedata
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 
 from src.budget.application.ports.ports import ILLMProvider, IGenerationEmitter
 from src.budget.catalog.domain.unit import Unit
@@ -322,6 +323,15 @@ class RestructuredItem(BaseModel):
     measurements: Optional[List[Dict[str, Any]]] = Field(
         default=None,
         description='Estado de mediciones estructurado: líneas {comment, units, length, width, height, subtotal, is_section}.',
+    )
+    # Resumen corto de la partida (BC3: `~C.description`). Lo usa
+    # `build_retrieval_query` como núcleo de la consulta de recuperación; el
+    # Judge sigue recibiendo `description` COMPLETA. None si no hay resumen.
+    # `SkipJsonSchema`: RestructuredItem también es response_schema del LLM
+    # extractor (vía `model_json_schema()`); no queremos que el modelo lo invente.
+    summary: SkipJsonSchema[Optional[str]] = Field(
+        default=None,
+        description='Resumen corto de la partida (BC3 ~C). Solo para la consulta de recuperación.',
     )
 
 class RestructureChunkResult(BaseModel):

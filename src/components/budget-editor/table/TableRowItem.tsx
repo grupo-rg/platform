@@ -34,7 +34,8 @@ import {
     Percent,
     Wand2,
     BookMarked,
-    Check
+    Check,
+    RotateCcw
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -57,6 +58,7 @@ import { detectDivergence } from '@/lib/budget/reconciliation';
 import { ReconciliationChip } from '../ReconciliationChip';
 import { useMarkupFactor } from '@/hooks/use-markup-factor';
 import { logCorrectionPairAction } from '@/actions/ai-training/log-correction-pair.action';
+import { toStoredScale, isPriceOverride } from '@/lib/budget/bc3-price';
 
 interface TableRowItemProps {
     item: EditableBudgetLineItem;
@@ -94,14 +96,24 @@ export const TableRowItem = React.memo(({
     const [isPending, startTransition] = useTransition();
     const { state, budgetId } = useBudgetEditorContext();
     // Phase 17.4 — factor de display centralizado en `useMarkupFactor`.
-    const { markupFactor, isMarkupBaked } = useMarkupFactor();
+    const { markupFactor, isMarkupBaked, bakedFactor } = useMarkupFactor();
 
-    // BC3 doble precio: si el presupuesto viene de un .bc3 con precios, mostramos
-    // dos columnas (Precio BC3 vs Precio IA) y el usuario elige la fuente activa.
+    // BC3 doble precio: si el presupuesto viene de un .bc3 con precios, la tabla
+    // muestra dos columnas (Precio BC3 vs Precio IA). La columna de la fuente
+    // activa es EDITABLE; la otra es un botón para cambiar de fuente. Las
+    // partidas sin precio BC3 (altas manuales, BC3 sin precio) editan su precio
+    // en la columna IA.
     const hasDualPrice = state.items.some((i: any) => i.item?.bc3_unit_price != null);
     const bc3Price: number | null | undefined = item.item?.bc3_unit_price;
-    const aiPrice = item.item?.ai_unit_price ?? item.item?.unitPrice ?? 0;
-    const activePriceSource = item.item?.active_price_source ?? (bc3Price != null ? 'bc3' : 'ai');
+    // Precios de fuente en la escala del unitPrice (GG+BI horneado): cambiar de
+    // fuente no pierde el markup y la columna cuadra con el Total.
+    const bc3Stored = toStoredScale(bc3Price, bakedFactor);
+    const aiStored = toStoredScale(item.item?.ai_unit_price, bakedFactor);
+    const rowHasBc3 = bc3Stored != null;
+    const activePriceSource = item.item?.active_price_source ?? (rowHasBc3 ? 'bc3' : 'ai');
+    const activeSourceStored = activePriceSource === 'bc3' ? bc3Stored : aiStored;
+    // Precio editado: el unitPrice ya no es el de su fuente → se ofrece restaurarlo.
+    const isPriceEdited = isPriceOverride(item.item?.unitPrice, activeSourceStored);
     const priceDivergence = (bc3Price != null && bc3Price > 0 && item.item?.ai_unit_price != null)
         ? Math.abs(item.item.ai_unit_price - bc3Price) / bc3Price
         : 0;
@@ -254,6 +266,96 @@ export const TableRowItem = React.memo(({
     };
 
     const unitPriceAllInToRaw = (val: string | number) => Number(val) / (markupFactor || 1);
+
+    // Precio unitario editable — mostrado all-in (raw × markupFactor), se edita
+    // en all-in y se guarda raw. Compartido por la columna "Precio" y por la
+    // columna activa del doble precio BC3.
+    const renderUnitPriceInput = (extraClassName?: string | false) => (
+        <EditableCell
+            value={displayUnitPrice}
+            onChange={(val) => {
+                // Phase 15 — el usuario edita en all-in; almacenamos raw PEM.
+                // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
+                handleUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } });
+            }}
+            onLiveChange={(val) => onUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } }, true)}
+            type="currency"
+            className={cn(
+                "text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full",
+                item.item?.unitPrice === 0 && "text-red-500 font-bold",
+                extraClassName
+            )}
+        />
+    );
+
+    const priceSourceLabel = (source: 'bc3' | 'ai') => source === 'bc3' ? 'BC3' : 'IA';
+
+    // Fija el precio de la fuente elegida (también restaura tras una edición).
+    const selectPriceSource = (source: 'bc3' | 'ai') => {
+        const price = source === 'bc3' ? bc3Stored : aiStored;
+        if (price == null) return;
+        onUpdate(item.id, { item: { ...item.item!, active_price_source: source, unitPrice: price } });
+    };
+
+    // Columna de la fuente ACTIVA: precio vigente editable. Resaltada con el color
+    // de la fuente; en ámbar si el precio se editó (con enlace para restaurarlo).
+    const renderActivePriceCell = (source: 'bc3' | 'ai') => {
+        const sourceStored = source === 'bc3' ? bc3Stored : aiStored;
+        const isSourced = activePriceSource === source && sourceStored != null;
+        const label = priceSourceLabel(source);
+        return (
+            <>
+                <div
+                    title={!isSourced
+                        ? undefined
+                        : isPriceEdited
+                            ? `Precio editado (el del ${label} es ${formatCurrency(sourceStored * markupFactor)})`
+                            : `Precio del ${label} — haz clic para editarlo`}
+                    className={cn(
+                        "rounded-md border",
+                        !isSourced
+                            ? "border-transparent"
+                            : isPriceEdited
+                                ? "bg-amber-500/10 border-amber-500/40"
+                                : source === 'bc3'
+                                    ? "bg-primary/15 border-primary/40"
+                                    : "bg-violet-500/15 border-violet-500/40"
+                    )}
+                >
+                    {renderUnitPriceInput(isSourced && "font-semibold text-slate-800 dark:text-white")}
+                </div>
+                {isSourced && isPriceEdited && (
+                    <button
+                        type="button"
+                        onClick={() => selectPriceSource(source)}
+                        title={`Restaurar el precio del ${label}`}
+                        className="mt-0.5 ml-auto flex items-center gap-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline"
+                    >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        {label} {formatCurrency(sourceStored * markupFactor)}
+                    </button>
+                )}
+            </>
+        );
+    };
+
+    // Columna de la fuente INACTIVA: botón para pasar a esa fuente.
+    const renderSourceButton = (source: 'bc3' | 'ai') => {
+        const price = source === 'bc3' ? bc3Stored : aiStored;
+        if (price == null) {
+            return <span className="block text-right text-slate-300 dark:text-slate-600 text-sm pr-2 pt-1">—</span>;
+        }
+        return (
+            <button
+                type="button"
+                onClick={() => selectPriceSource(source)}
+                title={source === 'bc3' ? "Usar el precio del BC3" : "Usar la estimación de la IA"}
+                className="w-full text-right font-mono text-sm rounded-md px-2 py-1 transition-colors text-slate-400 border border-transparent hover:bg-slate-100 dark:hover:bg-white/5"
+            >
+                {formatCurrency(price * markupFactor)}
+            </button>
+        );
+    };
 
     // Guarda esta partida (from_scratch) en el libro de precios del constructor,
     // etiquetada como generada por IA. Entra en el RAG para reutilizarse en futuros
@@ -627,40 +729,19 @@ export const TableRowItem = React.memo(({
             {hasDualPrice ? (
                 <>
                     {/* Precio BC3 (del propio archivo) */}
-                    <div className="w-[110px] shrink-0 px-3 pt-2.5 pb-2 text-right">
-                        {bc3Price != null ? (
-                            <button
-                                type="button"
-                                onClick={() => onUpdate(item.id, { item: { ...item.item!, active_price_source: 'bc3', unitPrice: bc3Price } })}
-                                title="Usar el precio del BC3"
-                                className={cn(
-                                    "w-full text-right font-mono text-sm rounded-md px-2 py-1 transition-colors",
-                                    activePriceSource === 'bc3'
-                                        ? "bg-primary/15 border border-primary/40 text-slate-800 dark:text-white font-semibold"
-                                        : "text-slate-400 border border-transparent hover:bg-slate-100 dark:hover:bg-white/5"
-                                )}
-                            >
-                                {formatCurrency((bc3Price || 0) * markupFactor)}
-                            </button>
-                        ) : (
-                            <span className="block text-right text-slate-300 dark:text-slate-600 text-sm pr-2">—</span>
-                        )}
+                    <div className="w-[120px] shrink-0 px-2 pt-2.5 pb-2 text-right">
+                        {!rowHasBc3
+                            ? <span className="block text-right text-slate-300 dark:text-slate-600 text-sm pr-2 pt-1">—</span>
+                            : activePriceSource === 'bc3'
+                                ? renderActivePriceCell('bc3')
+                                : renderSourceButton('bc3')}
                     </div>
-                    {/* Precio IA (estimación catálogo + Vertex) */}
-                    <div className="w-[110px] shrink-0 px-3 pt-2.5 pb-2 text-right">
-                        <button
-                            type="button"
-                            onClick={() => onUpdate(item.id, { item: { ...item.item!, active_price_source: 'ai', unitPrice: aiPrice } })}
-                            title="Usar la estimación de la IA"
-                            className={cn(
-                                "w-full text-right font-mono text-sm rounded-md px-2 py-1 transition-colors",
-                                activePriceSource === 'ai'
-                                    ? "bg-violet-500/15 border border-violet-500/40 text-slate-800 dark:text-white font-semibold"
-                                    : "text-slate-400 border border-transparent hover:bg-slate-100 dark:hover:bg-white/5"
-                            )}
-                        >
-                            {formatCurrency((aiPrice || 0) * markupFactor)}
-                        </button>
+                    {/* Precio IA (estimación catálogo + Vertex). Sin precio BC3 en la
+                        fila, esta es su única columna de precio → siempre editable. */}
+                    <div className="w-[120px] shrink-0 px-2 pt-2.5 pb-2 text-right">
+                        {activePriceSource === 'ai' || !rowHasBc3
+                            ? renderActivePriceCell('ai')
+                            : renderSourceButton('ai')}
                         {priceDivergence >= 0.08 && (
                             <div className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5 pr-1" title="Divergencia entre el precio del BC3 y la estimación IA">
                                 ▲ {Math.round(priceDivergence * 100)}%
@@ -672,20 +753,7 @@ export const TableRowItem = React.memo(({
                 /* Unit Price — mostrado all-in (raw × markupFactor). Edita en valor all-in y se guarda raw. */
                 <div className="w-[120px] shrink-0 px-3 pt-3 pb-2 text-right">
                     <div className="relative group/price">
-                        <EditableCell
-                            value={displayUnitPrice}
-                            onChange={(val) => {
-                                // Phase 15 — el usuario edita en all-in; almacenamos raw PEM.
-                                // Sprint 3 — S3-07: usar handleUpdate para registrar correction-pair.
-                                handleUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } });
-                            }}
-                            onLiveChange={(val) => onUpdate(item.id, { item: { ...item.item!, unitPrice: unitPriceAllInToRaw(val) } }, true)}
-                            type="currency"
-                            className={cn(
-                                "text-right text-sm font-mono text-slate-700 dark:text-slate-200 bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-zinc-900 w-full",
-                                item.item?.unitPrice === 0 && "text-red-500 font-bold"
-                            )}
-                        />
+                        {renderUnitPriceInput()}
                         {showGhostMode && item.originalState && (
                             <div className="absolute -bottom-4 right-2 text-[10px] text-slate-400 line-through">
                                 {formatCurrency(item.originalState.unitPrice * markupFactor)}

@@ -18,20 +18,51 @@ añade ~2× sobre eso ≈ ~330KB. Es despreciable en el worker (2GiB RAM).
 
 Latencia: el BM25 tarda <10ms para queries de 5-10 tokens sobre 1,661 docs.
 El vector search es la pieza lenta (Firestore I/O ~50-100ms). Total <150ms.
+
+Arreglos de recuperación (2026-09):
+  - El vector search solo devuelve partidas (`kind == "item"`); antes el top-K
+    se llenaba de breakdowns que se descartaban después del corte.
+  - Cada ranking se deduplica antes del RRF y se descartan códigos ajenos al
+    catálogo en memoria ANTES de cortar a `top_k` → siempre `top_k` si existen.
+  - Capítulo y unidad son señales BLANDAS (bonus/penalización multiplicativa
+    sobre el score fusionado), no filtros → desaparece el reintento "sin filtro".
+  - Tokenización con plegado de tildes y singular/plural ligero.
 """
 from __future__ import annotations
 
 import inspect
 import logging
 import re
+import unicodedata
 from typing import Any, Dict, List, Optional
 
 from rank_bm25 import BM25Okapi
 
 from src.budget.application.ports.ports import IVectorSearch
 from src.budget.catalog.domain.price_book_entry import PriceBookItemEntry
+from src.budget.catalog.domain.unit import dimension_mismatch
 
 logger = logging.getLogger(__name__)
+
+# ---- Señales blandas sobre el score fusionado (RRF) ------------------------
+#
+# Escala de referencia: con rrf_k=60, el top-1 de UN ranking aporta 1/60≈0.0167
+# y el top-1 de ambos ≈0.0333. Las señales son MULTIPLICATIVAS sobre el score
+# RRF, se aplican ANTES del corte a top_k y nunca excluyen candidatos.
+
+# BONUS de capítulo: el capítulo de la partida (normalizado, sin prefijo
+# numérico) casa por prefijo con el capítulo del candidato en la taxonomía del
+# libro. Pequeño (+8 %): desempata entre candidatos cercanos, no rescata
+# candidatos lejanos. Si el capítulo de la partida no casa con ninguno del
+# libro, la señal se ignora (taxonomías cliente ≠ libro son lo habitual).
+CHAPTER_MATCH_BONUS_FACTOR = 1.08
+
+# PENALIZACIÓN de unidad: la dimensión física del candidato es incompatible con
+# la de la partida (`unit.dimension_mismatch`: no penaliza pares puenteables
+# superficie↔volumen / lineal↔discreto ni partidas pa/%/h ni dimensiones
+# desconocidas). ×0.5 ≈ baja un top-1-de-ambos al nivel de un top-1-de-uno: el
+# candidato sigue en el pool (el Judge puede convertir) pero cede el sitio.
+UNIT_MISMATCH_PENALTY_FACTOR = 0.5
 
 
 # ---- Tokenization ---------------------------------------------------------
@@ -50,24 +81,88 @@ _SPANISH_STOPWORDS = {
 _TOKEN_SPLIT_RE = re.compile(r"[^\w]+", re.UNICODE)
 
 
-def tokenize_es(text: Optional[str]) -> List[str]:
-    """Tokeniza texto en español para indexación BM25.
+def fold_accents(text: Optional[str]) -> str:
+    """Minúsculas + plegado de tildes/diacríticos vía NFKD (hormigón→hormigon,
+    ñ→n, m²→m2). Idéntico para índice y consulta."""
+    if not text:
+        return ""
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
 
-    - Lowercase.
+
+# Letras tras las que el plural español añade "-es" (pared-es, tablón-es,
+# interior-es, red-es, reloj-es). En esos casos se quita "es" completo.
+_PLURAL_ES_PRECEDING = frozenset("lnrdj")
+
+
+def light_singular_es(token: str) -> str:
+    """Singular/plural LIGERO (no es un stemmer): colapsa el plural regular.
+
+      - len ≥ 5, termina en "es" y la letra anterior ∈ {l,n,r,d,j} → quita "es"
+        (paredes→pared, tablones→tablon, interiores→interior).
+      - si no, len ≥ 4 y termina en "s" (pero no "ss") → quita "s"
+        (tabiques→tabique, baldosas→baldosa, morteros→mortero).
+
+    Se aplica igual al indexar y al consultar, así que singular y plural casan.
+    """
+    if len(token) >= 5 and token.endswith("es") and token[-3] in _PLURAL_ES_PRECEDING:
+        return token[:-2]
+    if len(token) >= 4 and token.endswith("s") and not token.endswith("ss"):
+        return token[:-1]
+    return token
+
+
+def tokenize_es(text: Optional[str]) -> List[str]:
+    """Tokeniza texto en español para indexación BM25 (y boost léxico).
+
+    - Minúsculas + plegado de tildes (NFKD): "Hormigón" → "hormigon".
     - Splits on no-word characters (incluye guiones, comas, =, %, etc.).
     - Filtra tokens < 2 caracteres (típicamente ruido como 'm', 's').
     - Filtra stopwords de la lista mínima `_SPANISH_STOPWORDS`.
+    - Singular/plural ligero (`light_singular_es`).
 
-    No hace stemming todavía: las partidas son ya muy específicas y un
-    stemmer agresivo (Porter/Snowball) puede perder discriminación
-    técnica (ej: 'pintura' vs 'pintar'). Si Sprint 3 demuestra que sí
-    ayuda, se incorporará entonces.
+    Sin stemming agresivo (Porter/Snowball): las partidas son muy
+    específicas y un stemmer fuerte pierde discriminación técnica
+    (ej: 'pintura' vs 'pintar').
     """
     if not text:
         return []
-    lowered = text.lower()
-    tokens = _TOKEN_SPLIT_RE.split(lowered)
-    return [t for t in tokens if len(t) >= 2 and t not in _SPANISH_STOPWORDS]
+    tokens = _TOKEN_SPLIT_RE.split(fold_accents(text))
+    return [
+        light_singular_es(t)
+        for t in tokens
+        if len(t) >= 2 and t not in _SPANISH_STOPWORDS
+    ]
+
+
+# ---- Taxonomía de capítulos (señal blanda) ------------------------------
+
+# Prefijos numéricos de capítulo en presupuestos de cliente: "01 ", "C01 ",
+# "1.", "1. ", "01.02 ", "CAP. 3 ", "CAPITULO 04 - ".
+_CHAPTER_NUM_PREFIX_RE = re.compile(
+    r"^\s*(?:CAP(?:ITULO)?\.?\s*)?[A-Z]?\d+(?:[.\-]\d+)*\s*[.\-)]?\s*"
+)
+# Longitud mínima de la parte común para aceptar un casado por prefijo (evita
+# que "C" o "OBRA" casen con medio catálogo).
+_CHAPTER_PREFIX_MIN_LEN = 5
+
+
+def normalize_chapter_name(chapter: Optional[str], *, strip_numeric_prefix: bool = True) -> str:
+    """Normaliza un nombre de capítulo para compararlo con la taxonomía del
+    libro: MAYÚSCULAS, sin tildes, sin «…»/«...» ni puntos finales, espacios
+    colapsados y (opcional) sin prefijo numérico tipo "01 ", "C01 ", "1.".
+    """
+    if not chapter:
+        return ""
+    s = fold_accents(chapter).upper()
+    s = s.replace("…", " ").replace("...", " ")
+    s = re.sub(r"\s+", " ", s).strip()
+    if strip_numeric_prefix:
+        stripped = _CHAPTER_NUM_PREFIX_RE.sub("", s, count=1).strip()
+        if stripped:
+            s = stripped
+    s = s.rstrip(" .").strip()
+    return s
 
 
 # ---- Código base CYPE / FIEBDC -------------------------------------------
@@ -92,45 +187,60 @@ def cype_base_code(code: Optional[str]) -> Optional[str]:
 # ---- Reciprocal Rank Fusion ----------------------------------------------
 
 
+def dedupe_ranking(ranking: List[str]) -> List[str]:
+    """Quita duplicados de un ranking conservando la PRIMERA aparición (mejor
+    rango). Un código debe contar una sola vez por ranking en el RRF."""
+    seen: set = set()
+    out: List[str] = []
+    for item_id in ranking:
+        if item_id and item_id not in seen:
+            seen.add(item_id)
+            out.append(item_id)
+    return out
+
+
 def reciprocal_rank_fusion(
     rankings: List[List[str]],
     *,
     rrf_k: int = 60,
+    weights: Optional[List[float]] = None,
 ) -> List[tuple[str, float]]:
     """Combina varios rankings de IDs en uno solo con RRF.
 
-    Fórmula clásica (Cormack et al. 2009):
-        score(d) = sum_i  1 / (k + rank_i(d))
+    Fórmula clásica (Cormack et al. 2009), con peso opcional por ranking:
+        score(d) = sum_i  w_i / (k + rank_i(d))
 
     donde ``rank_i(d)`` es la posición (0-based) del item ``d`` en el
-    i-ésimo ranking. Items ausentes en un ranking simplemente no
-    contribuyen score desde ese ranking.
+    i-ésimo ranking (ya deduplicado: un id cuenta UNA vez por ranking, en su
+    mejor posición). Items ausentes en un ranking no contribuyen score desde
+    ese ranking. ``weights`` por defecto = 1.0 para todos.
 
     ``rrf_k`` = 60 es el valor original del paper; típicamente robusto.
-    Valores más bajos enfatizan más los top-K; valores más altos suavizan
-    el efecto de los rankings individuales.
 
     Devuelve lista de (item_id, score) ordenada por score descendente.
     """
     if not rankings:
         return []
     scores: Dict[str, float] = {}
-    for ranking in rankings:
-        for rank, item_id in enumerate(ranking):
-            scores[item_id] = scores.get(item_id, 0.0) + 1.0 / (rrf_k + rank)
+    for i, ranking in enumerate(rankings):
+        w = 1.0 if weights is None or i >= len(weights) else float(weights[i])
+        for rank, item_id in enumerate(dedupe_ranking(ranking)):
+            scores[item_id] = scores.get(item_id, 0.0) + w / (rrf_k + rank)
     # Stable sort: empates preservan el orden de descubrimiento.
     return sorted(scores.items(), key=lambda kv: -kv[1])
 
 
 # ---- HybridCatalogSearch -------------------------------------------------
-
-
 class HybridCatalogSearch:
-    """Search híbrido BM25 + Vector + RRF sobre el catálogo COAATMCA.
+    """Search híbrido BM25 + Vector + RRF sobre el catálogo del libro.
 
-    El catálogo se carga una sola vez al boot (1,661 items). El BM25 vive
-    en memoria; el vector search delega al ``IVectorSearch`` adapter
+    El catálogo (solo `kind="item"`) se carga una sola vez al boot. El BM25
+    vive en memoria; el vector search delega al ``IVectorSearch`` adapter
     inyectado (Firestore en producción, fake en tests).
+
+    Capítulo y unidad son SEÑALES BLANDAS (bonus/penalización sobre el score
+    fusionado), nunca filtros: así siempre salen ``top_k`` partidas si el
+    catálogo las tiene.
 
     Uso típico:
         svc = HybridCatalogSearch(items, vector_search)
@@ -138,14 +248,13 @@ class HybridCatalogSearch:
             query="solera hormigón HM-20",
             query_vector=embedding_de_la_query,
             top_k=15,
-            chapter_filter="03 HORMIGONES",
-            unit_dimension_filter="surface_area",
+            chapter_filter="03 HORMIGONES",        # señal blanda (bonus)
+            unit_dimension_filter="superficie",    # señal blanda (penalización)
         )
     """
 
-    # Pool size de candidatos por fuente antes del RRF. El plan dice top-30;
-    # con 1,661 items eso es ~2% del catálogo, suficiente para que el RRF
-    # converja sin inflar memoria.
+    # Pool size de candidatos por fuente antes del RRF (~2 % del catálogo):
+    # suficiente para que el RRF converja sin inflar memoria.
     _PER_SOURCE_CANDIDATES: int = 30
 
     def __init__(
@@ -172,11 +281,20 @@ class HybridCatalogSearch:
             base = cype_base_code(it.code)
             if base:
                 self._items_by_base_code.setdefault(base, it)
+        # Taxonomía de capítulos del libro, normalizada una vez al boot (para la
+        # señal blanda de capítulo). Hay capítulos truncados en origen
+        # ("ELECTRICIDAD Y TELECOMUNICACI…") → se casa por prefijo.
+        self._chapter_norm_by_code: Dict[str, str] = {
+            it.code: normalize_chapter_name(it.chapter) for it in self.catalog_items
+        }
+        self._chapter_taxonomy: List[str] = sorted(
+            {c for c in self._chapter_norm_by_code.values() if c}
+        )
+        self._chapter_match_cache: Dict[str, frozenset] = {}
         # Tokenizamos cada item con su descripción + unit_raw + search_aliases,
         # para que el BM25 (lado keyword del híbrido) también matchee la jerga
         # comercial/coloquial ("climalit", "riostra", "marés"…), no solo la
-        # redacción técnica oficial. Antes solo el vector se beneficiaba de los
-        # aliases; ahora también la búsqueda por palabra clave.
+        # redacción técnica oficial.
         self._tokenized: List[List[str]] = [
             tokenize_es(
                 f"{it.description} {it.unit_raw} "
@@ -185,16 +303,17 @@ class HybridCatalogSearch:
             for it in self.catalog_items
         ]
         # BM25Okapi requires non-empty tokenization to avoid div-by-zero.
-        # En catálogo vacío saltamos la construcción del índice; las queries
-        # devuelven lista vacía.
         if self._tokenized and any(self._tokenized):
             self._bm25: Optional[BM25Okapi] = BM25Okapi(self._tokenized)
         else:
             self._bm25 = None
         logger.info(
             f"[HybridCatalogSearch] indexed {len(self.catalog_items)} items "
-            f"(bm25_built={self._bm25 is not None})"
+            f"(bm25_built={self._bm25 is not None}, "
+            f"chapters={len(self._chapter_taxonomy)})"
         )
+
+    # ---- Code-first ------------------------------------------------------
 
     def lookup_by_code(self, code: Optional[str]) -> Optional[Dict[str, Any]]:
         """CODE-FIRST: resuelve una partida por su CÓDIGO contra el catálogo, sin
@@ -232,65 +351,66 @@ class HybridCatalogSearch:
             "_code_match": True,
         }
 
-    def _bm25_search(
-        self,
-        query_tokens: List[str],
-        *,
-        chapter_filter: Optional[str] = None,
-        unit_dimension_filter: Optional[str] = None,
-        limit: int = 30,
-    ) -> List[str]:
-        """Devuelve los ``limit`` codes con mejor score BM25 para la query.
+    # ---- Capítulo (señal blanda) ----------------------------------------
 
-        Aplica filtros estructurales DESPUÉS de calcular scores (BM25Okapi
-        no soporta filtros nativos). Para 1,661 items es despreciable.
-        Items con score cero quedan fuera (no aportan información).
-        """
+    def match_chapter(self, chapter: Optional[str]) -> frozenset:
+        """Capítulos normalizados del LIBRO que casan con el capítulo de la
+        partida: igualdad o prefijo en cualquier dirección (con una parte común
+        de ≥ `_CHAPTER_PREFIX_MIN_LEN` caracteres). Vacío si no casa ninguno —
+        en ese caso la señal de capítulo simplemente se ignora."""
+        norm = normalize_chapter_name(chapter)
+        if not norm:
+            return frozenset()
+        cached = self._chapter_match_cache.get(norm)
+        if cached is not None:
+            return cached
+        matched = set()
+        for cat in self._chapter_taxonomy:
+            if cat == norm:
+                matched.add(cat)
+                continue
+            shorter, longer = (cat, norm) if len(cat) <= len(norm) else (norm, cat)
+            if len(shorter) >= _CHAPTER_PREFIX_MIN_LEN and longer.startswith(shorter):
+                matched.add(cat)
+        result = frozenset(matched)
+        self._chapter_match_cache[norm] = result
+        return result
+
+    # ---- Fuentes ---------------------------------------------------------
+
+    def _bm25_search(self, query_tokens: List[str], *, limit: int = 30) -> List[str]:
+        """Devuelve los ``limit`` codes con mejor score BM25 para la query
+        (sin filtros: capítulo/unidad son señales blandas posteriores).
+        Items con score cero quedan fuera (no aportan información)."""
         if not self._bm25 or not query_tokens:
             return []
         scores = self._bm25.get_scores(query_tokens)
-        # Asociar score con index para luego filtrar.
         scored: List[tuple[int, float]] = [
             (i, s) for i, s in enumerate(scores) if s > 0
         ]
-        # Filtrar por chapter/unit_dim si aplica.
-        filtered: List[tuple[int, float]] = []
-        for idx, score in scored:
-            item = self.catalog_items[idx]
-            if chapter_filter and item.chapter != chapter_filter:
-                continue
-            if (
-                unit_dimension_filter
-                and item.unit_dimension
-                and item.unit_dimension != unit_dimension_filter
-            ):
-                continue
-            filtered.append((idx, score))
-        # Top-limit por score desc.
-        filtered.sort(key=lambda x: -x[1])
-        return [self.catalog_items[i].code for i, _ in filtered[:limit]]
+        scored.sort(key=lambda x: -x[1])
+        return dedupe_ranking(
+            [self.catalog_items[i].code for i, _ in scored[: limit * 2]]
+        )[:limit]
 
     async def _vector_search(
         self,
         query_vector: List[float],
         query_text: str,
         *,
-        chapter_filter: Optional[str] = None,
-        unit_dimension_filter: Optional[str] = None,
         limit: int = 30,
     ) -> List[Dict[str, Any]]:
-        """Wrap del IVectorSearch. Devuelve los resultados COMPLETOS (cada uno
-        con ``matchScore`` = coseno del adapter Firestore) para que el fusor
-        pueda usar el coseno como score final (Cambio #2), en vez de descartarlo
-        y quedarse solo con el score RRF."""
-        chapter_filters = [chapter_filter] if chapter_filter else None
+        """Wrap del IVectorSearch. Sin filtros de capítulo ni de unidad (son
+        señales blandas del híbrido; pasarlos al adapter duplicaría la
+        penalización). Devuelve los resultados COMPLETOS del adapter
+        (``_cosine_raw`` + ``matchScore`` con boosts)."""
         try:
             res = self.vector_search.search_similar_items(
                 query_vector=query_vector,
                 query_text=query_text,
                 limit=limit,
-                chapter_filters=chapter_filters,
-                partida_unit_dimension=unit_dimension_filter,
+                chapter_filters=None,
+                partida_unit_dimension=None,
             )
             # Backwards-compat: el port declara async pero el adapter
             # Firestore es sync. Aceptamos ambos.
@@ -299,6 +419,8 @@ class HybridCatalogSearch:
             logger.warning(f"[HybridCatalogSearch] vector_search failed: {e}")
             return []
         return results or []
+
+    # ---- Búsqueda --------------------------------------------------------
 
     async def search(
         self,
@@ -309,143 +431,104 @@ class HybridCatalogSearch:
         chapter_filter: Optional[str] = None,
         unit_dimension_filter: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Búsqueda híbrida combinada.
+        """Búsqueda híbrida BM25 + vector + RRF con señales blandas.
 
         Args:
-          query: texto de la query (para BM25 y log).
-          query_vector: embedding de la query (para vector search).
-          top_k: número final de candidatos a devolver.
-          chapter_filter: si se pasa, restringe BM25 al capítulo y empuja
-            el filtro hacia el vector search adapter (que decide cómo
-            aplicarlo).
-          unit_dimension_filter: idem para la dimensión física de la unidad.
+          query: texto de la query (BM25 + boost léxico del vector).
+          query_vector: embedding de la query.
+          top_k: número final de candidatos (siempre ``top_k`` si existen).
+          chapter_filter: capítulo de la PARTIDA. Señal blanda: si casa con la
+            taxonomía del libro, los candidatos de ese capítulo reciben
+            ``CHAPTER_MATCH_BONUS_FACTOR``; si no casa, se ignora. Ya NO filtra
+            (ni hay reintento "sin filtro": no hace falta).
+          unit_dimension_filter: dimensión física de la PARTIDA. Señal blanda:
+            ``UNIT_MISMATCH_PENALTY_FACTOR`` a los candidatos incompatibles
+            (ver ``unit.dimension_mismatch``). Nunca excluye.
 
-        Returns:
-          Lista de dicts (forma equivalente a la del IVectorSearch adapter)
-          ordenados por score combinado descendente. Cada dict incluye:
-          ``code``, ``description``, ``unit``, ``chapter``, ``priceTotal``,
-          ``unit_dimension``, ``matchScore`` (heredado del vector si está,
-          si no 1.0 por sigo de BM25), y ``_hybrid_rrf_score`` para auditoría.
+        Pipeline:
+          1. BM25 y vector (solo partidas) → rankings deduplicados, restringidos
+             a códigos presentes en el catálogo en memoria.
+          2. RRF → score fusionado.
+          3. Señales blandas multiplicativas sobre el score fusionado.
+          4. Orden por score final (fusión + señales; NO por coseno) y corte a
+             ``top_k``.
+
+        Cada candidato lleva trazas: ``_cosine_raw``, ``_hybrid_rrf_score``,
+        ``_bm25_rank``, ``_vector_rank`` (0-based o None), ``_final_score`` y
+        ``_soft_signals``. ``matchScore`` = coseno PURO si el candidato vino del
+        vector (señal de confianza para el tier Flash/Pro); si solo vino de
+        BM25, el score RRF (queda por debajo de cualquier match vectorial).
         """
-        if not query.strip():
+        if not query or not query.strip():
             return []
         if not self.catalog_items:
             return []
 
-        # Sprint 4 Fase G — best-effort chapter_filter:
-        #
-        # Las taxonomías de capítulos del PDF cliente (`"1 ACTUACIONES PREVIAS"`,
-        # `"C01 TRABAJOS PREVIOS"`, `"21 PATOLOGÍAS GRAVES"`) y del catálogo
-        # COAATMCA (`"DEMOLICIONES"`, `"HORMIGONES"`, `"FORJADOS"`) son
-        # sistemáticamente distintas — cliente organiza por orden de obra,
-        # catálogo por familia técnica.
-        #
-        # Pre-Sprint 4 no afloró: el LLM Vision NO extraía capítulos (todos
-        # `"Sin Capítulo"` → filter=None → search funcionaba sobre todo el
-        # catálogo). Sprint 4 extrae chapter_rate=100% → activamos filter →
-        # 0 docs match → cae a `from_scratch` masivamente.
-        #
-        # Best-effort: primero con chapter_filter (precisión si las taxonomías
-        # coinciden — futuro-proof). Si vacío, retry SIN filter (cobertura
-        # cuando no coinciden).
-        results = await self._do_search(
-            query=query,
-            query_vector=query_vector,
-            top_k=top_k,
-            chapter_filter=chapter_filter,
-            unit_dimension_filter=unit_dimension_filter,
-        )
-        if not results and chapter_filter:
-            logger.info(
-                "[HybridCatalogSearch] búsqueda vacía con chapter_filter=%r — "
-                "retry sin filter (best-effort por mismatch taxonomía).",
-                chapter_filter,
-            )
-            results = await self._do_search(
-                query=query,
-                query_vector=query_vector,
-                top_k=top_k,
-                chapter_filter=None,
-                unit_dimension_filter=unit_dimension_filter,
-            )
-        return results
-
-    async def _do_search(
-        self,
-        *,
-        query: str,
-        query_vector: List[float],
-        top_k: int,
-        chapter_filter: Optional[str],
-        unit_dimension_filter: Optional[str],
-    ) -> List[Dict[str, Any]]:
-        """Una iteración de búsqueda híbrida BM25 + Vector + RRF.
-
-        Separado de `search()` para permitir el retry best-effort sin
-        duplicar lógica.
-        """
         query_tokens = tokenize_es(query)
 
-        # 1. BM25 candidates (no I/O, syncrono).
-        bm25_codes = self._bm25_search(
-            query_tokens,
-            chapter_filter=chapter_filter,
-            unit_dimension_filter=unit_dimension_filter,
-            limit=self._PER_SOURCE_CANDIDATES,
-        )
+        # 1a. BM25 (no I/O).
+        bm25_codes = [
+            c for c in self._bm25_search(query_tokens, limit=self._PER_SOURCE_CANDIDATES)
+            if c in self._items_by_code
+        ]
 
-        # 2. Vector candidates (I/O contra Firestore en producción).
+        # 1b. Vector (I/O contra Firestore en producción).
         vector_results = await self._vector_search(
-            query_vector,
-            query_text=query,
-            chapter_filter=chapter_filter,
-            unit_dimension_filter=unit_dimension_filter,
-            limit=self._PER_SOURCE_CANDIDATES,
+            query_vector, query_text=query, limit=self._PER_SOURCE_CANDIDATES
         )
-        # Cambio #2 — guardamos el coseno por código para usarlo como score
-        # final (el vector es la señal fiable). Antes se descartaba.
         vector_codes: List[str] = []
         vector_cosine: Dict[str, float] = {}
+        vector_match: Dict[str, float] = {}
         for r in vector_results:
             c = r.get("code") or r.get("id")
-            if not c:
-                continue
+            if not c or c not in self._items_by_code or c in vector_cosine:
+                continue  # desconocido en el catálogo o duplicado
             vector_codes.append(c)
-            if c not in vector_cosine:
-                vector_cosine[c] = float(r.get("matchScore") or 0.0)
+            raw = r.get("_cosine_raw")
+            if raw is None:
+                raw = r.get("matchScore")
+            vector_cosine[c] = float(raw or 0.0)
+            vector_match[c] = float(r.get("matchScore") or 0.0)
 
-        logger.debug(
-            f"[HybridCatalogSearch] q={query[:60]!r} bm25={len(bm25_codes)} "
-            f"vec={len(vector_codes)} chap_filter={chapter_filter!r}"
-        )
+        bm25_rank = {c: i for i, c in enumerate(bm25_codes)}
+        vector_rank = {c: i for i, c in enumerate(vector_codes)}
 
-        # 3. RRF — fusiona ambos rankings en uno.
+        # 2. RRF.
         fused = reciprocal_rank_fusion(
             [bm25_codes, vector_codes], rrf_k=self.rrf_k
         )
 
-        # 4. Re-aplicar filtros estructurales (defensivo) y materializar
-        # los items con sus metadatos. Solo top_k.
-        out: List[Dict[str, Any]] = []
-        for code, rrf_score in fused[:top_k]:
-            item = self._items_by_code.get(code)
-            if item is None:
-                continue
-            if chapter_filter and item.chapter != chapter_filter:
-                continue
-            if (
-                unit_dimension_filter
-                and item.unit_dimension
-                and item.unit_dimension != unit_dimension_filter
+        # 3. Señales blandas ANTES del corte.
+        chapter_matches = self.match_chapter(chapter_filter) if chapter_filter else frozenset()
+        scored: List[tuple[float, int, str, float, Dict[str, Any]]] = []
+        for order, (code, rrf_score) in enumerate(fused):
+            item = self._items_by_code[code]
+            signals: Dict[str, Any] = {}
+            final = rrf_score
+            if chapter_matches and self._chapter_norm_by_code.get(code) in chapter_matches:
+                final *= CHAPTER_MATCH_BONUS_FACTOR
+                signals["chapter_bonus"] = CHAPTER_MATCH_BONUS_FACTOR
+            if unit_dimension_filter and dimension_mismatch(
+                unit_dimension_filter, item.unit_dimension
             ):
-                continue
-            # Cambio #2 — matchScore = COSENO del vector search (0..~1), no el
-            # RRF (~0.03). El RRF nunca superaba el umbral 0.85 del tier selector
-            # (→ siempre Pro) y no reflejaba la calidad real del match. Los
-            # candidatos que solo vinieron de BM25 (sin coseno) caen al score
-            # RRF, quedando por debajo de los matches vectoriales fuertes.
+                final *= UNIT_MISMATCH_PENALTY_FACTOR
+                signals["unit_penalty"] = UNIT_MISMATCH_PENALTY_FACTOR
+                signals["unit_dimensions"] = f"{unit_dimension_filter}->{item.unit_dimension}"
+            scored.append((final, order, code, rrf_score, signals))
+
+        # 4. Orden por score final (estable respecto al orden de fusión) + corte.
+        scored.sort(key=lambda t: (-t[0], t[1]))
+
+        logger.debug(
+            f"[HybridCatalogSearch] q={query[:60]!r} bm25={len(bm25_codes)} "
+            f"vec={len(vector_codes)} fused={len(fused)} "
+            f"chapter_hint={chapter_filter!r} matched={sorted(chapter_matches)}"
+        )
+
+        out: List[Dict[str, Any]] = []
+        for final, _order, code, rrf_score, signals in scored[:top_k]:
+            item = self._items_by_code[code]
             cosine = vector_cosine.get(code)
-            match_score = cosine if cosine is not None else rrf_score
             out.append({
                 "id": item.code,
                 "code": item.code,
@@ -456,13 +539,15 @@ class HybridCatalogSearch:
                 "chapter": item.chapter,
                 "section": item.section,
                 "priceTotal": item.priceTotal,
-                "matchScore": match_score,
-                "_hybrid_rrf_score": rrf_score,
+                "matchScore": cosine if cosine is not None else rrf_score,
+                "_cosine_raw": cosine,
+                # Compat: consumidores antiguos leen `_cosine`.
                 "_cosine": cosine,
+                "_vector_match_score": vector_match.get(code),
+                "_hybrid_rrf_score": rrf_score,
+                "_bm25_rank": bm25_rank.get(code),
+                "_vector_rank": vector_rank.get(code),
+                "_final_score": final,
+                "_soft_signals": signals,
             })
-
-        # Nota: NO reordenamos aquí — conservamos el orden RRF (BM25+vector) del
-        # pool. El ranking por coseno para el tier/juez lo hace aguas abajo el
-        # swarm (`_firestore_vector_swarm`), que ordena por `matchScore` (ahora
-        # coseno) tras fusionar los candidatos de todas las sub-queries.
         return out

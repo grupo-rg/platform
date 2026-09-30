@@ -80,3 +80,84 @@ class Unit:
         if dim_a is None or dim_b is None:
             return False
         return dim_a == dim_b
+
+
+# ---- Compatibilidad dimensional "blanda" (retrieval) ------------------------
+
+# Alias de dimensión que aparecen en datos/tests legacy (inglés) o en la jerga
+# de los planes ("longitud", "unidad"). Se pliegan al vocabulario canónico de
+# `Unit.DIMENSION` antes de comparar.
+_DIMENSION_ALIASES: dict[str, str] = {
+    "surface_area": "superficie",
+    "surface": "superficie",
+    "area": "superficie",
+    "volume": "volumen",
+    "length": "lineal",
+    "longitud": "lineal",
+    "linear": "lineal",
+    "unidad": "discreto",
+    "unit": "discreto",
+    "count": "discreto",
+    "time": "tiempo",
+    "percentage": "porcentaje",
+    "percent": "porcentaje",
+    "amount": "importe",
+    "lump_sum": "importe",
+    "mass": "masa",
+    "liquid_volume": "volumen_liquido",
+}
+
+# Pares de dimensiones PUENTEABLES: una partida en m² se valora a menudo con un
+# precio en m³ (espesor) y viceversa; una en ml con precios por ud (piezas por
+# metro) y viceversa. No se penalizan en el retrieval: decide el Judge con el
+# `unit_conversion_hints`.
+_BRIDGEABLE_DIMENSIONS: frozenset[frozenset[str]] = frozenset({
+    frozenset({"superficie", "volumen"}),
+    frozenset({"lineal", "discreto"}),
+})
+
+# Dimensiones de PARTIDA que no admiten comparación física con el candidato:
+# una partida alzada (pa), un porcentaje (%) o unas horas (h) pueden valorarse
+# con candidatos de cualquier unidad → nunca se penaliza ni filtra.
+_UNCONSTRAINED_PARTIDA_DIMENSIONS: frozenset[str] = frozenset({
+    "importe", "porcentaje", "tiempo",
+})
+
+
+_KNOWN_DIMENSIONS: frozenset[str] = frozenset(Unit.DIMENSION.values())
+
+
+def canonical_dimension(dim: Optional[str]) -> Optional[str]:
+    """Normaliza el nombre de una dimensión (alias inglés/legacy → canónico).
+    None si está vacía o no es una dimensión conocida."""
+    if not dim:
+        return None
+    d = str(dim).strip().lower()
+    if not d:
+        return None
+    d = _DIMENSION_ALIASES.get(d, d)
+    return d if d in _KNOWN_DIMENSIONS else None
+
+
+def dimension_mismatch(
+    partida_dim: Optional[str], candidate_dim: Optional[str]
+) -> bool:
+    """True si el candidato merece PENALIZACIÓN (nunca exclusión) por unidad.
+
+    No hay mismatch cuando:
+      - alguna de las dos dimensiones es desconocida/vacía (permisivo);
+      - la partida es importe/porcentaje/tiempo (pa, %, h);
+      - son iguales;
+      - forman un par puenteable (superficie↔volumen, lineal↔discreto).
+    """
+    p = canonical_dimension(partida_dim)
+    c = canonical_dimension(candidate_dim)
+    if p is None or c is None:
+        return False
+    if p in _UNCONSTRAINED_PARTIDA_DIMENSIONS:
+        return False
+    if p == c:
+        return False
+    if frozenset({p, c}) in _BRIDGEABLE_DIMENSIONS:
+        return False
+    return True
