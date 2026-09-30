@@ -80,10 +80,17 @@ def test_cumulative_shares_start_time_across_emits():
     emitter.increment_pipeline_job_failure(error_type="WorkerOOM")
     emitter.increment_pipeline_job_failure(error_type="LLMTimeout")  # different label
     assert len(client.calls) == 3
+
+    def start_seconds(call):
+        # proto-plus reciente expone el Timestamp como DatetimeWithNanoseconds
+        # (sin `.seconds`); versiones anteriores, como Timestamp con `.seconds`.
+        ts = call["time_series"][0].points[0].interval.start_time
+        return int(ts.timestamp()) if hasattr(ts, "timestamp") else ts.seconds
+
     # First two share start; third has its own start.
-    first_start = client.calls[0]["time_series"][0].points[0].interval.start_time.seconds
-    second_start = client.calls[1]["time_series"][0].points[0].interval.start_time.seconds
-    third_start = client.calls[2]["time_series"][0].points[0].interval.start_time.seconds
+    first_start = start_seconds(client.calls[0])
+    second_start = start_seconds(client.calls[1])
+    third_start = start_seconds(client.calls[2])
     assert first_start == second_start
     # Third labelset gets a fresh start_time (might equal first if same epoch
     # second — assert it's >=, not strictly greater).
