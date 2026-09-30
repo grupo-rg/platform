@@ -1,33 +1,38 @@
 import { genkit } from 'genkit';
-import { vertexAI, geminiEmbedding001, gemini } from '@genkit-ai/vertexai';
+import { vertexAI } from '@genkit-ai/google-genai';
 import dns from 'node:dns';
 import { getVertexPluginConfig } from './vertex-auth';
+import { defineEuEmbedder } from './eu-embedder';
+import { GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL } from './gemini-models';
+import { withGeminiFamilyConfig } from './genkit-family-config';
 
 /**
  * Shared Genkit Instance Configuration.
- * Inicializa Genkit con el plugin Vertex AI (Gemini Enterprise Agent Platform)
- * y exporta la instancia `ai` y el modelo de embeddings.
+ * Inicializa Genkit con Vertex AI (Gemini Enterprise Agent Platform) y exporta
+ * la instancia `ai`, el embedder y las referencias de modelo.
  *
- * Migrado desde `googleAI()` (Gemini Developer API / AI Studio, saldo prepago)
- * a Vertex AI (pago por uso vía la cuenta de facturación de GCP). Los IDs de
- * modelo y el embedder son idénticos; sólo cambia proveedor y autenticación.
+ * Migración Gemini 3.x (2026-09): plugin `@genkit-ai/google-genai` en location
+ * `global` (único endpoint con Gemini 3.x) para generación; embeddings en la
+ * región UE vía `defineEuEmbedder`. Ver `core/config/genkit.config.ts`.
  */
 
 // Fix for Node.js Undici fetch taking 60s to timeout on Windows IPv6 networks
 dns.setDefaultResultOrder('ipv4first');
 
-// Initialize Genkit
-export const ai = genkit({
-    plugins: [
-        vertexAI(getVertexPluginConfig()),
-    ],
-    promptDir: 'src/backend/ai/prompts', // Explicitly set prompt directory
-});
+// Initialize Genkit (+ config por familia Gemini en generate/generateStream)
+export const ai = withGeminiFamilyConfig(
+    genkit({
+        plugins: [
+            vertexAI(getVertexPluginConfig()),
+        ],
+        promptDir: 'src/backend/ai/prompts', // Explicitly set prompt directory
+    }),
+);
 
-// Export the Embedding Model Reference
-// Using geminiEmbedding001 which supports outputDimensionality.
-// Firestore requires exactly 768 dimensions.
-export const embeddingModel = geminiEmbedding001;
+// Embedder gemini-embedding-001 en europe-southwest1 (Firestore requiere 768 dims;
+// los call sites pasan `options: { outputDimensionality: 768 }`).
+export const embeddingModel = defineEuEmbedder(ai);
 
-// Use the model reference from the plugin
-export const gemini25Flash = gemini('gemini-2.5-flash');
+// Referencias de modelo (reparto aprobado: Flash = volumen, Pro = razonamiento).
+export const geminiFlash = vertexAI.model(GEMINI_FLASH_MODEL);
+export const geminiPro = vertexAI.model(GEMINI_PRO_MODEL);

@@ -1,5 +1,5 @@
 import { z } from 'genkit';
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import { materialRetrieverTool } from '@/backend/ai/core/tools/material-retriever.tool';
 
@@ -99,7 +99,7 @@ export const clientRequirementsFlow = ai.defineFlow(
         });
 
         const llmResponse = await ai.generate({
-            model: gemini25Flash,
+            model: geminiFlash,
             prompt: analysisPrompt,
             tools: [materialRetrieverTool],
             output: { schema: extractionSchema },

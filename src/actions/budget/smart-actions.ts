@@ -1,5 +1,5 @@
 'use server';
-import { ai, gemini25Flash } from '@/backend/ai/shared/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/shared/config/genkit.config';
 import { SurveyorAgent } from '@/backend/ai/private-core/agents/surveyor.agent';
 import { JudgeAgent } from '@/backend/ai/private-core/agents/judge.agent';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
@@ -22,7 +22,7 @@ export async function estimatePriceAction(description: string): Promise<{ succes
         `;
 
         const result = await ai.generate({
-            model: gemini25Flash, // Fast model
+            model: geminiFlash, // Fast model
             prompt: prompt,
             output: { format: 'json' }
         });

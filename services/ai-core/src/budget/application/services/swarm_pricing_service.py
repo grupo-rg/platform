@@ -203,11 +203,14 @@ ICL_EMPTY_SENTINEL = "(sin ejemplos históricos para esta partida)"
 
 
 # Fase 9.3 — Two-tier evaluation Flash/Pro.
-# Threshold de score sobre el cual aceptamos que Flash 2.5 es suficiente.
+# Threshold de score sobre el cual aceptamos que Flash es suficiente.
 TIER_FLASH_SCORE_THRESHOLD: float = 0.85
 # Modelos LLM. Mantenidos como constantes para evitar typos en strings sueltos.
-MODEL_FLASH: str = "gemini-2.5-flash"
-MODEL_PRO: str = "gemini-2.5-pro"
+# Migración Gemini 3.x: == GEMINI_FLASH_MODEL / GEMINI_PRO_MODEL de
+# ``infrastructure/config/model_registry.py`` (solo endpoint ``global``).
+# Juez de precios = Pro por defecto (ver ``_resolve_pricing_model``).
+MODEL_FLASH: str = "gemini-3.5-flash"
+MODEL_PRO: str = "gemini-3.1-pro-preview"
 
 # -------------------------------------------------------------------------------------------------
 # WS-3 — sesgo del material explícito + sanity de precio en el rerank/selección.
@@ -483,9 +486,18 @@ def _resolve_pricing_model(
     *,
     env: Optional[Dict[str, str]] = None,
 ) -> tuple[str, str]:
-    """S1-A-01 — Sprint 1 hotfix: decide qué modelo Gemini ejecuta el pricing.
+    """Decide qué modelo Gemini ejecuta el Juez de precios.
 
-    Política post-incidente 2026-05-18:
+    Migración Gemini 3.x (2026-09) — **Default: Juez = Pro**
+    (``gemini-3.1-pro-preview``, rol ``pricing_pro`` del registry), siempre, sin
+    heurística ni escalado (el escalado Flash→Pro del caller no se dispara porque
+    el modelo ya no es Flash).
+
+    Rollback / ahorro: ``PRICING_JUDGE_TIER=flash`` restaura EXACTAMENTE la
+    política S1-A-01 de abajo (Flash por defecto, Pro solo con
+    ``ENABLE_PRO_PRICING=true``). Cualquier otro valor (o sin set) → Pro.
+
+    Política S1-A-01 (post-incidente 2026-05-18; activa con PRICING_JUDGE_TIER=flash):
       - **Default: Flash siempre.** Pro queda fuera del camino caliente.
       - Pro requiere opt-in EXPLÍCITO via env var ``ENABLE_PRO_PRICING=true``.
       - La env var legacy ``FORCE_FLASH_PRICING`` se mantiene como alias
@@ -504,11 +516,13 @@ def _resolve_pricing_model(
 
     Returns:
       Tupla ``(model_id, reason)``. ``model_id`` es uno de:
-        - ``"gemini-2.5-flash"`` (default, casi siempre)
-        - ``"gemini-2.5-pro"`` (solo con ENABLE_PRO_PRICING=true Y
+        - ``MODEL_PRO`` / registry ``pricing_pro`` (default)
+        - con ``PRICING_JUDGE_TIER=flash``: ``MODEL_FLASH`` (casi siempre) o
+          ``MODEL_PRO`` (solo con ENABLE_PRO_PRICING=true Y
           ``suggested_tier == "pro"``)
     """
     resolved_env: Dict[str, str] = dict(env) if env is not None else dict(os.environ)
+    judge_tier = (resolved_env.get("PRICING_JUDGE_TIER") or "pro").strip().lower()
     enable_pro = _env_truthy(resolved_env.get("ENABLE_PRO_PRICING"))
     force_flash_legacy = _env_truthy(resolved_env.get("FORCE_FLASH_PRICING"))
 
@@ -520,6 +534,13 @@ def _resolve_pricing_model(
     # id per tier, not the flash-vs-pro decision.
     flash_model = get_model("pricing_flash", default_model_id=MODEL_FLASH).model_id
     pro_model = get_model("pricing_pro", default_model_id=MODEL_PRO).model_id
+
+    if judge_tier != "flash":
+        # Gemini 3.x — Juez Pro por defecto.
+        return pro_model, (
+            f"Juez Pro por defecto (PRICING_JUDGE_TIER={judge_tier}); "
+            f"suggested_tier={suggested_tier}"
+        )
 
     if enable_pro:
         # Opt-in explícito a Pro. La heurística decide tier libremente.
@@ -1289,7 +1310,7 @@ class SwarmPricingService:
             user_prompt=f"Partida: {item.description} (U: {item.unit})",
             response_schema=DeconstructResult,
             temperature=0.0,
-            model="gemini-2.5-flash"
+            model=MODEL_FLASH
         )
         try:
             res, usage = await deconstruct_call

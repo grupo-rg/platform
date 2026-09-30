@@ -1,14 +1,17 @@
 /**
  * Configurable Model Registry — shared domain types + code defaults (spec §5.1).
  *
- * Phase 0: pure indirection, ZERO behaviour change. Every default below is the
- * CURRENT model id in production, so seeding/reading the registry keeps the
- * pipeline identical until an owner deliberately edits a role via the admin UI.
+ * Gemini 3.x migration (2026-09): generation defaults moved to the 3.x family
+ * (approved split: `gemini-3.1-pro-preview` for reasoning roles — pricing judge,
+ * architect/orchestrator —, `gemini-3.5-flash` for volume roles,
+ * `gemini-3.1-flash-image` for renders). Embeddings UNCHANGED. A seeded
+ * `model_registry/{role}` doc still overrides these (rollback path).
  *
  * SHARED SCHEMA CONTRACT — the Python swarm (`services/ai-core`) reads the SAME
  * Firestore collection `model_registry` (doc id = role key). Keep this shape in
  * lock-step with `services/ai-core/src/budget/infrastructure/config/model_registry.py`.
  */
+import type { GeminiConfigInput } from '@/backend/ai/shared/config/gemini-models';
 
 export type ModelProvider = 'vertexai' | 'googleai' | 'local';
 
@@ -46,8 +49,14 @@ export const MODEL_ROLES: ModelRole[] = [
 /** The one role that must NOT hot-swap — swapping it invalidates every stored vector (spec §6). */
 export const EMBEDDING_ROLE: ModelRole = 'embedding';
 
-/** Default endpoint/region for every role (EU data residency). */
+/** Default endpoint/region for the EMBEDDING role (EU data residency). */
 export const DEFAULT_REGION = 'europe-southwest1';
+/**
+ * Default endpoint for GENERATION roles: Gemini 3.x is only served on the Vertex
+ * `global` endpoint (informational here — the real location comes from
+ * `GEMINI_GENERATION_LOCATION`, see `shared/config/vertex-auth.ts`).
+ */
+export const GENERATION_REGION = 'global';
 
 export interface ModelParams {
     temperature: number | null;
@@ -87,14 +96,20 @@ export interface ModelConfigDoc {
 
 /** Shape returned by `resolveModel()` — the id in every form a call site may need. */
 export interface ResolvedModel {
-    /** Bare id, e.g. `gemini-2.5-flash`. */
+    /** Bare id, e.g. `gemini-3.5-flash`. */
     id: string;
-    /** Genkit plugin reference, `gemini(id)` — for `ai.generate({ model })`. */
+    /** Genkit plugin reference, `vertexAI.model(id)` — for `ai.generate({ model })`. */
     genkitRef: unknown;
-    /** Provider-prefixed string, e.g. `vertexai/gemini-2.5-flash`. */
+    /** Provider-prefixed string, e.g. `vertexai/gemini-3.5-flash`. */
     prefixed: string;
     params: ModelParams;
     region: string;
+    /**
+     * Generation config for this model family, merging registry `params` with the
+     * call site's `base` (see `geminiConfig` in `shared/config/gemini-models.ts`).
+     * Works for both Genkit `config` and `@google/genai` `config`.
+     */
+    config: (base?: GeminiConfigInput) => Record<string, any>;
 }
 
 interface RoleDefault {
@@ -106,9 +121,11 @@ interface RoleDefault {
 }
 
 /**
- * CODE DEFAULTS = the CURRENT production ids (Phase-0 seed). `resolveModel()`
- * falls back to these on any error, so the pipeline can never hard-fail on bad
- * config, and the seed script writes exactly these values.
+ * CODE DEFAULTS (Gemini 3.x since 2026-09). `resolveModel()` falls back to these
+ * on any error, so the pipeline can never hard-fail on bad config, and the seed
+ * script writes exactly these values. `params.temperature` is only applied to
+ * 2.5-family ids (Gemini 3.x runs at the recommended default 1.0 — see
+ * `geminiConfig`).
  */
 export const MODEL_DEFAULTS: Record<ModelRole, RoleDefault> = {
     embedding: {
@@ -120,57 +137,57 @@ export const MODEL_DEFAULTS: Record<ModelRole, RoleDefault> = {
     },
     pricing_flash: {
         provider: 'vertexai',
-        modelId: 'gemini-2.5-flash',
-        region: DEFAULT_REGION,
+        modelId: 'gemini-3.5-flash',
+        region: GENERATION_REGION,
         params: { temperature: 0.2, maxOutputTokens: null, outputDimensionality: null },
         notes: 'Swarm pricing — Flash tier.',
     },
     pricing_pro: {
         provider: 'vertexai',
-        modelId: 'gemini-2.5-pro',
-        region: DEFAULT_REGION,
+        modelId: 'gemini-3.1-pro-preview',
+        region: GENERATION_REGION,
         params: { temperature: 0.2, maxOutputTokens: null, outputDimensionality: null },
-        notes: 'Swarm pricing — Pro tier. Opt-in (ENABLE_PRO_PRICING); off in prod.',
+        notes: 'Swarm pricing judge — DEFAULT since the Gemini 3.x migration (PRICING_JUDGE_TIER=flash rolls back to the Flash tier). Temperature ignored on 3.x.',
     },
     chat: {
         provider: 'vertexai',
-        modelId: 'gemini-2.5-flash',
-        region: DEFAULT_REGION,
+        modelId: 'gemini-3.5-flash',
+        region: GENERATION_REGION,
         params: { temperature: 0.2, maxOutputTokens: null, outputDimensionality: null },
         notes: 'Triage / commercial chat / wizard / demo / client-requirements.',
     },
     architect: {
         provider: 'vertexai',
-        modelId: 'gemini-2.5-flash',
-        region: DEFAULT_REGION,
+        modelId: 'gemini-3.1-pro-preview',
+        region: GENERATION_REGION,
         params: { temperature: 0.1, maxOutputTokens: null, outputDimensionality: null },
-        notes: 'Chapter decomposition (construction architect).',
+        notes: 'Reasoning roles: construction architect, architect agent, aparejador orchestrator (Pro).',
     },
     extraction: {
         provider: 'vertexai',
-        modelId: 'gemini-2.5-flash',
-        region: DEFAULT_REGION,
+        modelId: 'gemini-3.5-flash',
+        region: GENERATION_REGION,
         params: { temperature: 0.1, maxOutputTokens: null, outputDimensionality: null },
         notes: 'Invoice / attachments / measurements / price-book PDF parsing.',
     },
     transcription: {
         provider: 'vertexai',
-        modelId: 'gemini-2.5-flash',
-        region: DEFAULT_REGION,
+        modelId: 'gemini-3.5-flash',
+        region: GENERATION_REGION,
         params: { temperature: 0.2, maxOutputTokens: null, outputDimensionality: null },
         notes: 'Audio transcription.',
     },
     marketing: {
         provider: 'vertexai',
-        modelId: 'gemini-2.5-flash',
-        region: DEFAULT_REGION,
+        modelId: 'gemini-3.5-flash',
+        region: GENERATION_REGION,
         params: { temperature: 0.7, maxOutputTokens: null, outputDimensionality: null },
         notes: 'Marketing email rewrite.',
     },
     image_gen: {
         provider: 'vertexai',
-        modelId: 'gemini-2.5-flash-image',
-        region: DEFAULT_REGION,
+        modelId: 'gemini-3.1-flash-image',
+        region: GENERATION_REGION,
         params: { temperature: null, maxOutputTokens: null, outputDimensionality: null },
         notes: 'Renovation render image generation (non-critical path).',
     },

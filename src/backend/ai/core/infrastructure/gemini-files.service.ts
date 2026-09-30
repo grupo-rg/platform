@@ -56,7 +56,8 @@ export const GeminiFilesService = {
         const client = getGeminiClient();
         // Files/Batch API uses the Developer-API `models/<id>` id shape (a separate
         // client migration); the id itself now comes from the registry.
-        const extractionModel = `models/${(await resolveModel('extraction')).id}`;
+        const resolved = await resolveModel('extraction');
+        const extractionModel = `models/${resolved.id}`;
 
         // Create the JSONL request object
         // The Batch API expects each line to be a valid GenerateContent request
@@ -72,9 +73,8 @@ export const GeminiFilesService = {
                         ]
                     }
                 ],
-                generationConfig: {
-                    temperature: 0.1
-                }
+                // Config por familia (3.x: sin temperatura + thinkingLevel).
+                generationConfig: resolved.config({ temperature: 0.1 })
             }
         };
 

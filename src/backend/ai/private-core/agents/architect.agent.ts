@@ -1,4 +1,4 @@
-import { ai, gemini25Flash } from '../../shared/config/genkit.config';
+import { ai, geminiFlash } from '../../shared/config/genkit.config';
 import { generateWithRetry } from '../../shared/utils/ai-retry';
 import { resolveModel } from '@/backend/ai/core/config/model-registry';
 import * as fs from 'fs';
@@ -48,7 +48,7 @@ export type ArchitectResponse = z.infer<typeof ArchitectResponseSchema> & { usag
  * and break it down into the required COAATMCA construction chapters with generic descriptions.
  */
 export class ArchitectAgent {
-    private readonly model = gemini25Flash;
+    private readonly model = geminiFlash;
 
     async decomposeRequest(userRequest: string): Promise<ArchitectResponse> {
 
@@ -147,7 +147,7 @@ Cada objeto tarea en el array "tasks" debe tener:
         try {
             const result = await generateWithRetry({
                 // model-registry role 'architect' (spec §5.1); falls back to the
-                // code default (gemini-2.5-flash) on any registry error.
+                // code default (gemini-3.1-pro-preview) on any registry error.
                 model: (await resolveModel('architect')).prefixed,
                 prompt: prompt,
                 output: {

@@ -1,5 +1,5 @@
 import { z } from 'genkit';
-import { ai, gemini25Flash } from '@/backend/ai/shared/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/shared/config/genkit.config';
 import { generateWithRetry } from '@/backend/ai/shared/utils/ai-retry';
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import { demoMaterialRetrieverTool } from '@/backend/ai/public-demo/tools/demo-material-retriever.tool';
@@ -55,7 +55,7 @@ export const publicDemoRequirementsFlow = ai.defineFlow(
         `;
 
         const triageResult = await generateWithRetry({
-            model: gemini25Flash, // Could be an even smaller model if available
+            model: geminiFlash, // Could be an even smaller model if available
             prompt: triagePrompt,
             config: { temperature: 0.1, maxOutputTokens: 10 }
         });
@@ -148,7 +148,7 @@ export const publicDemoRequirementsFlow = ai.defineFlow(
         let result;
         try {
             const llmResponse = await generateWithRetry({
-                model: gemini25Flash,
+                model: geminiFlash,
                 prompt: analysisPrompt,
                 tools: [demoMaterialRetrieverTool],
                 output: { schema: extractionSchema },

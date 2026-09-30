@@ -321,7 +321,7 @@ class FromScratchCompositor:
         catalog_lookup: CatalogLookupService,
         material_search: IMaterialSearch,
         *,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3.5-flash",  # planificador = volumen → Flash 3.x
         min_material_score: float = 0.6,
         dominance_threshold: float = 0.85,
     ) -> None:

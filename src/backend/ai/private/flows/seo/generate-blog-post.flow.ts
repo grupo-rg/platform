@@ -1,4 +1,4 @@
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
 import { slugify } from '@/backend/marketing/domain/blog-post';
 
@@ -79,7 +79,7 @@ Devuelve un JSON con estos campos:
 - imageQueryEN: query corto EN INGLÉS (3-6 palabras) para buscar la imagen cover en Unsplash. Debe ser visual y específico — ej. "modern Mediterranean kitchen renovation", "bathroom marble tiles white", "outdoor pool villa Mallorca". Evita términos abstractos.`;
 
         const { output } = await ai.generate({
-            model: gemini25Flash,
+            model: geminiFlash,
             system,
             prompt: userPrompt,
             output: { schema: GenerateBlogPostOutputSchema },

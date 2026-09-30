@@ -121,7 +121,7 @@ export class GeminiPriceBookParser {
 
         const { output } = await ai.generate({
             // model-registry role 'extraction' (spec §5.1, site #19); falls back
-            // to the code default (gemini-2.5-flash) on any registry error.
+            // to the code default (gemini-3.5-flash) on any registry error.
             model: (await resolveModel('extraction')).prefixed,
             config: {
                 temperature: 0.1,

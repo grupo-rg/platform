@@ -73,7 +73,7 @@ async def main():
     
     logger.info(f"Encontrados {len(file_names)} archivos para organizar.")
     
-    llm = GoogleGenerativeAIAdapter(model_name="gemini-2.5-flash") # Flash es suficientemente rápido y barato para nombres de archivos
+    llm = GoogleGenerativeAIAdapter(model_name="gemini-3.5-flash") # Flash es suficientemente rápido y barato para nombres de archivos
     
     BATCH_SIZE = 40
     all_classifications = []

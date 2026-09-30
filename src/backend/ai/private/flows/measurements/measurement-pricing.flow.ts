@@ -10,7 +10,7 @@
  * - Smart Fallback (Materials + Estimated Labor)
  */
 
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
 import { MeasurementItemSchema, measurementExtractionFlow } from './measurement-extraction.flow';
 import { adminFirestore } from '@/backend/shared/infrastructure/firebase/admin-app';
@@ -113,7 +113,7 @@ async function processBatch(items: any[], useDeepSearch: boolean = true): Promis
                         reason: z.string().describe('Reason for the selection')
                     });
                     const verificationResult = await ai.generate({
-                        model: gemini25Flash,
+                        model: geminiFlash,
                         prompt: verificationPrompt,
                         output: { schema: VerificationSchema }
                     });

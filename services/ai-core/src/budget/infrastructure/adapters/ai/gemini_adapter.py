@@ -12,7 +12,18 @@ from pydantic import BaseModel, ValidationError
 
 from src.budget.application.ports.ports import ILLMProvider
 from src.budget.domain.exceptions import AIProviderError
-from src.budget.infrastructure.config.model_registry import get_model
+from src.budget.infrastructure.config.model_registry import (
+    EMBEDDING_MODEL,
+    GEMINI_FLASH_MODEL,
+    get_model,
+)
+from src.budget.infrastructure.adapters.ai.gemini_generation_config import (
+    build_generate_content_config,
+    embedding_location,
+    generation_location,
+    is_gemini3_family,
+    is_pro_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +187,31 @@ def _read_llm_call_timeout_seconds() -> float:
         return _DEFAULT_LLM_CALL_TIMEOUT_SECONDS
 
 
+# Gemini 3.x Pro (Juez / Arquitecto) piensa más y emite salidas largas: el
+# arquitecto con un brief de reforma integral tardó ~39s en el smoke (3k tokens
+# de salida). 60s dejaría fuera briefs grandes → timeout + retry + fallo. Para
+# modelos Pro 3.x el timeout efectivo es max(LLM_CALL_TIMEOUT_SECONDS,
+# LLM_CALL_TIMEOUT_SECONDS_PRO) (default 180s).
+_DEFAULT_LLM_CALL_TIMEOUT_SECONDS_PRO: float = 180.0
+
+
+def _read_llm_call_timeout_seconds_pro() -> float:
+    raw = (os.environ.get("LLM_CALL_TIMEOUT_SECONDS_PRO") or "").strip()
+    if not raw:
+        return _DEFAULT_LLM_CALL_TIMEOUT_SECONDS_PRO
+    try:
+        v = float(raw)
+        if 0 < v <= 600:
+            return v
+    except ValueError:
+        pass
+    logger.warning(
+        "LLM_CALL_TIMEOUT_SECONDS_PRO=%s inválido; usando default %.1f",
+        raw, _DEFAULT_LLM_CALL_TIMEOUT_SECONDS_PRO,
+    )
+    return _DEFAULT_LLM_CALL_TIMEOUT_SECONDS_PRO
+
+
 def _read_llm_call_max_retries() -> int:
     """Lee `LLM_CALL_MAX_RETRIES` del entorno; default = 2."""
     raw = (os.environ.get("LLM_CALL_MAX_RETRIES") or "").strip()
@@ -269,14 +305,22 @@ def _salvage_truncated_json(raw: str, schema: Type[BaseModel]) -> tuple[Optional
 
 class GoogleGenerativeAIAdapter(ILLMProvider):
     """
-    Adapter for Google Cloud Vertex AI (Gemini 2.5).
+    Adapter for Google Cloud Vertex AI (Gemini 3.x; 2.5 sigue soportado para rollback).
     Features built-in exponential backoff to handle rate limits and guaranteed Pydantic structured output.
     Uses native GCP Service Account OAuth2 Authentication for 99.9% SLA guarantees.
+
+    Dos clientes Vertex:
+      - ``genai_client`` (GENERACIÓN) en ``GEMINI_GENERATION_LOCATION`` (default
+        ``global``: los Gemini 3.x solo se sirven ahí).
+      - ``embedding_client`` (EMBEDDINGS) en ``GOOGLE_CLOUD_LOCATION`` (default
+        europe-southwest1, sin cambio: mismos vectores @768 que Firestore).
+    La config por familia (temperatura / thinking) vive en
+    ``gemini_generation_config.build_generate_content_config``.
     """
-    
+
     def __init__(
         self,
-        model_name: str = 'gemini-2.5-flash',
+        model_name: str = GEMINI_FLASH_MODEL,
         max_retries: Optional[int] = None,
         base_delay: float = 2.0,
         per_call_timeout_seconds: Optional[float] = None,
@@ -290,7 +334,9 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
             or os.environ.get("GCLOUD_PROJECT")
             or os.environ.get("FIREBASE_PROJECT_ID")
         )
-        self.location = os.environ.get("GOOGLE_CLOUD_LOCATION", "europe-southwest1")
+        # Generación → endpoint global (Gemini 3.x); embeddings → región UE.
+        self.location = generation_location()
+        self.embedding_location = embedding_location()
         if not self.project:
             raise ValueError(
                 "GOOGLE_CLOUD_PROJECT / GCLOUD_PROJECT / FIREBASE_PROJECT_ID missing for Vertex AI."
@@ -300,6 +346,12 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
         self.genai_client = genai.Client(
             vertexai=True, project=self.project, location=self.location
         )
+        if self.embedding_location == self.location:
+            self.embedding_client = self.genai_client
+        else:
+            self.embedding_client = genai.Client(
+                vertexai=True, project=self.project, location=self.embedding_location
+            )
 
         self.model_name = model_name
         # S1-A-06 — defaults configurables vía env vars. Las llamadas pueden
@@ -313,13 +365,30 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
             if per_call_timeout_seconds is not None
             else _read_llm_call_timeout_seconds()
         )
+        # Un override explícito (tests) manda para todos los modelos.
+        self._explicit_timeout = per_call_timeout_seconds is not None
 
-    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: Type[BaseModel], temperature: float = 0.2, model: str = "gemini-2.5-flash", image_base64: Optional[str] = None, max_output_tokens: int = 32768) -> tuple[BaseModel, Dict[str, int]]:
+    def _timeout_for(self, model: str) -> float:
+        """Timeout por intento; los Pro 3.x reciben más margen (ver arriba)."""
+        if (
+            not getattr(self, "_explicit_timeout", True)
+            and is_gemini3_family(model)
+            and is_pro_model(model)
+        ):
+            return max(self.per_call_timeout_seconds, _read_llm_call_timeout_seconds_pro())
+        return self.per_call_timeout_seconds
+
+    async def generate_structured(self, system_prompt: str, user_prompt: str, response_schema: Type[BaseModel], temperature: float = 0.2, model: str = GEMINI_FLASH_MODEL, image_base64: Optional[str] = None, max_output_tokens: int = 32768, thinking_level: Optional[str] = None) -> tuple[BaseModel, Dict[str, int]]:
         """
         Calls Vertex AI, enforcing a strict JSON return conforming to the Pydantic `response_schema`.
         Applies exponential backoff on HTTP 429 (ResourceExhausted).
 
-        `max_output_tokens` se fija por defecto a 32768. El máximo de gemini-2.5-flash es 65535,
+        Gemini 3.x: `temperature` se IGNORA (Google recomienda el default 1.0) y se
+        aplica `thinking_level` (param explícito o default por familia vía env
+        `GEMINI_FLASH_THINKING_LEVEL` / `GEMINI_PRO_THINKING_LEVEL`). Gemini 2.5:
+        config idéntica a la histórica. Ver `gemini_generation_config`.
+
+        `max_output_tokens` se fija por defecto a 32768. El máximo de Gemini 2.5/3.x es ~64k,
         pero 32k cubre con margen briefs complejos (Architect con 50+ tareas o pages PDF densas).
         Con el valor previo de 8192 el modelo truncaba JSON a mitad de string en reformas
         multi-habitación → ValidationError EOF → retries de salida igual de truncada.
@@ -373,11 +442,14 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
         parts.append(types.Part(text=user_prompt))
         contents = [types.Content(role="user", parts=parts)]
 
-        gen_config = types.GenerateContentConfig(
+        gen_config = build_generate_content_config(
+            types,
+            model=model,
             temperature=temperature,
             response_mime_type="application/json",
             max_output_tokens=max_output_tokens,
             system_instruction=full_system,
+            thinking_level=thinking_level,
         )
         
         attempt = 0
@@ -404,7 +476,7 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                     self.genai_client.aio.models.generate_content(
                         model=model, contents=contents, config=gen_config
                     ),
-                    timeout=self.per_call_timeout_seconds,
+                    timeout=self._timeout_for(model),
                 )
 
                 if not response.candidates:
@@ -413,7 +485,15 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                 candidate = response.candidates[0]
                 _content = getattr(candidate, "content", None)
                 _parts = getattr(_content, "parts", None) if _content else None
-                raw_json = (_parts[0].text or "").strip() if (_parts and _parts[0].text) else ""
+                # Gemini 3.x: la respuesta puede traer partes de pensamiento
+                # (`thought=True`) o varias partes de texto (con thought_signature).
+                # Concatenamos SOLO el texto de respuesta; en 2.5 equivale a parts[0].
+                raw_json = "".join(
+                    (p.text or "")
+                    for p in (_parts or [])
+                    if isinstance(getattr(p, "text", None), str)
+                    and getattr(p, "thought", None) is not True
+                ).strip()
                 if raw_json.startswith("```json"):
                     raw_json = raw_json[7:]
                 if raw_json.endswith("```"):
@@ -436,7 +516,10 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                     "promptTokenCount": getattr(_um, "prompt_token_count", 0) or 0,
                     "candidatesTokenCount": getattr(_um, "candidates_token_count", 0) or 0,
                     "totalTokenCount": getattr(_um, "total_token_count", 0) or 0,
-                } if _um else {"promptTokenCount": 0, "candidatesTokenCount": 0, "totalTokenCount": 0}
+                    # Gemini 3.x: el thinking se factura como salida y NO va en
+                    # candidatesTokenCount → lo exponemos para la telemetría de coste.
+                    "thoughtsTokenCount": getattr(_um, "thoughts_token_count", 0) or 0,
+                } if _um else {"promptTokenCount": 0, "candidatesTokenCount": 0, "totalTokenCount": 0, "thoughtsTokenCount": 0}
                 
                 if raw_json.startswith("[") and raw_json.endswith("]"):
                     schema_dict = response_schema.model_json_schema()
@@ -456,7 +539,7 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                 elapsed = time.monotonic() - call_started_at
                 error_str = (
                     f"llm_call_timeout: model={model} elapsed={elapsed:.1f}s "
-                    f"> timeout={self.per_call_timeout_seconds:.1f}s "
+                    f"> timeout={self._timeout_for(model):.1f}s "
                     f"(attempt {attempt + 1}/{self.max_retries})"
                 )
                 logger.warning(error_str)
@@ -542,10 +625,11 @@ class GoogleGenerativeAIAdapter(ILLMProvider):
                 # vectores ya almacenados en Firestore (gemini-embedding-001 @768)
                 # — NUNCA lo decide el registry (cambiar dims invalida vectores).
                 embedding_model = get_model(
-                    "embedding", default_model_id="gemini-embedding-001"
+                    "embedding", default_model_id=EMBEDDING_MODEL
                 ).model_id
+                # Cliente de EMBEDDINGS (región UE), no el de generación (global).
                 response = await asyncio.to_thread(
-                    self.genai_client.models.embed_content,
+                    self.embedding_client.models.embed_content,
                     model=embedding_model,
                     contents=text,
                     config=types.EmbedContentConfig(output_dimensionality=768),

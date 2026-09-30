@@ -1,4 +1,4 @@
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
 
 /**
@@ -111,7 +111,7 @@ ${keywordsBlock}
 Devuelve JSON con \`briefs\` (lista de exactamente ${totalPosts}) y \`summary\` (2-3 frases describiendo la estrategia).`;
 
         const { output } = await ai.generate({
-            model: gemini25Flash,
+            model: geminiFlash,
             system,
             prompt: userPrompt,
             output: { schema: EditorialPlanOutputSchema },

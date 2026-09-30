@@ -1,4 +1,4 @@
-import { gemini25Flash } from '../../shared/config/genkit.config';
+import { geminiFlash } from '../../shared/config/genkit.config';
 import { generateWithRetry } from '../../shared/utils/ai-retry';
 import { PriceBookItem } from '../../../../backend/price-book/domain/price-book-item';
 import { DecomposedTask } from './architect.agent';
@@ -15,7 +15,7 @@ export interface JudgeDecision {
  * The Judge Agent reviews the RAG candidates and makes a strict selection.
  */
 export class JudgeAgent {
-    private readonly model = gemini25Flash;
+    private readonly model = geminiFlash;
 
     async evaluateAndSelect(task: DecomposedTask, candidates: PriceBookItem[]): Promise<{ decision: JudgeDecision, usage?: any }> {
         if (candidates.length === 0) {

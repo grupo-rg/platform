@@ -1,4 +1,4 @@
-import { ai, gemini25Flash } from '@/backend/ai/core/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
 import { requestBudgetHandoffTool } from '../tools/request-budget-handoff.tool';
 import { listAvailableSlotsTool } from '../tools/list-available-slots.tool';
@@ -193,7 +193,7 @@ export const publicCommercialAgent = ai.defineFlow(
 
         try {
             const response = await ai.generate({
-                model: gemini25Flash,
+                model: geminiFlash,
                 system: buildSystemPrompt({
                     existingLeadId: input.existingLeadId,
                     leadName: input.leadName,

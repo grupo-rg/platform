@@ -1,5 +1,5 @@
 import { z, Part } from 'genkit';
-import { ai, gemini25Flash } from '@/backend/ai/shared/config/genkit.config';
+import { ai, geminiFlash } from '@/backend/ai/shared/config/genkit.config';
 
 const AttachmentInput = z.object({
     files: z.array(z.object({
@@ -45,7 +45,7 @@ export const analyzeAttachmentsFlow = ai.defineFlow(
         });
 
         const result = await ai.generate({
-            model: gemini25Flash,
+            model: geminiFlash,
             prompt: parts,
             config: {
                 temperature: 0.2,

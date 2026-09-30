@@ -58,7 +58,7 @@ export function IngestionDashboard({ job, onCancel }: IngestionDashboardProps) {
                             <Activity className="w-5 h-5 text-orange-500" />
                             Ingestión de Precios en Tiempo Real
                         </h2>
-                        <p className="text-sm text-slate-500">Conectado al motor neuronal Gemini 2.5 Flash</p>
+                        <p className="text-sm text-slate-500">Conectado al motor neuronal Gemini 3.5 Flash</p>
                     </div>
                     <Badge variant={status === 'processing' ? 'default' : 'secondary'} className="text-xs px-3 py-1 uppercase tracking-wider">
                         {status === 'processing' ? <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Processing</span> : status}

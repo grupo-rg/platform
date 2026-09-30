@@ -31,11 +31,22 @@ from src.budget.application.ports.ports import (
 )
 from src.budget.application.services.pdf_extractor_service import RestructuredItem
 from src.budget.application.services.swarm_pricing_service import (
+    MODEL_FLASH,
+    MODEL_PRO,
     BatchPricedItemV3,
     BatchPricingEvaluatorResultV3,
     PricingFinalResultDB,
     SwarmPricingService,
 )
+
+
+
+# Migración Gemini 3.x — el Juez es Pro por defecto. Estos tests cubren la
+# política S1-A-01 (Flash por defecto + opt-in ENABLE_PRO_PRICING), que ahora
+# se activa con PRICING_JUDGE_TIER=flash (rollback / ahorro).
+@pytest.fixture(autouse=True)
+def _legacy_flash_judge_policy(monkeypatch):
+    monkeypatch.setenv("PRICING_JUDGE_TIER", "flash")
 
 
 def _flash_response(match_kind="1:1", needs_review=False, price=60.0):
@@ -53,7 +64,7 @@ class _RecordingLLM(ILLMProvider):
         self.calls: List[Dict[str, Any]] = []
 
     async def generate_structured(self, system_prompt, user_prompt, response_schema, **kwargs):
-        model = kwargs.get("model", "gemini-2.5-flash")
+        model = kwargs.get("model", MODEL_FLASH)
         self.calls.append({"model": model})
         name = response_schema.__name__
         if name == "DeconstructResult":
@@ -113,7 +124,7 @@ def test_tier_used_reflects_real_model_not_heuristic(monkeypatch):
     monkeypatch.delenv("ENABLE_PRO_PRICING", raising=False)
     monkeypatch.delenv("FORCE_FLASH_PRICING", raising=False)
 
-    llm = _RecordingLLM({"gemini-2.5-flash": _flash_response()})
+    llm = _RecordingLLM({MODEL_FLASH: _flash_response()})
     # Candidato con unit mismatch → suggested_tier='pro'.
     candidates = [{
         "id": "C1", "description": "Hora oficial", "matchScore": 0.95,
@@ -152,8 +163,8 @@ def test_tier_used_pro_when_escalation_executed(monkeypatch):
     monkeypatch.setenv("ENABLE_PRO_PRICING", "true")
 
     llm = _RecordingLLM({
-        "gemini-2.5-flash": _flash_response(match_kind="from_scratch"),
-        "gemini-2.5-pro": _flash_response(price=80.0),  # final accepted result
+        MODEL_FLASH: _flash_response(match_kind="from_scratch"),
+        MODEL_PRO: _flash_response(price=80.0),  # final accepted result
     })
     # Candidatos fuertes → suggested_tier='flash'; pero escalation a Pro tras
     # match_kind='from_scratch'.
@@ -193,7 +204,7 @@ def test_job_metrics_final_counts_real_executions(monkeypatch):
     monkeypatch.delenv("ENABLE_PRO_PRICING", raising=False)
 
     # Aunque la heurística diga Pro (unit mismatch), sin opt-in todo va a Flash.
-    llm = _RecordingLLM({"gemini-2.5-flash": _flash_response()})
+    llm = _RecordingLLM({MODEL_FLASH: _flash_response()})
     candidates = [{
         "id": "C1", "description": "Hora", "matchScore": 0.95,
         "unit": "h", "priceTotal": 25.0,
@@ -226,7 +237,7 @@ def test_tier_reason_documents_both_real_and_suggested(monkeypatch):
     )
     monkeypatch.delenv("ENABLE_PRO_PRICING", raising=False)
 
-    llm = _RecordingLLM({"gemini-2.5-flash": _flash_response()})
+    llm = _RecordingLLM({MODEL_FLASH: _flash_response()})
     candidates = [{
         "id": "C1", "description": "X", "matchScore": 0.95,
         "unit": "h", "priceTotal": 25.0,

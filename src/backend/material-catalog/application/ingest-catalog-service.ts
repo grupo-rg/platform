@@ -1,7 +1,7 @@
 
 import { MaterialCatalogRepository } from '../domain/material-catalog-repository';
 import { MaterialItem, MaterialItemSchema } from '../domain/material-item';
-import { ai, gemini25Flash, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
+import { ai, geminiFlash, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
 import { PDFDocument } from 'pdf-lib';
 import { z } from 'zod';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -186,7 +186,7 @@ export class IngestMaterialCatalogService {
             while (attempts > 0) {
                 try {
                     const { output, usage } = await ai.generate({
-                        model: gemini25Flash,
+                        model: geminiFlash,
                         prompt: [
                             { text: extractionPrompt },
                             { media: { url: `data:application/pdf;base64,${subPdfBase64}` } }

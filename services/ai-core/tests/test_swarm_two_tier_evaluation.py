@@ -39,6 +39,17 @@ from src.budget.application.services.swarm_pricing_service import (
 )
 
 
+# Migración Gemini 3.x — el Juez es Pro por defecto. Estos tests cubren la
+# política S1-A-01 (Flash por defecto + opt-in ENABLE_PRO_PRICING), que ahora
+# se activa con PRICING_JUDGE_TIER=flash (rollback / ahorro).
+@pytest.fixture(autouse=True)
+def _legacy_flash_judge_policy(monkeypatch):
+    monkeypatch.setenv("PRICING_JUDGE_TIER", "flash")
+
+
+_LEGACY = {"PRICING_JUDGE_TIER": "flash"}
+
+
 # ---- Pure helper: _select_tier ---------------------------------------------
 
 
@@ -97,7 +108,7 @@ class _RecordingLLM(ILLMProvider):
         self.calls: List[Dict[str, Any]] = []
 
     async def generate_structured(self, system_prompt, user_prompt, response_schema, **kwargs):
-        model = kwargs.get("model", "gemini-2.5-flash")
+        model = kwargs.get("model", MODEL_FLASH)
         self.calls.append({"model": model, "user_prompt_len": len(user_prompt)})
         name = response_schema.__name__
         if name == "DeconstructResult":
@@ -162,7 +173,7 @@ def test_easy_partida_routed_to_flash(monkeypatch):
     )
 
     llm = _RecordingLLM({
-        "gemini-2.5-flash": _flash_response(match_kind="1:1"),
+        MODEL_FLASH: _flash_response(match_kind="1:1"),
     })
     candidates = [{"id": "C1", "description": "Tabique pladur", "matchScore": 0.92,
                    "unit": "m2", "priceTotal": 60.0}]
@@ -197,7 +208,7 @@ def test_hard_partida_routed_to_pro_directly(monkeypatch):
     # Opt-in a Pro (legacy behaviour). Sin este flag iría a Flash siempre.
     monkeypatch.setenv("ENABLE_PRO_PRICING", "true")
 
-    llm = _RecordingLLM({"gemini-2.5-pro": _pro_response()})
+    llm = _RecordingLLM({MODEL_PRO: _pro_response()})
     candidates = [{"id": "C1", "description": "Hora oficial", "matchScore": 0.95,
                    "unit": "h", "priceTotal": 25.0}]  # mismatch unit
     svc = SwarmPricingService(
@@ -228,8 +239,8 @@ def test_flash_escalates_to_pro_when_match_kind_from_scratch(monkeypatch):
     monkeypatch.setenv("ENABLE_PRO_PRICING", "true")
 
     llm = _RecordingLLM({
-        "gemini-2.5-flash": _flash_response(match_kind="from_scratch"),
-        "gemini-2.5-pro": _pro_response(price=80.0),
+        MODEL_FLASH: _flash_response(match_kind="from_scratch"),
+        MODEL_PRO: _pro_response(price=80.0),
     })
     candidates = [{"id": "C1", "description": "X", "matchScore": 0.92, "unit": "m2", "priceTotal": 60.0}]
     svc = SwarmPricingService(
@@ -262,8 +273,8 @@ def test_flash_escalates_when_needs_human_review_true(monkeypatch):
     monkeypatch.setenv("ENABLE_PRO_PRICING", "true")
 
     llm = _RecordingLLM({
-        "gemini-2.5-flash": _flash_response(match_kind="1:1", needs_review=True),
-        "gemini-2.5-pro": _pro_response(price=70.0),
+        MODEL_FLASH: _flash_response(match_kind="1:1", needs_review=True),
+        MODEL_PRO: _pro_response(price=70.0),
     })
     candidates = [{"id": "C1", "description": "X", "matchScore": 0.91, "unit": "m2", "priceTotal": 60.0}]
     svc = SwarmPricingService(
@@ -285,34 +296,34 @@ def test_flash_escalates_when_needs_human_review_true(monkeypatch):
 
 def test_resolve_pricing_model_default_returns_flash():
     """Sin env vars, el default es Flash, independientemente del suggested_tier."""
-    model, reason = _resolve_pricing_model("pro", env={})
+    model, reason = _resolve_pricing_model("pro", env=_LEGACY)
     assert model == MODEL_FLASH
     assert "flash" in reason.lower()
 
 
 def test_resolve_pricing_model_flash_suggestion_returns_flash_without_optin():
     """Sin opt-in, suggested_tier='flash' devuelve Flash con razón clara."""
-    model, reason = _resolve_pricing_model("flash", env={})
+    model, reason = _resolve_pricing_model("flash", env=_LEGACY)
     assert model == MODEL_FLASH
     assert "flash" in reason.lower()
 
 
 def test_resolve_pricing_model_enable_pro_with_pro_suggestion_returns_pro():
     """Con opt-in ENABLE_PRO_PRICING=true y suggested_tier='pro' → Pro."""
-    model, reason = _resolve_pricing_model("pro", env={"ENABLE_PRO_PRICING": "true"})
+    model, reason = _resolve_pricing_model("pro", env={**_LEGACY, "ENABLE_PRO_PRICING": "true"})
     assert model == MODEL_PRO
     assert "pro" in reason.lower()
 
 
 def test_resolve_pricing_model_enable_pro_with_flash_suggestion_returns_flash():
     """Con opt-in pero suggested_tier='flash' sigue siendo Flash (no se fuerza)."""
-    model, _ = _resolve_pricing_model("flash", env={"ENABLE_PRO_PRICING": "true"})
+    model, _ = _resolve_pricing_model("flash", env={**_LEGACY, "ENABLE_PRO_PRICING": "true"})
     assert model == MODEL_FLASH
 
 
 def test_resolve_pricing_model_force_flash_legacy_is_compatible():
     """FORCE_FLASH_PRICING=true (alias deprecado) sigue forzando Flash."""
-    model, reason = _resolve_pricing_model("pro", env={"FORCE_FLASH_PRICING": "true"})
+    model, reason = _resolve_pricing_model("pro", env={**_LEGACY, "FORCE_FLASH_PRICING": "true"})
     assert model == MODEL_FLASH
     assert "deprecado" in reason.lower() or "forzado" in reason.lower()
 
@@ -320,14 +331,14 @@ def test_resolve_pricing_model_force_flash_legacy_is_compatible():
 def test_resolve_pricing_model_truthy_env_var_values():
     """Reconoce '1', 'true', 'yes', 'on' como truthy (case-insensitive)."""
     for v in ["1", "true", "True", "TRUE", "yes", "on", "YES"]:
-        model, _ = _resolve_pricing_model("pro", env={"ENABLE_PRO_PRICING": v})
+        model, _ = _resolve_pricing_model("pro", env={**_LEGACY, "ENABLE_PRO_PRICING": v})
         assert model == MODEL_PRO, f"value {v!r} not recognized as truthy"
 
 
 def test_resolve_pricing_model_falsy_env_var_values():
     """Reconoce '0', 'false', '', valores arbitrarios como falsy."""
     for v in ["0", "false", "False", "no", "off", "", "anything", "  "]:
-        model, _ = _resolve_pricing_model("pro", env={"ENABLE_PRO_PRICING": v})
+        model, _ = _resolve_pricing_model("pro", env={**_LEGACY, "ENABLE_PRO_PRICING": v})
         assert model == MODEL_FLASH, f"value {v!r} should not be truthy"
 
 
@@ -347,7 +358,7 @@ def test_swarm_uses_flash_by_default_even_when_tier_says_pro(monkeypatch):
     monkeypatch.delenv("ENABLE_PRO_PRICING", raising=False)
     monkeypatch.delenv("FORCE_FLASH_PRICING", raising=False)
 
-    llm = _RecordingLLM({"gemini-2.5-flash": _flash_response(match_kind="1:1")})
+    llm = _RecordingLLM({MODEL_FLASH: _flash_response(match_kind="1:1")})
     candidates = [{"id": "C1", "description": "Hora oficial", "matchScore": 0.95,
                    "unit": "h", "priceTotal": 25.0}]  # unit mismatch → suggested_tier='pro'
     emitter = _SpyEmitter()
@@ -373,7 +384,7 @@ def test_swarm_uses_flash_by_default_even_when_tier_says_pro(monkeypatch):
     # Nuevo evento de resolución del modelo expone qué se ejecutó.
     model_events = [e for e in emitter.events if e["type"] == "pricing_model_resolved"]
     assert model_events
-    assert model_events[0]["data"]["model"] == "gemini-2.5-flash"
+    assert model_events[0]["data"]["model"] == MODEL_FLASH
     assert model_events[0]["data"]["suggested_tier"] == "pro"
 
 
@@ -388,7 +399,7 @@ def test_swarm_suppresses_escalation_without_optin(monkeypatch):
     )
     monkeypatch.delenv("ENABLE_PRO_PRICING", raising=False)
 
-    llm = _RecordingLLM({"gemini-2.5-flash": _flash_response(match_kind="from_scratch")})
+    llm = _RecordingLLM({MODEL_FLASH: _flash_response(match_kind="from_scratch")})
     candidates = [{"id": "C1", "description": "X", "matchScore": 0.92,
                    "unit": "m2", "priceTotal": 60.0}]
     emitter = _SpyEmitter()
@@ -418,7 +429,7 @@ def test_telemetry_emits_tier_assigned_event(monkeypatch):
         lambda self, filename, **kwargs: ("sys", kwargs.get("batch_items", "")),
     )
 
-    llm = _RecordingLLM({"gemini-2.5-flash": _flash_response()})
+    llm = _RecordingLLM({MODEL_FLASH: _flash_response()})
     candidates = [{"id": "C1", "description": "X", "matchScore": 0.95, "unit": "m2", "priceTotal": 60.0}]
     emitter = _SpyEmitter()
     svc = SwarmPricingService(
@@ -434,3 +445,28 @@ def test_telemetry_emits_tier_assigned_event(monkeypatch):
     assert tier_events[0]["data"]["tier"] == "flash"
     assert tier_events[0]["data"]["code"] == "TEST.1"
     assert "reason" in tier_events[0]["data"]
+
+
+# ---- Migración Gemini 3.x: Juez = Pro por defecto --------------------------
+
+
+@pytest.mark.parametrize("suggested", ["pro", "flash"])
+def test_resolve_pricing_model_default_is_pro_judge(suggested):
+    """Sin PRICING_JUDGE_TIER, el Juez es Pro (gemini-3.1-pro-preview) siempre."""
+    model, reason = _resolve_pricing_model(suggested, env={})
+    assert model == MODEL_PRO == "gemini-3.1-pro-preview"
+    assert "pro" in reason.lower()
+
+
+def test_resolve_pricing_model_pro_default_ignores_legacy_flags():
+    """ENABLE_PRO_PRICING / FORCE_FLASH_PRICING solo aplican con PRICING_JUDGE_TIER=flash."""
+    for env in ({"FORCE_FLASH_PRICING": "true"}, {"ENABLE_PRO_PRICING": "false"}, {"PRICING_JUDGE_TIER": "pro"}):
+        model, _ = _resolve_pricing_model("flash", env=env)
+        assert model == MODEL_PRO
+
+
+def test_resolve_pricing_model_flash_rollback_flag():
+    """PRICING_JUDGE_TIER=flash (case-insensitive) vuelve al Juez Flash."""
+    for v in ("flash", "FLASH", " Flash "):
+        model, _ = _resolve_pricing_model("pro", env={"PRICING_JUDGE_TIER": v})
+        assert model == MODEL_FLASH == "gemini-3.5-flash"

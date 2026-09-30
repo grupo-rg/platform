@@ -54,6 +54,12 @@ substitutions:
   _JOB_TASK_TIMEOUT: "3600s"
   _JOB_PARALLELISM: "1"
   _JOB_TASK_COUNT: "1"
+  # Gemini 3.x (generación) solo se sirve en el endpoint `global` de Vertex
+  # (sondeo 2026-09-30: 404 en europe-southwest1/west1/west4). Los embeddings
+  # (gemini-embedding-001 @768) siguen en la región UE: cambiar su región no
+  # cambia los vectores, pero mantenemos residencia UE para ellos.
+  _GEMINI_GENERATION_LOCATION: "global"
+  _EMBEDDING_LOCATION: "europe-southwest1"
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -99,7 +105,7 @@ steps:
       - --cpu=${_SERVICE_CPU}
       - --timeout=${_SERVICE_TIMEOUT}
       - --service-account=firebase-adminsdk-fbsvc@${PROJECT_ID}.iam.gserviceaccount.com
-      - --update-env-vars=WORKER_JOB_NAME=projects/${PROJECT_ID}/locations/${_REGION}/jobs/${_JOB_NAME}
+      - --update-env-vars=WORKER_JOB_NAME=projects/${PROJECT_ID}/locations/${_REGION}/jobs/${_JOB_NAME},GEMINI_GENERATION_LOCATION=${_GEMINI_GENERATION_LOCATION},GOOGLE_CLOUD_LOCATION=${_EMBEDDING_LOCATION}
       - --quiet
 
   # -- 4. Deploy Cloud Run Job (worker) ------------------------------------
@@ -127,6 +133,7 @@ steps:
       - --service-account=ai-core-worker-sa@${PROJECT_ID}.iam.gserviceaccount.com
       - --command=python
       - --args=-m,src.core.jobs.worker_main
+      - --update-env-vars=GEMINI_GENERATION_LOCATION=${_GEMINI_GENERATION_LOCATION},GOOGLE_CLOUD_LOCATION=${_EMBEDDING_LOCATION}
       - --quiet
 
 images:

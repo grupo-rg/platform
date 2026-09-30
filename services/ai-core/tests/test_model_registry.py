@@ -79,7 +79,7 @@ def test_get_model_reads_doc_when_present():
     mr._set_db_for_testing(db)
 
     cfg = mr.get_model("pricing_flash")
-    assert cfg.model_id == "gemini-2.5-flash"
+    assert cfg.model_id == "gemini-2.5-flash"  # el doc manda (rollback posible)
     assert cfg.provider == "vertexai"
     assert cfg.region == "europe-southwest1"
     assert cfg.params == {"temperature": 0.2}
@@ -113,8 +113,8 @@ def test_fallback_on_missing_doc_returns_code_default():
     db = _FakeDb(docs={})  # no docs at all
     mr._set_db_for_testing(db)
 
-    assert mr.get_model("pricing_flash").model_id == "gemini-2.5-flash"
-    assert mr.get_model("pricing_pro").model_id == "gemini-2.5-pro"
+    assert mr.get_model("pricing_flash").model_id == mr.GEMINI_FLASH_MODEL
+    assert mr.get_model("pricing_pro").model_id == mr.GEMINI_PRO_MODEL
     assert mr.get_model("embedding").model_id == "gemini-embedding-001"
     # embedding code default carries the 768 dims marker.
     assert mr.get_model("embedding").params["outputDimensionality"] == 768
@@ -126,7 +126,7 @@ def test_fallback_when_disabled():
     })
     mr._set_db_for_testing(db)
     # enabled=false → force the code default, NOT the doc's modelId.
-    assert mr.get_model("pricing_flash").model_id == "gemini-2.5-flash"
+    assert mr.get_model("pricing_flash").model_id == mr.GEMINI_FLASH_MODEL
 
 
 def test_fallback_when_modelid_blank_or_missing():
@@ -135,15 +135,15 @@ def test_fallback_when_modelid_blank_or_missing():
         "pricing_pro": {"provider": "vertexai"},  # no modelId key
     })
     mr._set_db_for_testing(db)
-    assert mr.get_model("pricing_flash").model_id == "gemini-2.5-flash"
-    assert mr.get_model("pricing_pro").model_id == "gemini-2.5-pro"
+    assert mr.get_model("pricing_flash").model_id == mr.GEMINI_FLASH_MODEL
+    assert mr.get_model("pricing_pro").model_id == mr.GEMINI_PRO_MODEL
 
 
 def test_fallback_on_firestore_error():
     db = _FakeDb(raise_on_get=True)
     mr._set_db_for_testing(db)
     # Any Firestore error → code default, never raises.
-    assert mr.get_model("pricing_flash").model_id == "gemini-2.5-flash"
+    assert mr.get_model("pricing_flash").model_id == mr.GEMINI_FLASH_MODEL
 
 
 def test_fallback_when_no_admin_client(monkeypatch):
