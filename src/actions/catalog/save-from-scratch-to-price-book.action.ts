@@ -18,6 +18,37 @@ interface SaveFromScratchInput {
     userId?: string;
 }
 
+/**
+ * Dimensión física de la unidad — espejo de `Unit.dimension_of` del servicio
+ * Python (`services/ai-core/src/budget/catalog/domain/unit.py`). La usa la señal
+ * blanda de unidad del retrieval (penaliza candidatos de dimensión incompatible).
+ * `undefined` si la unidad no se reconoce (el retrieval no penaliza entonces).
+ */
+const UNIT_DIMENSION_BY_SYNONYM: Record<string, string> = (() => {
+    const table: Record<string, [string, string[]]> = {
+        ud: ['discreto', ['ud', 'u', 'uds', 'und', 'unidad', 'unit']],
+        m2: ['superficie', ['m2', 'm²', 'm.cuad', 'm cuadrados', 'metro cuadrado']],
+        m3: ['volumen', ['m3', 'm³', 'm.cub', 'm cubicos', 'metro cubico']],
+        ml: ['lineal', ['ml', 'm', 'm.l.', 'metro lineal', 'mts', 'mtl']],
+        kg: ['masa', ['kg', 'kgs', 'kilo', 'kilogramo']],
+        t: ['masa', ['t', 'ton', 'tonelada', 'tn']],
+        h: ['tiempo', ['h', 'hora', 'hr', 'hrs']],
+        l: ['volumen_liquido', ['l', 'litro', 'lts', 'lt']],
+        '%': ['porcentaje', ['%', 'porcentaje', 'pct']],
+        pa: ['importe', ['pa', 'p.a.', 'partida alzada']],
+    };
+    const out: Record<string, string> = {};
+    for (const [dimension, synonyms] of Object.values(table)) {
+        for (const s of synonyms) out[s] = dimension;
+    }
+    return out;
+})();
+
+function unitDimensionOf(unit: string | undefined): string | undefined {
+    if (!unit) return undefined;
+    return UNIT_DIMENSION_BY_SYNONYM[unit.trim().toLowerCase()];
+}
+
 /** Palabras clave para el re-ranking híbrido (keyword boost). */
 function buildKeywords(description: string): string[] {
     const stop = new Set(['de', 'la', 'el', 'los', 'las', 'con', 'para', 'por', 'del', 'una', 'uno', 'y', 'en', 'a']);
@@ -120,9 +151,13 @@ export async function saveFromScratchToPriceBookAction(input: SaveFromScratchInp
             // BM25 híbrido del pipeline NL→budget (`list_all_items` filtra
             // `kind=='item'` y luego `PriceBookItemEntry(**data)` exige `unit_raw`
             // y `chapter`). Sin esto solo la reutilizaba el path vectorial legacy.
+            // `kind: 'item'` es además OBLIGATORIO para el vector search: el
+            // adapter Python pre-filtra `where kind == 'item'` (índice
+            // kind+embedding) — sin él la partida no aparecería nunca.
             kind: 'item',
             unit_raw: unit,
             unit_normalized: unit,
+            unit_dimension: unitDimensionOf(unit),
             chapter: chapter || 'Sin Capítulo',
             searchKeywords: buildKeywords(description),
             breakdown: breakdown.length > 0 ? breakdown : undefined,

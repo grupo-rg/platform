@@ -67,6 +67,7 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
     """
     # Import diferido para no crear dependencia circular en tiempo de carga.
     from src.budget.application.services.pdf_extractor_service import RestructuredItem
+    from src.budget.catalog.domain.unit import Unit
 
     # Mapa inverso: child_code → parent_code (para reconstruir chapter path).
     parent_of: dict[str, str] = {}
@@ -163,6 +164,17 @@ def bc3_tree_to_restructured_items(tree: Bc3Tree) -> List["RestructuredItem"]:
                 sub_chapter=None,  # BC3 no distingue sub-capítulo explícito
                 bc3_unit_price=bc3_price,
                 measurements=measurement_lines,
+                # Resumen corto `~C` → núcleo de la consulta de recuperación
+                # (`build_retrieval_query`). El Judge sigue viendo `description`.
+                summary=short or None,
+                # Dimensión física para la señal blanda de unidad del retrieval
+                # (antes BC3 no la rellenaba → sin penalización dimensional).
+                # Los BC3 escriben a menudo la unidad con punto final ("m.",
+                # "ud.", "h.") que el normalizador no reconoce.
+                unit_dimension=(
+                    Unit.dimension_of(unit)
+                    or Unit.dimension_of((unit or "").strip().rstrip("."))
+                ),
             )
         )
 

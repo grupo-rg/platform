@@ -142,10 +142,41 @@ def test_llm_crashes_in_pricing_chunk_recovered(monkeypatch):
     assert "P.2" in _recovered_codes(emitter)
 
 
-def test_llm_crashes_in_deconstruction_recovered(monkeypatch):
+def test_llm_crash_in_deconstruction_no_longer_drops_candidates(monkeypatch):
+    """CAMBIO (arreglos de recuperación): antes un 429 en la deconstrucción
+    tumbaba la recuperación de la partida (drop A → fallback a 0 €). Ahora
+    `_analyze_and_deconstruct` captura el fallo y sigue con la consulta cruda:
+    la partida se valora con normalidad y NO cae al resguardo."""
     codes = ["P.1", "P.2", "P.3"]
+    # Descripciones ≥120 caracteres para que la deconstrucción LLM SÍ se invoque.
+    items = [
+        RestructuredItem(
+            code=c,
+            description=f"Partida {c} descripcion " + "con texto largo de pliego de condiciones " * 4,
+            quantity=2.0, unit="m2", chapter="A",
+        )
+        for c in codes
+    ]
     emitter = _SpyEmitter()
-    priced = _run(_FakeLLM(codes, crash_deconstruct_codes={"P.3"}), _make_items(codes), emitter, monkeypatch)
+    priced = _run(_FakeLLM(codes, crash_deconstruct_codes={"P.3"}), items, emitter, monkeypatch)
+    assert {p.code for p in priced} == set(codes)
+    assert _recovered_codes(emitter) == set()
+
+
+def test_retrieval_crash_recovered(monkeypatch):
+    """Drop A sigue cubierto: si la recuperación de una partida revienta por
+    completo, la partida se recupera como fallback determinista."""
+    codes = ["P.1", "P.2", "P.3"]
+    original = SwarmPricingService.retrieve_candidates
+
+    async def _crashing_retrieve(self, item, metrics):
+        if item.code == "P.3":
+            raise RuntimeError("simulated retrieval crash")
+        return await original(self, item, metrics)
+
+    monkeypatch.setattr(SwarmPricingService, "retrieve_candidates", _crashing_retrieve)
+    emitter = _SpyEmitter()
+    priced = _run(_FakeLLM(codes), _make_items(codes), emitter, monkeypatch)
     assert {p.code for p in priced} == set(codes)
     assert "P.3" in _recovered_codes(emitter)
 

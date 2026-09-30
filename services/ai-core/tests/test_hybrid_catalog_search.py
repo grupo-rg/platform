@@ -13,9 +13,11 @@ Tests:
   4. ``search`` con query semántica suelta coloca el item correcto top-1
      gracias a vector (BM25 solo no lo encuentra).
   5. ``search`` con query mixta deja al item correcto top-1.
-  6. Filtros estructurales (chapter, unit_dimension) reducen el candidate
-     pool antes de combinar (S1-A-05 hook).
+  6. Capítulo y unidad son SEÑALES BLANDAS (bonus / penalización) sobre el
+     score fusionado — ya no filtran el pool (antes S1-A-05 los aplicaba
+     como filtros duros con reintento "sin filtro").
   7. Latencia <100ms sobre dataset de 50 items sintético (smoke).
+  8. Dedupe por ranking, descarte de códigos ajenos y corte a top_k.
 """
 from __future__ import annotations
 
@@ -26,7 +28,10 @@ import pytest
 
 from src.budget.application.ports.ports import IVectorSearch
 from src.budget.catalog.application.services.hybrid_catalog_search import (
+    CHAPTER_MATCH_BONUS_FACTOR,
+    UNIT_MISMATCH_PENALTY_FACTOR,
     HybridCatalogSearch,
+    normalize_chapter_name,
     reciprocal_rank_fusion,
     tokenize_es,
 )
@@ -233,60 +238,6 @@ async def test_search_mixed_query_top1_is_correct(synthetic_catalog):
 
 
 @pytest.mark.asyncio
-async def test_search_chapter_filter_excludes_other_chapters(synthetic_catalog):
-    """Con chapter_filter='03 HORMIGONES', BM25 solo busca dentro del
-    capítulo. Items de otros capítulos NO aparecen en BM25, aunque el
-    vector pueda devolverlos."""
-    fake_vec = _FakeVectorSearch(
-        ranked_codes=["D000", "D001"],  # demoliciones — DEBE filtrarse
-        all_items=synthetic_catalog,
-    )
-    svc = HybridCatalogSearch(synthetic_catalog, fake_vec, rrf_k=60)
-    results = await svc.search(
-        query="solera hormigón fratasada",
-        query_vector=[0.0] * 768,
-        top_k=5,
-        chapter_filter="03 HORMIGONES",
-    )
-    # Solo GOLDEN_KW está en HORMIGONES → debe ser el único candidato real.
-    chapters = {r["chapter"] for r in results}
-    assert chapters == {"03 HORMIGONES"}, (
-        f"Esperado solo '03 HORMIGONES', got {chapters}"
-    )
-
-
-@pytest.mark.asyncio
-async def test_search_unit_dimension_filter(synthetic_catalog):
-    """Con unit_dimension_filter='surface_area', solo items con esa
-    dimensión pueden aparecer en BM25."""
-    # Inyectamos un item de unidad distinta.
-    catalog = list(synthetic_catalog) + [
-        _make_item(
-            code="HOUR_ITEM",
-            description="Hora oficial 1ª",
-            chapter="01 DEMOLICIONES",
-            unit="h",
-            unit_dim="time",
-        ),
-    ]
-    fake_vec = _FakeVectorSearch(
-        ranked_codes=["HOUR_ITEM"],
-        all_items=catalog,
-    )
-    svc = HybridCatalogSearch(catalog, fake_vec, rrf_k=60)
-    results = await svc.search(
-        query="hora oficial",
-        query_vector=[0.0] * 768,
-        top_k=5,
-        unit_dimension_filter="surface_area",  # excluye horas
-    )
-    codes = [r["code"] for r in results]
-    assert "HOUR_ITEM" not in codes, (
-        "El filtro de unit_dimension debería excluir HOUR_ITEM"
-    )
-
-
-@pytest.mark.asyncio
 async def test_search_latency_under_100ms_on_50_items(synthetic_catalog):
     """Smoke perf: el search debe responder en <100ms con 50 items."""
     fake_vec = _FakeVectorSearch(
@@ -334,133 +285,260 @@ async def test_search_zero_catalog_is_safe():
     assert results == []
 
 
-# --- Sprint 4 Fase G — best-effort chapter_filter fallback ------------------
 
-class _ChapterAwareFakeVectorSearch(IVectorSearch):
-    """Vector search que SÍ respeta el chapter_filter — para validar el
-    fallback retry sin filter cuando la taxonomía cliente no matchea el
-    catálogo."""
-
-    def __init__(self, ranked_codes: List[str], all_items: List[PriceBookItemEntry]):
-        self._ranked_codes = ranked_codes
-        self._by_code = {it.code: it for it in all_items}
-        self.call_log: List[Dict[str, Any]] = []  # registro de llamadas
-
-    def search_similar_items(
-        self,
-        query_vector,
-        query_text="",
-        limit=3,
-        score_threshold=0.5,
-        chapter_filters=None,
-        partida_unit_dimension=None,
-    ):
-        self.call_log.append({
-            "chapter_filters": chapter_filters,
-            "limit": limit,
-        })
-        # Filtra por chapter_filters si se pasa.
-        codes_for_chapter: List[str] = []
-        for code in self._ranked_codes:
-            it = self._by_code.get(code)
-            if not it:
-                continue
-            if chapter_filters and it.chapter not in chapter_filters:
-                continue
-            codes_for_chapter.append(code)
-            if len(codes_for_chapter) >= limit:
-                break
-
-        out: List[Dict[str, Any]] = []
-        for rank, code in enumerate(codes_for_chapter):
-            it = self._by_code[code]
-            out.append({
-                "id": it.code,
-                "code": it.code,
-                "description": it.description,
-                "unit": it.unit_raw,
-                "unit_normalized": it.unit_normalized,
-                "unit_dimension": it.unit_dimension,
-                "chapter": it.chapter,
-                "priceTotal": it.priceTotal,
-                "matchScore": 1.0 - rank * 0.1,
-            })
-        return out
+# ---- Señales blandas: capítulo (bonus) y unidad (penalización) -------------
+#
+# CAMBIO (arreglos de recuperación 2026-09): antes `chapter_filter` y
+# `unit_dimension_filter` eran FILTROS DUROS (BM25 y vector excluían otros
+# capítulos/dimensiones, con un reintento "sin filtro" si quedaba vacío). En
+# producción la taxonomía de capítulos del cliente casi nunca casa con la del
+# libro y el filtro dejaba pools cortos o vacíos. Ahora son SEÑALES BLANDAS
+# sobre el score fusionado: nunca excluyen y siempre salen `top_k` si existen.
 
 
 @pytest.mark.asyncio
-async def test_vector_search_fallback_when_chapter_filter_mismatches(synthetic_catalog):
-    """Sprint 4 Fase G — bug del chapter mismatch.
-
-    Cliente pasa `chapter_filter="1 ACTUACIONES PREVIAS"` (taxonomía cliente).
-    Catálogo COAATMCA tiene chapters `"01 DEMOLICIONES"`, `"02 FABRICAS Y TABIQUES"`,
-    `"03 HORMIGONES"` (taxonomía catálogo). 0 overlap → vector_search devuelve
-    vacío → caería a `from_scratch`.
-
-    Con el fallback best-effort, debe reintentarse SIN chapter_filter y
-    devolver los candidates relevantes del catálogo completo.
-    """
-    fake_vec = _ChapterAwareFakeVectorSearch(
-        ranked_codes=["GOLDEN_KW", "D000", "D001"],
+async def test_chapter_hint_is_soft_bonus_not_filter(synthetic_catalog):
+    """Con chapter_filter='03 HORMIGONES' los candidatos de otros capítulos
+    SIGUEN apareciendo (antes se excluían); el del capítulo casado recibe el
+    bonus y queda el primero."""
+    fake_vec = _FakeVectorSearch(
+        ranked_codes=["D000", "D001", "GOLDEN_KW"],
         all_items=synthetic_catalog,
     )
     svc = HybridCatalogSearch(synthetic_catalog, fake_vec, rrf_k=60)
-
-    # Cliente: chapter del PDF NO existe en el catálogo.
     results = await svc.search(
         query="solera hormigón fratasada",
         query_vector=[0.0] * 768,
         top_k=5,
-        chapter_filter="1 ACTUACIONES PREVIAS",  # taxonomía cliente, no existe en catálogo
+        chapter_filter="03 HORMIGONES",
     )
-
-    # ASSERT 1: el adapter fue llamado 2 veces — primero CON filter, después SIN.
-    assert len(fake_vec.call_log) == 2, (
-        f"Esperaba 2 llamadas (retry), got {len(fake_vec.call_log)}: {fake_vec.call_log}"
-    )
-    assert fake_vec.call_log[0]["chapter_filters"] == ["1 ACTUACIONES PREVIAS"]
-    assert fake_vec.call_log[1]["chapter_filters"] is None  # fallback
-
-    # ASSERT 2: el resultado NO es vacío (vienen del retry).
-    assert len(results) > 0, "Esperaba candidates del fallback sin filter"
+    chapters = {r["chapter"] for r in results}
+    assert "01 DEMOLICIONES" in chapters  # ya no se filtran
+    assert results[0]["code"] == "GOLDEN_KW"
+    assert results[0]["_soft_signals"].get("chapter_bonus") == CHAPTER_MATCH_BONUS_FACTOR
+    # Los de otro capítulo no reciben bonus.
+    other = next(r for r in results if r["code"] == "D000")
+    assert "chapter_bonus" not in other["_soft_signals"]
 
 
 @pytest.mark.asyncio
-async def test_vector_search_no_retry_when_chapter_filter_matches(synthetic_catalog):
-    """Si chapter_filter coincide con catálogo y devuelve resultados, NO debe
-    haber retry."""
-    fake_vec = _ChapterAwareFakeVectorSearch(
-        ranked_codes=["GOLDEN_KW"],  # GOLDEN_KW está en chapter "03 HORMIGONES"
-        all_items=synthetic_catalog,
+async def test_chapter_bonus_breaks_ties_between_equal_rrf(synthetic_catalog):
+    """Dos candidatos con el MISMO score RRF: el del capítulo casado sube."""
+    catalog = list(synthetic_catalog)
+    # Vector: X_OTHER en rank 0, X_CHAP en rank 1; BM25 no aporta nada (query
+    # sin tokens comunes) → sin bonus X_OTHER gana.
+    catalog.append(_make_item("X_OTHER", "zzz uno", chapter="09 CUBIERTAS"))
+    catalog.append(_make_item("X_CHAP", "zzz dos", chapter="HORMIGONES"))
+    fake_vec = _FakeVectorSearch(ranked_codes=["X_OTHER", "X_CHAP"], all_items=catalog)
+    svc = HybridCatalogSearch(catalog, fake_vec, rrf_k=60)
+
+    no_hint = await svc.search(query="qqq", query_vector=[0.0] * 768, top_k=2)
+    assert [r["code"] for r in no_hint] == ["X_OTHER", "X_CHAP"]
+
+    # Rank 0 vs rank 1 difieren ~1.6 %; el bonus (+8 %) invierte el orden.
+    with_hint = await svc.search(
+        query="qqq", query_vector=[0.0] * 768, top_k=2, chapter_filter="C03 HORMIGONES",
     )
+    assert [r["code"] for r in with_hint] == ["X_CHAP", "X_OTHER"]
+
+
+@pytest.mark.asyncio
+async def test_unmatched_chapter_is_ignored(synthetic_catalog):
+    """Un capítulo de cliente que no casa con la taxonomía del libro no da
+    bonus a nadie ni reduce el pool."""
+    fake_vec = _FakeVectorSearch(ranked_codes=["GOLDEN_KW", "D000"], all_items=synthetic_catalog)
     svc = HybridCatalogSearch(synthetic_catalog, fake_vec, rrf_k=60)
     results = await svc.search(
-        query="solera hormigón",
-        query_vector=[0.0] * 768,
-        top_k=5,
-        chapter_filter="03 HORMIGONES",  # coincide
+        query="tabique", query_vector=[0.0] * 768, top_k=5,  # 40 items con "tabique"
+        chapter_filter="1 ACTUACIONES PREVIAS",
     )
-    # Solo 1 llamada — sin fallback.
-    assert len(fake_vec.call_log) == 1, (
-        f"Esperaba 1 llamada (sin retry), got {len(fake_vec.call_log)}"
-    )
-    assert fake_vec.call_log[0]["chapter_filters"] == ["03 HORMIGONES"]
-    assert len(results) > 0
+    assert len(results) == 5
+    assert all("chapter_bonus" not in r["_soft_signals"] for r in results)
 
 
 @pytest.mark.asyncio
-async def test_vector_search_no_retry_when_no_chapter_filter(synthetic_catalog):
-    """Si caller NO pasa chapter_filter, NO debe haber retry (no aplica)."""
-    fake_vec = _ChapterAwareFakeVectorSearch(
-        ranked_codes=["GOLDEN_KW"],
-        all_items=synthetic_catalog,
+async def test_unit_dimension_is_penalty_not_exclusion(synthetic_catalog):
+    """Antes `unit_dimension_filter` EXCLUÍA el item de otra dimensión. Ahora
+    se PENALIZA: sigue en el pool (el Judge puede convertir) pero cede el
+    sitio frente a un compatible con score similar."""
+    catalog = list(synthetic_catalog) + [
+        _make_item("HOUR_ITEM", "Hora oficial 1ª", unit="h", unit_dim="tiempo"),
+        _make_item("SURF_ITEM", "Oficial alicatado", unit="m2", unit_dim="superficie"),
+    ]
+    fake_vec = _FakeVectorSearch(ranked_codes=["HOUR_ITEM", "SURF_ITEM"], all_items=catalog)
+    svc = HybridCatalogSearch(catalog, fake_vec, rrf_k=60)
+    results = await svc.search(
+        query="oficial", query_vector=[0.0] * 768, top_k=5,
+        unit_dimension_filter="surface_area",  # alias → superficie
     )
+    codes = [r["code"] for r in results]
+    assert "HOUR_ITEM" in codes, "la penalización no debe excluir"
+    assert codes.index("SURF_ITEM") < codes.index("HOUR_ITEM")
+    hour = next(r for r in results if r["code"] == "HOUR_ITEM")
+    assert hour["_soft_signals"]["unit_penalty"] == UNIT_MISMATCH_PENALTY_FACTOR
+    assert hour["_final_score"] == pytest.approx(
+        hour["_hybrid_rrf_score"] * UNIT_MISMATCH_PENALTY_FACTOR
+    )
+
+
+@pytest.mark.asyncio
+async def test_bridgeable_and_unconstrained_units_not_penalized(synthetic_catalog):
+    """superficie↔volumen y lineal↔discreto son puenteables; partidas pa/%/h
+    o de dimensión desconocida no penalizan a nadie."""
+    catalog = list(synthetic_catalog) + [
+        _make_item("VOL", "Hormigón en masa relleno", unit="m3", unit_dim="volumen"),
+    ]
+    fake_vec = _FakeVectorSearch(ranked_codes=["VOL"], all_items=catalog)
+    svc = HybridCatalogSearch(catalog, fake_vec, rrf_k=60)
+    for partida_dim in ("superficie", "importe", "porcentaje", "tiempo", None, "desconocida_x"):
+        res = await svc.search(
+            query="relleno", query_vector=[0.0] * 768, top_k=3,
+            unit_dimension_filter=partida_dim,
+        )
+        vol = next(r for r in res if r["code"] == "VOL")
+        assert "unit_penalty" not in vol["_soft_signals"], partida_dim
+
+
+# ---- Dedupe, catálogo desconocido y corte a top_k ---------------------------
+
+
+class _DupeUnknownVectorSearch(IVectorSearch):
+    """Devuelve duplicados y códigos que no están en el catálogo en memoria
+    (p. ej. partidas guardadas después del boot)."""
+
+    def __init__(self, items: List[PriceBookItemEntry]):
+        self._items = items
+
+    def search_similar_items(self, query_vector, query_text="", limit=3, **kwargs):
+        out: List[Dict[str, Any]] = []
+        for i, it in enumerate(self._items[:limit]):
+            out.append({"id": "GHOST-%d" % i, "code": "GHOST-%d" % i, "matchScore": 0.99})
+            out.append({"id": it.code, "code": it.code, "matchScore": 0.9 - i * 0.01,
+                        "_cosine_raw": 0.8 - i * 0.01})
+            out.append({"id": it.code, "code": it.code, "matchScore": 0.5})  # dup
+        return out
+
+
+@pytest.mark.asyncio
+async def test_unknown_and_duplicate_codes_do_not_shrink_top_k(synthetic_catalog):
+    svc = HybridCatalogSearch(
+        synthetic_catalog, _DupeUnknownVectorSearch(synthetic_catalog), rrf_k=60
+    )
+    results = await svc.search(query="zzzz", query_vector=[0.0] * 768, top_k=15)
+    codes = [r["code"] for r in results]
+    assert len(results) == 15, "siempre top_k si el catálogo los tiene"
+    assert len(set(codes)) == len(codes), "sin duplicados"
+    assert not any(c.startswith("GHOST") for c in codes)
+    # La primera aparición (mejor rango) es la que cuenta.
+    assert results[0]["_vector_rank"] == 0
+    assert results[0]["_cosine_raw"] == pytest.approx(0.8)
+
+
+@pytest.mark.asyncio
+async def test_rrf_counts_each_code_once_per_ranking():
+    fused = reciprocal_rank_fusion([["A", "A", "B"], ["B"]], rrf_k=60)
+    scores = dict(fused)
+    # A solo cuenta en rank 0 del primer ranking (no 1/60 + 1/61).
+    assert scores["A"] == pytest.approx(1 / 60)
+    # B: rank 1 (tras dedupe) en el primero + rank 0 en el segundo.
+    assert scores["B"] == pytest.approx(1 / 61 + 1 / 60)
+
+
+def test_rrf_weights():
+    fused = dict(reciprocal_rank_fusion([["A"], ["B"]], rrf_k=60, weights=[2.0, 1.0]))
+    assert fused["A"] == pytest.approx(2 / 60)
+    assert fused["B"] == pytest.approx(1 / 60)
+
+
+@pytest.mark.asyncio
+async def test_output_carries_traces_and_keeps_fusion_order(synthetic_catalog):
+    """Trazas en cada candidato y orden = fusión (no coseno): un candidato
+    con coseno altísimo pero solo en el vector (rank bajo) no adelanta a uno
+    que está arriba en ambos rankings."""
+
+    class _VS(IVectorSearch):
+        def search_similar_items(self, query_vector, query_text="", limit=3, **kw):
+            return [
+                {"code": "GOLDEN_KW", "matchScore": 0.70, "_cosine_raw": 0.70},
+                {"code": "D005", "matchScore": 1.40, "_cosine_raw": 0.99},  # inflado
+            ]
+
+    svc = HybridCatalogSearch(synthetic_catalog, _VS(), rrf_k=60)
+    results = await svc.search(query="solera hormigón HM-20", query_vector=[0.0] * 768, top_k=5)
+    assert results[0]["code"] == "GOLDEN_KW"
+    top = results[0]
+    for key in ("_cosine_raw", "_hybrid_rrf_score", "_bm25_rank", "_vector_rank",
+                "_final_score", "_soft_signals"):
+        assert key in top, key
+    assert top["_bm25_rank"] == 0 and top["_vector_rank"] == 0
+    # matchScore = coseno PURO (no el inflado por boosts del adapter).
+    d005 = next(r for r in results if r["code"] == "D005")
+    assert d005["matchScore"] == pytest.approx(0.99)
+    assert d005["_bm25_rank"] is None
+
+
+# ---- Sin reintento "sin filtro" ------------------------------------------
+#
+# CAMBIO: antes, si la búsqueda con chapter_filter salía vacía, se repetía
+# sin filtro (2 llamadas al vector). Como el capítulo ya no filtra, el
+# reintento desaparece: siempre UNA llamada, y el adapter NUNCA recibe
+# `chapter_filters` ni `partida_unit_dimension` (el híbrido aplica las señales).
+
+
+class _RecordingFakeVectorSearch(_FakeVectorSearch):
+    def __init__(self, ranked_codes, all_items):
+        super().__init__(ranked_codes, all_items)
+        self.call_log: List[Dict[str, Any]] = []
+
+    def search_similar_items(self, query_vector, query_text="", limit=3,
+                             score_threshold=0.5, chapter_filters=None,
+                             partida_unit_dimension=None):
+        self.call_log.append({
+            "chapter_filters": chapter_filters,
+            "partida_unit_dimension": partida_unit_dimension,
+            "limit": limit,
+        })
+        return super().search_similar_items(query_vector, query_text, limit)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chapter", ["1 ACTUACIONES PREVIAS", "03 HORMIGONES", None])
+async def test_single_vector_call_without_hard_filters(synthetic_catalog, chapter):
+    fake_vec = _RecordingFakeVectorSearch(["GOLDEN_KW", "D000"], synthetic_catalog)
     svc = HybridCatalogSearch(synthetic_catalog, fake_vec, rrf_k=60)
-    await svc.search(
-        query="solera",
-        query_vector=[0.0] * 768,
-        top_k=5,
-        chapter_filter=None,
+    results = await svc.search(
+        query="solera hormigón tabiques", query_vector=[0.0] * 768, top_k=5,
+        chapter_filter=chapter, unit_dimension_filter="superficie",
     )
     assert len(fake_vec.call_log) == 1
     assert fake_vec.call_log[0]["chapter_filters"] is None
+    assert fake_vec.call_log[0]["partida_unit_dimension"] is None
+    assert len(results) == 5
+
+
+# ---- Taxonomía de capítulos ----------------------------------------------
+
+
+def test_normalize_chapter_name_strips_prefix_accents_ellipsis():
+    assert normalize_chapter_name("01 Demoliciones") == "DEMOLICIONES"
+    assert normalize_chapter_name("C01 TRABAJOS PREVIOS") == "TRABAJOS PREVIOS"
+    assert normalize_chapter_name("1.Fontanería") == "FONTANERIA"
+    assert normalize_chapter_name("1. Fontanería.") == "FONTANERIA"
+    assert normalize_chapter_name("ELECTRICIDAD Y TELECOMUNICACI…") == "ELECTRICIDAD Y TELECOMUNICACI"
+    assert normalize_chapter_name("  Solados   y  alicatados ") == "SOLADOS Y ALICATADOS"
+    assert normalize_chapter_name(None) == ""
+
+
+def test_match_chapter_by_prefix_handles_truncated_catalog_chapters():
+    catalog = [
+        _make_item("E1", "Cuadro eléctrico", chapter="ELECTRICIDAD Y TELECOMUNICACI…"),
+        _make_item("H1", "Solera", chapter="HORMIGONES"),
+    ]
+    svc = HybridCatalogSearch(catalog, _FakeVectorSearch([], catalog))
+    assert svc.match_chapter("05 ELECTRICIDAD Y TELECOMUNICACIONES") == frozenset(
+        {"ELECTRICIDAD Y TELECOMUNICACI"}
+    )
+    assert svc.match_chapter("C02 Hormigones") == frozenset({"HORMIGONES"})
+    assert svc.match_chapter("1 ACTUACIONES PREVIAS") == frozenset()
+    # Prefijos demasiado cortos no casan.
+    assert svc.match_chapter("HOR") == frozenset()
