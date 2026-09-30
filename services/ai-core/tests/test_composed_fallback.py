@@ -63,6 +63,25 @@ async def test_composed_fallback_prices_unresolved_partida():
     assert "fallback_composed" in (p.reasoning or "")
 
 
+async def test_composed_fallback_keeps_bc3_price_for_comparison():
+    item = _item()
+    item.bc3_unit_price = 42.0
+    p = await _svc(_FakeCompositor(50.0))._build_composed_fallback(item)
+    assert p.active_price_source == "ai"
+    assert p.unitPrice == 50.0
+    assert p.bc3_unit_price == 42.0
+
+
+def test_unresolved_fallback_uses_bc3_price_without_faking_ai_price():
+    # La IA no dio precio: el activo es el BC3 (mejor que 0) y la columna IA queda vacía.
+    item = _item()
+    item.bc3_unit_price = 42.0
+    p = _svc(None)._build_unresolved_fallback(item, reason="test")
+    assert p.active_price_source == "bc3"
+    assert p.unitPrice == 42.0
+    assert p.ai_unit_price is None
+
+
 async def test_composed_fallback_none_when_price_zero():
     # compositor sin precio → None (el caller cae al resguardo a 0)
     p = await _svc(_FakeCompositor(0.0))._build_composed_fallback(_item())
@@ -115,3 +134,22 @@ def test_align_cached_partida_overrides_identity_and_recomputes_total():
     assert p.match_kind == "1:1"
     assert p.matchConfidence == 95.0
     assert p.id != "old-uuid"  # id fresco
+    assert p.active_price_source == "ai"
+    assert p.bc3_unit_price is None
+
+
+def test_align_cached_partida_resets_stale_bc3_to_ai_default():
+    # Entrada antigua del cache cacheada con el precio BC3 (de otro cliente) activo.
+    cached = _cached_partida_stale()
+    cached.unitPrice = 30.0
+    cached.bc3_unit_price = 30.0
+    cached.ai_unit_price = 16.43
+    cached.active_price_source = "bc3"
+    current = RestructuredItem(code="NL-1", description="Demolición de alicatado existente en paredes",
+                              quantity=10.0, unit="m2", chapter="DEMOLICIONES",
+                              bc3_unit_price=12.0)
+    p = SwarmPricingService._align_cached_partida(cached, current)
+    assert p.active_price_source == "ai"
+    assert p.unitPrice == 16.43             # precio del motor, no el BC3 cacheado
+    assert p.totalPrice == 164.30
+    assert p.bc3_unit_price == 12.0         # el BC3 del presupuesto ACTUAL

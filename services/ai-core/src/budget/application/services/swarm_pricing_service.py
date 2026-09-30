@@ -1379,6 +1379,8 @@ class SwarmPricingService:
         Nunca se descarta una partida medida: se conserva marcada para revisión
         humana (`match_kind='from_scratch'`, `needs_human_review=True`,
         `confidence=40`). Precio activo = precio del propio BC3 si viene, si no 0.0.
+        Es la única excepción a "IA por defecto": aquí la IA no dio precio, así que
+        `ai_unit_price` queda vacío en vez de duplicar el precio BC3.
         Coste 0 (ni una llamada al LLM) — seguro a escala (500+ partidas)."""
         safe_code = item.code or ""
         safe_description = item.description or ""
@@ -1415,7 +1417,8 @@ class SwarmPricingService:
             quantity=safe_quantity, unitPrice=unit_price, totalPrice=total_price,
             isRealCost=False, matchConfidence=40.0, match_kind="from_scratch",
             reasoning=trace,
-            bc3_unit_price=bc3_price, ai_unit_price=unit_price,
+            bc3_unit_price=bc3_price,
+            ai_unit_price=None if bc3_price is not None else unit_price,
             active_price_source=active_source, measurements=measurements,
             needs_reconciliation=False,
         )
@@ -1440,6 +1443,13 @@ class SwarmPricingService:
             item.quantity if item.quantity is not None else partida.quantity
         )
         partida.measurements = getattr(item, "measurements", None)
+        # BC3 doble precio: el precio BC3 es el del item ACTUAL (no el del
+        # presupuesto donde se cacheó) y el activo por defecto es el del motor.
+        # Entradas antiguas se cachearon con unitPrice = precio BC3 de otro cliente.
+        if partida.ai_unit_price is not None:
+            partida.unitPrice = partida.ai_unit_price
+        partida.bc3_unit_price = getattr(item, "bc3_unit_price", None)
+        partida.active_price_source = "ai"
         if partida.original_item is not None:
             partida.original_item.code = item.code or ""
             partida.original_item.description = item.description
@@ -1542,6 +1552,7 @@ class SwarmPricingService:
             breakdown=breakdown or None,
             isRealCost=False, matchConfidence=40.0, match_kind="from_scratch",
             reasoning=trace,
+            bc3_unit_price=getattr(item, "bc3_unit_price", None),
             ai_unit_price=unit_price,
             active_price_source="ai",
             measurements=getattr(item, "measurements", None),
@@ -2349,21 +2360,18 @@ class SwarmPricingService:
                     # Excluidos (factor 1.0, pero se registra pre/factor para
                     # transparencia §8):
                     #   - `from_scratch`: su base son tarifas compuestas, no catálogo.
-                    #   - BC3 active-source: el precio activo es el del BC3, no la
-                    #     estimación IA; no se calibra ni se cosecha corrección.
                     #   - sin tabla inyectada (backward-compat / tests).
+                    # Las partidas BC3 SÍ se calibran: el precio activo por defecto
+                    # es la valoración del motor, igual que sin BC3.
                     cal_key = normalize_chapter_key(safe_chapter)
                     cal_pre_price = final_price
                     cal_factor = 1.0
                     cal_source = "none"
                     cal_sample_count = 0
-                    _cal_bc3_price = getattr(item, "bc3_unit_price", None)
                     if calibration_table is None:
                         cal_source = "disabled"
                     elif val.match_kind == "from_scratch":
                         cal_source = "excluded:from_scratch"
-                    elif _cal_bc3_price is not None:
-                        cal_source = "excluded:bc3"
                     else:
                         _eff = calibration_table.effective_factor(cal_key)
                         cal_factor = _eff.factor
@@ -2680,16 +2688,13 @@ class SwarmPricingService:
                         else None
                     )
 
-                    # BC3 doble precio: si la partida trae precio del propio BC3,
-                    # ese es el precio ACTIVO por defecto (importar tal cual); la
-                    # estimación IA (final_price) queda guardada para comparar.
+                    # BC3 doble precio: el precio ACTIVO por defecto es siempre la
+                    # valoración del motor (final_price); el precio del propio BC3
+                    # se guarda para comparar y el usuario puede elegirlo por
+                    # partida en el editor.
                     _bc3_price = getattr(item, 'bc3_unit_price', None)
                     _measurements = getattr(item, 'measurements', None)
-                    _active_source = 'bc3' if _bc3_price is not None else 'ai'
-                    _active_price = _bc3_price if _active_source == 'bc3' else final_price
-                    # La reconciliación (breakdown IA vs unitPrice) sólo aplica
-                    # cuando el precio activo ES el de la IA.
-                    _recon_active = (_active_source == 'ai') and recon.needs_review
+                    _recon_active = recon.needs_review
 
                     partida = BudgetPartida(
                         id=str(uuid.uuid4()), order=global_order,
@@ -2697,8 +2702,8 @@ class SwarmPricingService:
                         ai_resolution=ai_res_obj,
                         alternatives=alternatives,
                         code=safe_code, description=safe_description,
-                        unit=safe_unit, quantity=safe_quantity, unitPrice=_active_price,
-                        totalPrice=_active_price * safe_quantity,
+                        unit=safe_unit, quantity=safe_quantity, unitPrice=final_price,
+                        totalPrice=final_price * safe_quantity,
                         isRealCost=not needs_human_review,
                         matchConfidence=confidence,
                         reasoning=reasoning_for_trace,
@@ -2709,9 +2714,9 @@ class SwarmPricingService:
                         # BC3 — doble precio + mediciones estructuradas.
                         bc3_unit_price=_bc3_price,
                         ai_unit_price=final_price,
-                        active_price_source=_active_source,
+                        active_price_source='ai',
                         measurements=_measurements,
-                        # Phase 17 — flags de reconciliación (sólo si el activo es IA).
+                        # Phase 17 — flags de reconciliación (breakdown IA vs unitPrice).
                         needs_reconciliation=_recon_active,
                         divergence_pct=recon.divergence_pct if _recon_active else None,
                         divergence_amount=recon.divergence_amount if _recon_active else None,
