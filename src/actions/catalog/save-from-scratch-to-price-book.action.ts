@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestorePriceBookRepository } from '@/backend/price-book/infrastructure/firestore-price-book-repository';
 import { PriceBookItem, PriceBookComponent } from '@/backend/price-book/domain/price-book-item';
 import { ai, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
@@ -67,6 +69,7 @@ function buildKeywords(description: string): string[] {
  * determinista → re-guardar sobreescribe (idempotente), sin duplicados.
  */
 export async function saveFromScratchToPriceBookAction(input: SaveFromScratchInput) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const { budgetId, partida, originalTask, chapter: chapterInput, userId } = input;
         if (!partida) return { success: false, error: 'Falta la partida' };

@@ -68,14 +68,20 @@ export function AnalyticsPageClient({ globalAnalytics, projects, providerRanking
     const handleSelectProject = async (projectId: string) => {
         setLoadingProject(true);
         setSelectedProjectId(projectId);
-        if (activeTab === 'evm') {
-            const analytics = await getEVMAnalyticsAction(projectId);
-            setEvmAnalytics(analytics);
-        } else {
-            const analytics = await getProjectAnalyticsAction(projectId);
-            setProjectAnalytics(analytics);
+        try {
+            if (activeTab === 'evm') {
+                const analytics = await getEVMAnalyticsAction(projectId);
+                setEvmAnalytics(analytics);
+            } else {
+                const analytics = await getProjectAnalyticsAction(projectId);
+                setProjectAnalytics(analytics);
+            }
+        } catch (err) {
+            // p.ej. "No autorizado" (sesión caducada): no rompemos la vista.
+            console.error('[Analytics] project analytics failed:', err);
+        } finally {
+            setLoadingProject(false);
         }
-        setLoadingProject(false);
     };
 
     const handleBackToGlobal = () => {

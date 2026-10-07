@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -7,6 +9,7 @@ import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/a
 import { revalidatePath } from 'next/cache';
 
 export async function deleteLeadAction(leadId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!leadId) {
             return { success: false, error: 'Lead ID no proporcionado.' };

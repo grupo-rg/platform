@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { BudgetNarrativeBuilder } from '@/backend/budget/domain/budget-narrative-builder';
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,6 +27,7 @@ export async function generateBudgetFromSpecsAction(
     _deepGeneration: boolean = false,
     providedBudgetId?: string,
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const budgetId = providedBudgetId || uuidv4();
 

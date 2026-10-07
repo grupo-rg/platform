@@ -1,5 +1,7 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { FirestoreProjectRepository } from '@/backend/project/infrastructure/firestore-project-repository';
 import { FirestoreExpenseRepository } from '@/backend/expense/infrastructure/firestore-expense-repository';
 import { AnalyticsService, GlobalAnalytics } from '@/backend/analytics/analytics-service';
@@ -9,6 +11,7 @@ const expenseRepo = new FirestoreExpenseRepository();
 const analyticsService = new AnalyticsService();
 
 export async function getGlobalAnalyticsAction(): Promise<GlobalAnalytics> {
+    await requireAdmin();
     try {
         const [projects, expenses] = await Promise.all([
             projectRepo.findAll(),

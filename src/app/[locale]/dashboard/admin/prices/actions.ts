@@ -1,8 +1,11 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { processPriceBookPdf } from '@/genkit/ingestion';
 
 export async function ingestPriceBook(fileUrl: string, fileName: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     console.log("Starting Ingestion for: ", fileName);
 
     try {

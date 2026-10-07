@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreProjectRepository } from '@/backend/project/infrastructure/firestore-project-repository';
 import { ProjectService } from '@/backend/project/application/project-service';
 import { PhaseStatus } from '@/backend/project/domain/project-phase';
@@ -23,6 +25,7 @@ export async function updateProjectPhaseAction(
         estimatedEndDate?: string;   // ISO string
     }
 ): Promise<{ success: boolean; project?: any; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const payload: any = { ...updates };
 

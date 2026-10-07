@@ -1,10 +1,13 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreMessageRepository } from '@/backend/chat/infrastructure/firestore-message-repository';
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { GetConversationHistoryUseCase } from '@/backend/chat/application/get-conversation-history.usecase';
 
 export async function getConversationHistoryAction(conversationId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const messageRepo = new FirestoreMessageRepository();
         const useCase = new GetConversationHistoryUseCase(messageRepo);

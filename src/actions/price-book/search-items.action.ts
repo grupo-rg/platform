@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestorePriceBookRepository } from '@/backend/price-book/infrastructure/firestore-price-book-repository';
 import { SearchPriceBookService } from '@/backend/price-book/application/search-price-book-service';
 import { PriceBookItem } from '@/backend/price-book/domain/price-book-item';
@@ -14,6 +16,7 @@ import { adaptV005Item, V005ItemDoc } from '@/lib/price-book/v005-adapter';
  * UI siga consumiendo el shape `PriceBookItem` (con `unit` mapeado de `unit_raw`).
  */
 export async function searchPriceBookAction(query: string): Promise<{ success: boolean; data?: PriceBookItem[]; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!query || query.trim().length === 0) {
             return { success: true, data: [] };

@@ -1,5 +1,7 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { getFirestore } from 'firebase-admin/firestore';
 import { IngestionStatus } from '@/backend/material-catalog/domain/ingestion-status';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
@@ -9,6 +11,7 @@ import { unstable_noStore as noStore } from 'next/cache';
 initFirebaseAdminApp();
 
 export async function getIngestionStatusAction(jobId: string): Promise<IngestionStatus | null> {
+    await requireAdmin();
     noStore(); // Opt out of static caching
     try {
         console.log(`[Action] Fetching status for JobId: ${jobId}`);

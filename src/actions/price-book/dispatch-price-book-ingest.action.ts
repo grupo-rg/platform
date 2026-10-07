@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, requireAdmin, unauthorizedResult } from '@/actions/_guards';
+
 /**
  * Fase 4c — lanzar y seguir el JOB de ingesta del libro nuevo a staging.
  *
@@ -47,6 +49,7 @@ export async function dispatchPriceBookIngestAction(args: {
   pages: string;
   year: number | string;
 }): Promise<DispatchIngestResult> {
+  if (!(await checkAdmin())) return unauthorizedResult();
   try {
     const { gcsUri } = args;
     if (!gcsUri || !gcsUri.startsWith('gs://')) {
@@ -96,6 +99,7 @@ export async function dispatchPriceBookIngestAction(args: {
 }
 
 export async function getPriceBookIngestStatusAction(jobId: string): Promise<IngestStatus> {
+  await requireAdmin();
   if (!jobId) return { status: 'unknown', eventCount: 0 };
   try {
     const jobSnap = await adminFirestore.collection('pipeline_jobs').doc(jobId).get();

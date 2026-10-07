@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { BudgetService } from '@/backend/budget/application/budget-service';
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { PricingOutput } from '@/backend/ai/private/flows/measurements/measurement-pricing.flow';
@@ -15,6 +17,7 @@ export async function createBudgetFromMeasurementsAction(
     fileName: string,
     pageCount?: number
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         // The lineItems and costBreakdown variables are no longer needed as separate entities
         // The new budget structure will be built directly in the createNewBudget call.

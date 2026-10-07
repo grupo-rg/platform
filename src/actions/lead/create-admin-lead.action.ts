@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { Lead } from '@/backend/lead/domain/lead';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,6 +19,7 @@ export async function createAdminLeadAction(data: {
     billingProvince?: string;
     billingCountry?: string;
 }) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const repository = new FirestoreLeadRepository();
 

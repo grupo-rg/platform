@@ -4,6 +4,7 @@ import { FirebaseSequenceRepository } from '@/backend/marketing/infrastructure/p
 import { FirebaseEnrollmentRepository } from '@/backend/marketing/infrastructure/persistence/firebase.enrollment.repository';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { ResendEmailProvider } from '@/backend/marketing/infrastructure/messaging/resend-email.provider';
+import { requireSecretHeader } from '@/app/api/_lib/route-guards';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -12,17 +13,13 @@ export const runtime = 'nodejs';
  * POST /api/marketing/worker
  * Body: { enrollmentId: string }
  * Invocado por Google Cloud Tasks (o por el mock local) para avanzar un
- * enrollment en su secuencia. Protegido por INTERNAL_WORKER_TOKEN si está
- * configurado.
+ * enrollment en su secuencia. Protegido por la cabecera `x-internal-token`
+ * = INTERNAL_WORKER_TOKEN (tiempo constante). Fail-closed: si la variable no
+ * está definida, el endpoint deniega (el mock local también debe enviarla).
  */
 export async function POST(req: NextRequest) {
-    const expected = process.env.INTERNAL_WORKER_TOKEN;
-    if (expected) {
-        const provided = req.headers.get('x-internal-token') || '';
-        if (provided !== expected) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-    }
+    const denied = requireSecretHeader(req, 'x-internal-token', 'INTERNAL_WORKER_TOKEN');
+    if (denied) return denied;
 
     let body: any;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }

@@ -1,10 +1,13 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { Conversation } from '@/backend/chat/domain/conversation';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function createAdminConversationAction(adminId: string = 'admin-user') {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const conversationRepo = new FirestoreConversationRepository();
 

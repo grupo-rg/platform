@@ -1,11 +1,14 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreProjectRepository } from '@/backend/project/infrastructure/firestore-project-repository';
 import { revalidatePath } from 'next/cache';
 
 const projectRepository = new FirestoreProjectRepository();
 
 export async function deleteProjectAction(projectId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const existing = await projectRepository.findById(projectId);
         if (!existing) {

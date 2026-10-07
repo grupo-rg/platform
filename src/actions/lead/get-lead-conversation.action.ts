@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { FirestoreMessageRepository } from '@/backend/chat/infrastructure/firestore-message-repository';
 
@@ -33,6 +35,7 @@ export async function getLeadConversationAction(leadId: string): Promise<{
     conversation?: LeadConversationDTO | null;
     error?: string;
 }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const convRepo = new FirestoreConversationRepository();
         const msgRepo = new FirestoreMessageRepository();

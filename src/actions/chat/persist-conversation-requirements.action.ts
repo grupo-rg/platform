@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 
@@ -16,6 +18,7 @@ export async function persistConversationRequirementsAction(
     conversationId: string,
     requirements: any,
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!conversationId) {
             return { success: false, error: 'conversationId requerido' };

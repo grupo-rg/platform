@@ -1,8 +1,11 @@
 'use server';
 
+import { checkUser, unauthorizedResult } from '@/actions/_guards';
+
 import { transcribeAudioFlow } from '@/backend/ai/private-core/flows/transcribe-audio.flow';
 
 export async function processAudioAction(formData: FormData) {
+    if (!(await checkUser())) return unauthorizedResult();
     try {
         const file = formData.get('audio') as File;
         if (!file) throw new Error("No audio file provided");

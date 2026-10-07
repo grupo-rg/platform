@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { extractionFlow } from '@/backend/ai/private-core/flows/budget/extraction.flow';
 import { priceBookRetrieverTool } from '@/backend/ai/private-core/tools/price-book-retriever.tool';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
@@ -7,6 +9,7 @@ import { EditableBudgetLineItem } from '@/types/budget-editor';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function smartAddAction(input: string, leadId?: string): Promise<{ success: boolean; items?: EditableBudgetLineItem[]; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!input || input.trim().length === 0) {
             return { success: false, error: "Input cannot be empty" };

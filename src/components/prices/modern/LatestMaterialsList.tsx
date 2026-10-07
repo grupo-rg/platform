@@ -18,9 +18,16 @@ export function LatestMaterialsList() {
 
     const loadItems = async () => {
         setLoading(true);
-        const data = await getLatestMaterialsAction(10);
-        setItems(data);
-        setLoading(false);
+        try {
+            const data = await getLatestMaterialsAction(10);
+            setItems(data);
+        } catch (err) {
+            // p.ej. "No autorizado" si la sesión caducó.
+            console.error('[LatestMaterialsList] load failed:', err);
+            setItems([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {

@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 /**
  * Cancel a running (or queued) pipeline job.
  *
@@ -22,6 +24,7 @@ export type CancelResult =
 export async function cancelPipelineJobAction(
   jobId: string,
 ): Promise<CancelResult> {
+  if (!(await checkAdmin())) return unauthorizedResult();
   try {
     const AI_CORE_URL = process.env.AI_CORE_URL || 'http://127.0.0.1:8080';
     const targetUrl = `${AI_CORE_URL}/api/v1/jobs/${encodeURIComponent(jobId)}/cancel`;

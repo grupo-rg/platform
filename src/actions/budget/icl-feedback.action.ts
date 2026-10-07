@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 import { HeuristicFragment } from '@/backend/ai-training/domain/heuristic-fragment';
@@ -17,6 +19,7 @@ interface ICLFeedbackPayload {
 }
 
 export async function saveIclFeedbackAction(payload: ICLFeedbackPayload) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         initFirebaseAdminApp();
         const db = getFirestore();

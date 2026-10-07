@@ -32,6 +32,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/resend-email.service';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { requireBearerSecret } from '@/app/api/_lib/route-guards';
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 const AUTO_CANCEL_PROPOSAL_AGE_MS = 30 * 60 * 1000;
@@ -58,10 +59,9 @@ function toMs(value: any): number {
 }
 
 function authorized(request: NextRequest): boolean {
-    const expected = process.env.CRON_SECRET;
-    if (!expected) return true; // dev convenience — no secret = no gate
-    const auth = request.headers.get('authorization') || '';
-    return auth === `Bearer ${expected}`;
+    // Fase 0-B: fail-closed + comparación en tiempo constante. Antes, sin
+    // CRON_SECRET el endpoint quedaba abierto ("dev convenience").
+    return requireBearerSecret(request, 'CRON_SECRET') === null;
 }
 
 function adminEmail(): string | null {

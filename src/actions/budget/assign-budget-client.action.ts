@@ -1,10 +1,13 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { revalidatePath } from 'next/cache';
 
 export async function assignBudgetClientAction(budgetId: string, leadId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const budgetRepo = new BudgetRepositoryFirestore();
         const leadRepo = new FirestoreLeadRepository();

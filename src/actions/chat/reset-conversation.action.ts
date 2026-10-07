@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 'use server';
 
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
@@ -7,6 +9,7 @@ import { FirestoreMessageRepository } from '@/backend/chat/infrastructure/firest
 // import { getAuthenticatedUser } from '@/lib/auth/get-authenticated-user';
 
 export async function resetConversationAction(leadId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         // const user = await getAuthenticatedUser();
         // if (!user) return { success: false, error: "Unauthorized" };

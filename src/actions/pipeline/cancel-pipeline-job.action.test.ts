@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Fase 0-B: las server actions exigen sesión admin. Simulamos una sesión admin
+// válida para probar la lógica de negocio (los tests de denegación están en
+// src/actions/_guards.test.ts).
+vi.mock('@/backend/auth/auth.middleware', () => ({
+  verifyAuth: vi.fn(async () => ({ userId: 'admin-test', role: 'admin', claims: { role: 'admin' } })),
+}));
+
+
 const originalFetch = globalThis.fetch;
 
 async function loadActions() {

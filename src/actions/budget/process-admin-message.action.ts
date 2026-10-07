@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { clientRequirementsFlow } from '@/backend/ai/private-core/flows/client-requirements.flow';
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import dns from 'node:dns';
@@ -13,6 +15,7 @@ export async function processAdminMessageAction(
     currentRequirements: Partial<BudgetRequirement>,
     attachments: string[] = []
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         // ===============================================
         // ADMIN FLOW: Bypasses lead checks and rate limits

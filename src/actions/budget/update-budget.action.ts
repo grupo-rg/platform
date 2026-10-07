@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { Budget } from '@/backend/budget/domain/budget';
 import { revalidatePath } from 'next/cache';
@@ -7,6 +9,7 @@ import { revalidatePath } from 'next/cache';
 const budgetRepository = new BudgetRepositoryFirestore();
 
 export async function updateBudgetAction(id: string, updates: Partial<Budget>): Promise<{ success: boolean; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         await budgetRepository.updatePartial(id, updates);
 

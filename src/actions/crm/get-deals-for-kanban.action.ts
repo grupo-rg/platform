@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { PipelineStage } from '@/backend/crm/domain/deal';
@@ -42,6 +44,7 @@ export interface GetDealsForKanbanResult {
  * mostrar la ficha completa sin hacer N+1 fetches en cliente.
  */
 export async function getDealsForKanbanAction(): Promise<GetDealsForKanbanResult> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const dealRepo = new FirebaseDealRepository();
         const leadRepo = new FirestoreLeadRepository();

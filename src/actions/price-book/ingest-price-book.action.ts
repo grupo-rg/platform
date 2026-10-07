@@ -1,12 +1,14 @@
 // @ts-nocheck
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
 import { FirestorePriceBookRepository } from '@/backend/price-book/infrastructure/firestore-price-book-repository';
 import { FirestoreIngestionJobRepository } from '@/backend/price-book/infrastructure/firestore-ingestion-job-repository';
 import { IngestionJob } from '@/backend/price-book/domain/ingestion-job';
 import { FirestoreBasicResourceRepository } from '@/backend/price-book/infrastructure/firestore-basic-resource-repository';
 
 export async function ingestPriceBookAction(fileUrl: string, fileName: string, year: number) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     console.log("Action: Ingest Price Book (Async Trigger)", fileName, year);
 
     const jobId = crypto.randomUUID();

@@ -1,5 +1,7 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { SearchMaterialService } from '../application/search-material-service';
 import { FirestoreMaterialCatalogRepository } from '../infrastructure/firestore-material-catalog-repository';
 import { MaterialItem } from '../domain/material-item';
@@ -8,6 +10,7 @@ const repository = new FirestoreMaterialCatalogRepository();
 const service = new SearchMaterialService(repository);
 
 export async function searchMaterialsAction(query: string): Promise<MaterialItem[]> {
+    await requireAdmin();
     if (!query || query.trim().length < 2) return [];
 
     try {

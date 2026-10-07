@@ -1,9 +1,12 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { ListAdminConversationsUseCase } from '@/backend/chat/application/list-admin-conversations.usecase';
 
 export async function listAdminConversationsAction(limit: number = 20) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const conversationRepo = new FirestoreConversationRepository();
         const useCase = new ListAdminConversationsUseCase(conversationRepo);

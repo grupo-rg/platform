@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreAiTrainingRepository } from '@/backend/ai-training/infrastructure/firestore-ai-training-repository';
 import { SaveFinalHumanEditUseCase } from '@/backend/ai-training/application/save-final-human-edit.use-case';
 
@@ -8,6 +10,7 @@ export async function saveTrainingDeltaAction(
     finalFormattedJson: any,
     timeSpentEditingMs: number
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         console.log(`>> Saving Human-Edited RLHF Delta for trace: ${traceId}...`);
 

@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import type {
     LeadIntakeSource,
@@ -61,6 +63,7 @@ function previewDescription(s: string | undefined, max = 140): string {
 export async function getAdminLeadsAction(
     filters: GetAdminLeadsFilters = {}
 ): Promise<GetAdminLeadsResult> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const repository = new FirestoreLeadRepository();
         const limit = filters.limit ?? 50;

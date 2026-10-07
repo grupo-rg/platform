@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreExpenseRepository } from '@/backend/expense/infrastructure/firestore-expense-repository';
 import { FirestoreProviderRepository } from '@/backend/expense/infrastructure/firestore-provider-repository';
 import { FirestoreProjectRepository } from '@/backend/project/infrastructure/firestore-project-repository';
@@ -32,6 +34,7 @@ export async function createExpenseAction(data: {
     pdfUrl?: string;
     notes?: string;
 }) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const expense = await expenseService.createExpense(data.projectId, {
             ...data,

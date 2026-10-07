@@ -115,9 +115,14 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
     React.useEffect(() => {
         const fetchPdfMeta = async () => {
             if (budget.leadId && budget.leadId !== 'unassigned') {
-                const meta = await getLeadPdfConfigAction(budget.leadId);
-                if (meta) {
-                    setPdfMeta(meta);
+                try {
+                    const meta = await getLeadPdfConfigAction(budget.leadId);
+                    if (meta) {
+                        setPdfMeta(meta);
+                    }
+                } catch (err) {
+                    // Sin sesión admin (No autorizado) u otro fallo: el PDF usa los datos por defecto.
+                    console.error('[BudgetEditor] getLeadPdfConfigAction failed:', err);
                 }
             }
         };

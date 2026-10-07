@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 
 export interface LeadSelectorItem {
@@ -31,6 +33,7 @@ export interface ListLeadsForSelectorResult {
 export async function listLeadsForSelectorAction(
     options: { limit?: number; textQuery?: string } = {}
 ): Promise<ListLeadsForSelectorResult> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const repository = new FirestoreLeadRepository();
         const limit = options.limit ?? 100;

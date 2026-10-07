@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { generateRenderFlow } from '@/backend/ai/private-core/flows/renovation/generate-render.flow';
 
 interface GenerateRenovationParams {
@@ -19,6 +21,7 @@ export async function generateRenovationAction({
     additionalRequirements,
     aspectRatio
 }: GenerateRenovationParams) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         // 1. Call AI Flow
         const result = await generateRenderFlow({

@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { revalidatePath } from 'next/cache';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
@@ -78,6 +80,7 @@ export async function dispatchBudgetGenerationAction(
      */
     enrichedRequirement?: BudgetRequirement
 ): Promise<DispatchBudgetResult> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     if (engine !== 'from-specs') {
         return { success: false, error: `Motor '${engine}' aún no soportado` };
     }

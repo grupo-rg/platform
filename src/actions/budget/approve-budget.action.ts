@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { FirestoreProjectRepository } from '@/backend/project/infrastructure/firestore-project-repository';
 import { ProjectService } from '@/backend/project/application/project-service';
@@ -31,6 +33,7 @@ export async function approveBudgetAction(
         estimatedEndDate?: string;  // ISO string
     }
 ): Promise<ApproveResult> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const budget = await budgetRepository.findById(budgetId);
         if (!budget) {

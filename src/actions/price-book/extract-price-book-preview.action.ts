@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 /**
  * Compuerta 2 del asistente de actualización: reenvía el PDF + las páginas
  * confirmadas al endpoint Python `POST /api/v1/admin/price-book/extract-preview`,
@@ -60,6 +62,7 @@ export async function extractPriceBookPreviewAction(args: {
   year: number | string;
   limit?: number | string;
 }): Promise<ExtractPreviewActionResult> {
+  if (!(await checkAdmin())) return unauthorizedResult();
   try {
     const { gcsUri } = args;
     if (!gcsUri || !gcsUri.startsWith('gs://')) {

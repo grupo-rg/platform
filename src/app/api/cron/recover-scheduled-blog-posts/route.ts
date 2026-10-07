@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { blogPostService } from '@/backend/marketing/application/blog-post-service';
 import { enqueueBlogPublishTask } from '@/backend/marketing/infrastructure/queue/blog-publish-queue';
+import { requireBearerSecret } from '@/app/api/_lib/route-guards';
 
 /**
  * Cron de rescate para posts en `scheduled` cuya Cloud Task venció sin
@@ -30,13 +31,9 @@ const MAX_RECOVERY_ATTEMPTS = 3;
 const OVERDUE_MARGIN_MS = 5 * 60 * 1000; // 5 minutos
 
 export async function GET(request: NextRequest) {
-    const expected = process.env.CRON_SECRET;
-    if (expected) {
-        const auth = request.headers.get('authorization') || '';
-        if (auth !== `Bearer ${expected}`) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-    }
+    // Fase 0-B: fail-closed + comparación en tiempo constante.
+    const denied = requireBearerSecret(request, 'CRON_SECRET');
+    if (denied) return denied;
 
     const now = Date.now();
     const cutoff = now - OVERDUE_MARGIN_MS;

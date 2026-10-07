@@ -8,9 +8,13 @@ export default async function ProjectsPage({ params }: { params: Promise<{ local
     const dict = await getDictionary(locale as any);
 
     // Fetch data in parallel
+    // `getAllBudgetsAction` es admin-only; los presupuestos solo sirven para
+    // crear obras (acción también admin-only). Un usuario no-admin con acceso
+    // a obras (p.ej. rol `encargado`) ve la lista sin presupuestos en vez de
+    // romper la página.
     const [projects, allBudgets] = await Promise.all([
         getAllProjectsAction(),
-        getAllBudgetsAction(),
+        getAllBudgetsAction().catch(() => []),
     ]);
 
     // Only approved budgets (without an existing project) can be used to create new projects

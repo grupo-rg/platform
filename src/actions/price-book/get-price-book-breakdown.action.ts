@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { PriceBookComponent } from '@/backend/price-book/domain/price-book-item';
@@ -23,6 +25,7 @@ export async function getPriceBookBreakdown(parentCode: string): Promise<{
     components: PriceBookComponent[];
     error?: string;
 }> {
+    if (!(await checkAdmin())) return { ...unauthorizedResult(), components: [] };
     if (!parentCode || parentCode.trim().length === 0) {
         return { success: true, components: [] };
     }
@@ -65,6 +68,7 @@ export async function getCatalogBreakdownForRepair(parentCode: string): Promise<
     components: NormalizedCatalogComponent[];
     error?: string;
 }> {
+    if (!(await checkAdmin())) return { ...unauthorizedResult(), components: [] };
     if (!parentCode || parentCode.trim().length === 0) {
         return { success: true, components: [] };
     }

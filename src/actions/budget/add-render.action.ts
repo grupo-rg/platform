@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { BudgetRender } from '@/backend/budget/domain/budget';
 import { revalidatePath } from 'next/cache';
@@ -12,6 +14,7 @@ interface AddRenderParams {
 }
 
 export async function addRenderAction({ budgetId, render }: AddRenderParams) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const budget = await budgetRepository.findById(budgetId);
         if (!budget) {

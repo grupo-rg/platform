@@ -6,8 +6,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { measurementPricingFlow } from '@/backend/ai/private/flows/measurements/measurement-pricing.flow';
+import { requireAdminRoute } from '@/app/api/_lib/route-guards';
 
 export async function POST(request: NextRequest) {
+    // Admin-only: solo lo usa /dashboard/measurements. Comprobamos ANTES de
+    // leer el multipart para no aceptar subidas de anónimos.
+    const denied = await requireAdminRoute();
+    if (denied) return denied;
     try {
         const formData = await request.formData();
         const file = formData.get('file') as File | null;

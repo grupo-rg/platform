@@ -1,11 +1,14 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { Budget } from '@/backend/budget/domain/budget';
 
 const budgetRepository = new BudgetRepositoryFirestore();
 
 export async function getBudgetAction(id: string): Promise<Budget | null> {
+    await requireAdmin();
     try {
         const budget = await budgetRepository.findById(id);
         if (!budget) {

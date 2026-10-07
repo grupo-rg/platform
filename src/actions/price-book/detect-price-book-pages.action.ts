@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 /**
  * Compuerta 1 del asistente de actualización del libro de precios: reenvía el PDF
  * subido al endpoint Python `POST /api/v1/admin/price-book/detect-pages`, que
@@ -30,6 +32,7 @@ export type DetectPagesResult =
 export async function detectPriceBookPagesAction(
   gcsUri: string,
 ): Promise<DetectPagesResult> {
+  if (!(await checkAdmin())) return unauthorizedResult();
   try {
     if (!gcsUri || !gcsUri.startsWith('gs://')) {
       return { success: false, error: 'Falta la referencia del PDF (gs://...).' };

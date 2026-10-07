@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 
@@ -15,6 +17,7 @@ export async function renameAdminConversationAction(
     conversationId: string,
     newTitle: string,
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const trimmed = (newTitle || '').trim();
         if (!conversationId) {
