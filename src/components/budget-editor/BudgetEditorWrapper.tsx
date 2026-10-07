@@ -36,6 +36,9 @@ import type { CompanyConfig } from '@/backend/platform/domain/company-config';
 import { DEFAULT_COMPANY_CONFIG } from '@/backend/platform/domain/company-config';
 import { BudgetEditorProvider } from './BudgetEditorContext';
 import { cn, formatMoneyEUR } from '@/lib/utils';
+import { getDocumentTemplatesForAction } from '@/actions/document-template/document-template.action';
+import type { DocumentTemplate } from '@/backend/document-template/domain/document-template';
+import { resolveDocumentTemplate } from '@/backend/document-template/domain/template-resolution';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 
 interface BudgetEditorWrapperProps {
@@ -127,6 +130,34 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
         if (initialCompanyConfig) return;
         getCompanyConfigAction().then(setCompanyConfig).catch(console.error);
     }, [initialCompanyConfig]);
+
+    // Plantilla de condiciones del PDF: asignada → predeterminada (budget/any) →
+    // constante en código. Fuera del panel admin (demo/traza) no se consulta
+    // Firestore y el PDF usa siempre la estándar.
+    const [documentTemplateId, setDocumentTemplateId] = React.useState<string | null>(budget.documentTemplateId ?? null);
+    const [documentTemplates, setDocumentTemplates] = React.useState<DocumentTemplate[]>([]);
+    React.useEffect(() => {
+        if (!isAdmin) return;
+        getDocumentTemplatesForAction('budget')
+            .then((res) => setDocumentTemplates(res.templates))
+            .catch(console.error);
+    }, [isAdmin]);
+    const pdfConditions = React.useMemo(
+        () => resolveDocumentTemplate(documentTemplates, 'budget', documentTemplateId),
+        [documentTemplates, documentTemplateId],
+    );
+
+    const handleChangeDocumentTemplate = async (id: string | null) => {
+        setDocumentTemplateId(id);
+        // En modo traza/demo solo se aplica localmente.
+        if (!isAdmin || traceData) return;
+        const res = await updateBudgetAction(budget.id, { documentTemplateId: id });
+        if (res.success) {
+            toast({ title: 'Plantilla de condiciones actualizada', description: 'Se usará en los PDFs de este presupuesto.' });
+        } else {
+            toast({ title: 'No se pudo guardar la plantilla', description: res.error || 'Se aplicará solo en esta sesión.', variant: 'destructive' });
+        }
+    };
 
     const handleSavePdfSettings = async (meta: any) => {
         if (!budget.leadId || budget.leadId === 'unassigned') {
@@ -289,7 +320,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                 }
             } else {
                 // Normal User Budget Edit Pipeline
-                const result = await updateBudgetAction(budget.id, finalJson as any);
+                const result = await updateBudgetAction(budget.id, { ...finalJson, documentTemplateId } as any);
 
                 if (result.success) {
                     saveSuccess();
@@ -359,6 +390,7 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                     renders={budget.renders}
                     company={companyConfig}
                     includeBreakdown={true}
+                    conditions={pdfConditions}
                 />
             ).toBlob();
 
@@ -566,6 +598,10 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                                                 budgetStatus={budget.status}
                                                 clientEmail={budget.clientSnapshot?.email}
                                                 clientAddress={budget.clientSnapshot?.address}
+                                                conditions={pdfConditions}
+                                                documentTemplates={documentTemplates}
+                                                documentTemplateId={documentTemplateId}
+                                                onChangeDocumentTemplate={isAdmin ? handleChangeDocumentTemplate : undefined}
                                             />
                                         </TabsContent>
                                         <TabsContent value="library" className="mt-4">
@@ -733,6 +769,10 @@ const BudgetEditorMain = ({ budget, isAdmin, traceData, initialCompanyConfig }: 
                                     budgetStatus={budget.status}
                                     clientEmail={budget.clientSnapshot?.email}
                                     clientAddress={budget.clientSnapshot?.address}
+                                    conditions={pdfConditions}
+                                    documentTemplates={documentTemplates}
+                                    documentTemplateId={documentTemplateId}
+                                    onChangeDocumentTemplate={isAdmin ? handleChangeDocumentTemplate : undefined}
                                 />
                             </div>
                         </SheetContent>

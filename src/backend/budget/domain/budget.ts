@@ -289,6 +289,13 @@ export interface Budget {
    */
   executionMode?: BudgetExecutionMode;
 
+  /**
+   * Plantilla de condiciones del PDF (`document_templates/{id}`). Ausente/null →
+   * predeterminada de tipo budget/any → constante en código. Se persiste en
+   * `handleSave` del editor y al cambiar el selector.
+   */
+  documentTemplateId?: string | null;
+
   // Quick Consultation Response
   quickQuote?: {
     price: number;

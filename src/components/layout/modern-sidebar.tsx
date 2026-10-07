@@ -29,6 +29,8 @@ import {
     FileSearch,
     SlidersHorizontal,
     BrainCircuit,
+    ListOrdered,
+    FileCog,
 } from 'lucide-react';
 import Image from 'next/image';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -84,6 +86,7 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                 { href: '/dashboard/admin/budgets', label: t.dashboard.nav.myBudgets, icon: FileText },
                 { href: '/dashboard/projects', label: 'Obras', icon: Building2 },
                 { href: '/dashboard/expenses', label: 'Facturas', icon: Receipt },
+                { href: '/dashboard/price-lists', label: 'Listas de precios', icon: ListOrdered },
             ]
         },
         {
@@ -112,6 +115,7 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
             label: 'Configuración',
             items: [
                 { href: '/dashboard/settings/company', label: 'Empresa', icon: Building2 },
+                { href: '/dashboard/settings/document-templates', label: 'Plantillas PDF', icon: FileCog },
                 { href: '/dashboard/admin/prices', label: t.dashboard.nav.priceBook, icon: Briefcase },
                 { href: '/dashboard/admin/prices?view=catalog', label: 'Catálogo', icon: Package },
                 { href: '/dashboard/settings/budget', label: 'Calibración', icon: SlidersHorizontal },
