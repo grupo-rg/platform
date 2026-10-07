@@ -1,8 +1,11 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { v4 as uuidv4 } from 'uuid';
 
 export async function extractMeasurementPdfAction(formData: FormData, effectiveId: string, strategy: 'INLINE' | 'ANNEXED' = 'INLINE', providedBudgetId?: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const file = formData.get('file') as File;
         if (!file) throw new Error("No file provided");

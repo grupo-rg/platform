@@ -1,9 +1,12 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { GeminiFilesService } from '@/backend/ai/core/infrastructure/gemini-files.service';
 import { measurementPricingFromItemsFlow } from '@/backend/ai/private/flows/measurements/measurement-pricing.flow';
 
 export async function checkBatchJobStatusAction(jobId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const job = await GeminiFilesService.getBatchJobStatus(jobId);
 
@@ -23,6 +26,7 @@ export async function checkBatchJobStatusAction(jobId: string) {
 }
 
 export async function processBatchJobResultAction(jobId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const job = await GeminiFilesService.getBatchJobStatus(jobId);
 

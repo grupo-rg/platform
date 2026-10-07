@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreAiTrainingRepository } from '@/backend/ai-training/infrastructure/firestore-ai-training-repository';
 import { AiTrainingData } from '@/backend/ai-training/domain/ai-training-data';
 
@@ -9,6 +11,7 @@ export async function saveAdminCorrectionTraceAction(
     finalEditedState: any,
     timeSpentEditingMs: number
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         console.log(`>> Capturing Admin RLHF Correction for budget: ${budgetId}...`);
 

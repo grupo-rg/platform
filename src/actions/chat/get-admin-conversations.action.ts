@@ -1,10 +1,13 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 
 export async function getAdminConversationsAction(adminId: string = 'admin-user') {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         initFirebaseAdminApp();
         const db = getFirestore();

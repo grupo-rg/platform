@@ -17,6 +17,7 @@
 
 import { adminFirestore } from '@/backend/shared/infrastructure/firebase/admin-app';
 import { verifyAuth } from '@/backend/auth/auth.middleware';
+import { requireAdmin } from '@/actions/_guards';
 
 export type JobSource = 'nl' | 'pdf' | 'unknown';
 export type JobStatus = 'queued' | 'running' | 'in_progress' | 'completed' | 'failed' | 'canceled';
@@ -210,6 +211,7 @@ export async function getPipelineJobsAction(
     limitOrFilters?: number | GetPipelineJobsFilters,
     legacyFilters?: GetPipelineJobsFilters,
 ): Promise<PipelineJobSummary[]> {
+    await requireAdmin();
     // Backwards-compat: the previous signature was `(limit: number)`. The new
     // signature accepts a single filters object OR a (limit, filters) pair.
     let filters: GetPipelineJobsFilters | undefined;
@@ -362,6 +364,7 @@ export async function getPipelineJobDetailAction(
      */
     telemetryKey?: string,
 ): Promise<PipelineEventRow[]> {
+    await requireAdmin();
     const docId = telemetryKey || jobId;
     const evSnap = await adminFirestore
         .collection('pipeline_telemetry')

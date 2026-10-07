@@ -1,11 +1,14 @@
 'use server';
 
+import { checkAdmin, UNAUTHORIZED_MESSAGE } from '@/actions/_guards';
+
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { revalidatePath } from 'next/cache';
 
 const budgetRepository = new BudgetRepositoryFirestore();
 
 export async function deleteBudgetsAction(ids: string[]): Promise<{ success: boolean; message: string; count?: number }> {
+    if (!(await checkAdmin())) return { success: false, message: UNAUTHORIZED_MESSAGE };
     try {
         if (!ids || ids.length === 0) {
             return { success: false, message: 'No se han seleccionado presupuestos para eliminar.' };

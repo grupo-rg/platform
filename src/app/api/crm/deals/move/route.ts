@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
 import { PipelineStage } from '@/backend/crm/domain/deal';
+import { requireAdminRoute } from '@/app/api/_lib/route-guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,9 @@ export const dynamic = 'force-dynamic';
  * Body: { dealId: string, toStage: PipelineStage }
  */
 export async function POST(req: NextRequest) {
+    const denied = await requireAdminRoute();
+    if (denied) return denied;
+
     let body: any;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 

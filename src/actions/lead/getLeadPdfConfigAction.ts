@@ -1,8 +1,11 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 
 export async function getLeadPdfConfigAction(leadId: string) {
+    await requireAdmin();
     if (!leadId || leadId === 'unassigned') {
         return null;
     }

@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedOkResult } from '@/actions/_guards';
+
 /**
  * Detección rápida de un archivo BC3 (FIEBDC-3) para la tarjeta de importación
  * del chat. Reenvía el archivo al servicio Python `ai-core` (`/api/v1/bc3/detect`),
@@ -27,6 +29,7 @@ export type DetectBc3Response =
     | { ok: false; error: string };
 
 export async function detectBc3Action(formData: FormData): Promise<DetectBc3Response> {
+    if (!(await checkAdmin())) return unauthorizedOkResult();
     const file = formData.get('file');
     if (!(file instanceof Blob)) {
         return { ok: false, error: 'No se recibió el archivo BC3.' };

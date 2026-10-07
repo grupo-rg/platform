@@ -1,5 +1,7 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 
 const leadRepo = new FirestoreLeadRepository();
@@ -22,6 +24,7 @@ export interface LeadTableRow {
  * Get paginated leads for the dashboard table
  */
 export async function getLeadsAction(limit: number = 50, offset: number = 0): Promise<LeadTableRow[]> {
+    await requireAdmin();
     const leads = await leadRepo.findAll(limit, offset);
 
     return leads.map(lead => ({
@@ -43,6 +46,7 @@ export async function getLeadsAction(limit: number = 50, offset: number = 0): Pr
  * Get lead counts by status for dashboard stats
  */
 export async function getLeadStatsAction(): Promise<{ verified: number; unverified: number; profiled: number }> {
+    await requireAdmin();
     return leadRepo.countByStatus();
 }
 
@@ -50,6 +54,7 @@ export async function getLeadStatsAction(): Promise<{ verified: number; unverifi
  * Get full lead details by ID
  */
 export async function getLeadByIdAction(id: string) {
+    await requireAdmin();
     const lead = await leadRepo.findById(id);
     if (!lead) return null;
     return {

@@ -1,5 +1,7 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { FirestoreBudgetConfigRepository } from "@/backend/budget/infrastructure/firestore-budget-config.repository";
 import { BudgetConfig } from "@/backend/budget/domain/budget-config";
 import { revalidatePath } from "next/cache";
@@ -7,6 +9,7 @@ import { revalidatePath } from "next/cache";
 const repo = new FirestoreBudgetConfigRepository();
 
 export async function getBudgetConfigAction(): Promise<BudgetConfig> {
+    await requireAdmin();
     try {
         return await repo.getConfig();
     } catch (error) {
@@ -16,6 +19,7 @@ export async function getBudgetConfigAction(): Promise<BudgetConfig> {
 }
 
 export async function saveBudgetConfigAction(config: BudgetConfig): Promise<void> {
+    await requireAdmin();
     try {
         await repo.saveConfig(config);
         revalidatePath('/dashboard/settings/budget');

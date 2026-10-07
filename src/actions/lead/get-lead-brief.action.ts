@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
 import { buildLeadBrief } from '@/backend/lead/application/build-lead-brief';
@@ -31,6 +33,7 @@ export async function getLeadBriefAction(leadId: string, dealId?: string): Promi
     banner?: LeadBannerInfo;
     error?: string;
 }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!leadId) return { success: false, error: 'Lead ID no proporcionado' };
         const repo = new FirestoreLeadRepository();

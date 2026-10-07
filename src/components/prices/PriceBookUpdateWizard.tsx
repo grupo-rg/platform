@@ -223,9 +223,14 @@ export function PriceBookUpdateWizard() {
     if (terminal(ingestStatus?.status)) return;
     let alive = true;
     const tick = async () => {
-      const st = await getPriceBookIngestStatusAction(ingestJobId);
-      if (!alive) return;
-      setIngestStatus(st);
+      try {
+        const st = await getPriceBookIngestStatusAction(ingestJobId);
+        if (!alive) return;
+        setIngestStatus(st);
+      } catch (err) {
+        // p.ej. "No autorizado" (sesión caducada): seguimos sondeando sin romper la UI.
+        console.error('[PriceBookUpdateWizard] status poll failed:', err);
+      }
     };
     const id = setInterval(tick, 3000);
     tick();

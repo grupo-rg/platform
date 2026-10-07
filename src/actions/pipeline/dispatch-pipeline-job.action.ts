@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 /**
  * Dispatches a pipeline job via the new ai-core Cloud Run Jobs path.
  *
@@ -56,6 +58,7 @@ export type DispatchResult =
 export async function dispatchPipelineJobAction(
   input: DispatchInput,
 ): Promise<DispatchResult> {
+  if (!(await checkAdmin())) return unauthorizedResult();
   try {
     const AI_CORE_URL = process.env.AI_CORE_URL || 'http://127.0.0.1:8080';
     const targetUrl = `${AI_CORE_URL}/api/v1/jobs/dispatch`;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { streamPrivateWizardAgent } from '@/backend/ai/private/agents/private-wizard.agent';
+import { requireAdminRoute } from '@/app/api/_lib/route-guards';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -20,6 +21,10 @@ export const runtime = 'nodejs';
  *   - `error\ndata: {"message": "..."}\n\n`
  */
 export async function POST(req: NextRequest) {
+    // Admin-only: lo consume el wizard privado (/dashboard/assistant).
+    const denied = await requireAdminRoute();
+    if (denied) return denied;
+
     let body: any;
     try {
         body = await req.json();

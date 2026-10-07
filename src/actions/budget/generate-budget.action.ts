@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { BudgetNarrativeBuilder } from '@/backend/budget/domain/budget-narrative-builder';
 // Deprecated import removed
 import { runWithContext } from '@/backend/ai/shared/context/genkit.context';
@@ -14,6 +16,7 @@ const budgetRepository = new BudgetRepositoryFirestore();
 const leadRepository = new FirestoreLeadRepository();
 
 export async function generateBudgetAction(leadId: string, formValues: DetailedFormValues) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         console.log(">> Generating Budget from Requirements...");
 

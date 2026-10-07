@@ -1,4 +1,6 @@
 'use server';
+
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
 import { ai, geminiFlash } from '@/backend/ai/shared/config/genkit.config';
 import { SurveyorAgent } from '@/backend/ai/private-core/agents/surveyor.agent';
 import { JudgeAgent } from '@/backend/ai/private-core/agents/judge.agent';
@@ -9,6 +11,7 @@ import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore
  * Fast, approximate, for quick budgeting.
  */
 export async function estimatePriceAction(description: string): Promise<{ success: boolean; price?: number; confidence?: number; reason?: string; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!description) return { success: false, error: "Description is empty" };
 
@@ -46,6 +49,7 @@ export async function estimatePriceAction(description: string): Promise<{ succes
  * This effectively converts a simple line item into a complex Partida.
  */
 export async function generateBreakdownAction(description: string, leadId?: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!description) return { success: false, error: "Description is empty" };
 

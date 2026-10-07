@@ -19,6 +19,18 @@ export class GoogleCloudTasksAdapter implements TaskQueuePort {
         this.webWorkerUrl = `${baseUrl}/api/marketing/worker`;
     }
 
+    /**
+     * Cabeceras para /api/marketing/worker, que exige `x-internal-token`
+     * (fail-closed, Fase 0-B). Sin el token, el worker responde 401.
+     */
+    private workerHeaders(): Record<string, string> {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const token = process.env.INTERNAL_WORKER_TOKEN;
+        if (token) headers['x-internal-token'] = token;
+        else console.warn('[GCP Tasks] INTERNAL_WORKER_TOKEN no definido: el worker rechazará la tarea.');
+        return headers;
+    }
+
     async enqueueSequenceProcessing(enrollmentId: string): Promise<void> {
         // En entorno de desarrollo (sin GOOGLE_APPLICATION_CREDENTIALS), simulamos
         // la asincronía de la cola escupiendo el payload al worker en background ("Fire & Forget")
@@ -26,7 +38,7 @@ export class GoogleCloudTasksAdapter implements TaskQueuePort {
             console.log(`[Local Queue Mock] Delegando asíncronamente Enrollment: ${enrollmentId} vía local Fetch`);
             fetch(this.webWorkerUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.workerHeaders(),
                 body: JSON.stringify({ enrollmentId })
             }).catch(e => console.error("[Worker local] request falló tras delegarse silenciosamente"));
             return;
@@ -40,7 +52,7 @@ export class GoogleCloudTasksAdapter implements TaskQueuePort {
             httpRequest: {
                 httpMethod: 'POST',
                 url: this.webWorkerUrl,
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.workerHeaders(),
                 body: Buffer.from(payload).toString('base64'),
             },
         };

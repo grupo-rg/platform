@@ -1,11 +1,14 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { Budget } from '@/backend/budget/domain/budget';
 
 const budgetRepository = new BudgetRepositoryFirestore();
 
 export async function getAllBudgetsAction(): Promise<Budget[]> {
+    await requireAdmin();
     try {
         const budgets = await budgetRepository.findAll();
         // Serialize deeply to remove Firestore Timestamps classes that crash Next.js Client Boundaries

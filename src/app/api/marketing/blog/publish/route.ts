@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { blogPostService } from '@/backend/marketing/application/blog-post-service';
+import { requireSecretHeader } from '@/app/api/_lib/route-guards';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -12,11 +13,9 @@ export const runtime = 'nodejs';
  * Destino de las Cloud Tasks programadas en `scheduleBlogPostAction`.
  */
 export async function POST(req: NextRequest) {
-    const expected = process.env.INTERNAL_WORKER_TOKEN;
-    const provided = req.headers.get('x-internal-token') || '';
-    if (!expected || provided !== expected) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Fail-closed + comparación en tiempo constante.
+    const denied = requireSecretHeader(req, 'x-internal-token', 'INTERNAL_WORKER_TOKEN');
+    if (denied) return denied;
 
     let body: any;
     try {

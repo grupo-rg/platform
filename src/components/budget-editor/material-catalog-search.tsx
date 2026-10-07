@@ -52,9 +52,16 @@ export function MaterialCatalogSearch({ onSelect, trigger, open: controlledOpen,
             }
 
             setLoading(true);
-            const items = await searchMaterialsAction(query);
-            setResults(items);
-            setLoading(false);
+            try {
+                const items = await searchMaterialsAction(query);
+                setResults(items);
+            } catch (err) {
+                // p.ej. "No autorizado" si la sesión caducó: lista vacía en vez de romper.
+                console.error('[MaterialCatalogSearch] search failed:', err);
+                setResults([]);
+            } finally {
+                setLoading(false);
+            }
         }, 500);
 
         return () => clearTimeout(timeoutId);

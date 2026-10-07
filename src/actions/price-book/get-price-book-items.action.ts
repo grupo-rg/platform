@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { PriceBookItem } from '@/backend/price-book/domain/price-book-item';
@@ -20,6 +22,7 @@ import { priceBookCollection } from '@/lib/catalog/catalog-config';
  *   vía `getPriceBookBreakdown(parentCode)`.
  */
 export async function getPriceBookItems(year: number = 2025, limitCount: number = 2000) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         console.log(`[Action] Fetching price book items (limit: ${limitCount})...`);
         initFirebaseAdminApp();

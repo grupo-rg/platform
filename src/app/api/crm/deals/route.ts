@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
+import { requireAdminRoute } from '@/app/api/_lib/route-guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,8 @@ export const dynamic = 'force-dynamic';
  * Si no se pasa stage, devuelve todos los deals.
  */
 export async function GET(req: NextRequest) {
+    const denied = await requireAdminRoute();
+    if (denied) return denied;
     try {
         const repo = new FirebaseDealRepository();
         const stage = req.nextUrl.searchParams.get('stage');

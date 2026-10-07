@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
@@ -106,6 +108,7 @@ export async function getAdminLeadDetailAction(leadId: string): Promise<{
     lead?: AdminLeadDetail;
     error?: string;
 }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const leadRepo = new FirestoreLeadRepository();
         const budgetRepo = new BudgetRepositoryFirestore();

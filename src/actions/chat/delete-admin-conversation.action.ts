@@ -1,8 +1,11 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 
 export async function deleteAdminConversationAction(conversationId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         // You could also add a layer of security here to verify if the conversation
         // belongs to the admin. For now, we trust the dashboard.

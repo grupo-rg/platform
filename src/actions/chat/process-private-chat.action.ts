@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { privateWizardAgent } from '@/backend/ai/private/agents/private-wizard.agent';
 
 export async function processPrivateChatAction(
@@ -8,6 +10,7 @@ export async function processPrivateChatAction(
     base64Files?: string[],
     userId?: string
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!userId) {
             throw new Error('User ID is required for private wizard');

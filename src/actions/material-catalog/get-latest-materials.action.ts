@@ -1,5 +1,7 @@
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { getFirestore } from 'firebase-admin/firestore';
 import { MaterialItem } from '@/backend/material-catalog/domain/material-item';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
@@ -7,6 +9,7 @@ import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/a
 initFirebaseAdminApp();
 
 export async function getLatestMaterialsAction(limit: number = 20): Promise<MaterialItem[]> {
+    await requireAdmin();
     try {
         const snapshot = await getFirestore().collection('material_catalog')
             .orderBy('createdAt', 'desc')

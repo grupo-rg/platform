@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, requireAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { ai, embeddingModel } from '@/backend/ai/shared/config/genkit.config';
 import { FirestorePriceBookRepository } from '@/backend/price-book/infrastructure/firestore-price-book-repository';
 import { FirestorePendingPriceItemRepository } from '@/backend/budget/infrastructure/firestore-pending-item.repository';
@@ -18,6 +20,7 @@ export interface ApproveItemInput {
 }
 
 export async function approvePendingItemAction(input: ApproveItemInput) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         console.log(`[Action] Approving item ${input.id}...`);
 
@@ -60,10 +63,12 @@ export async function approvePendingItemAction(input: ApproveItemInput) {
 }
 
 export async function rejectPendingItemAction(id: string) {
+    await requireAdmin();
     await pendingRepo.updateStatus(id, 'rejected');
     revalidatePath('/dashboard/admin/pending-items');
 }
 
 export async function getPendingItemsAction() {
+    await requireAdmin();
     return await pendingRepo.findAllPending();
 }

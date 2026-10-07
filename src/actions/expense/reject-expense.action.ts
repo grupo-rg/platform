@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreExpenseRepository } from '@/backend/expense/infrastructure/firestore-expense-repository';
 import { FirestoreProviderRepository } from '@/backend/expense/infrastructure/firestore-provider-repository';
 import { FirestoreProjectRepository } from '@/backend/project/infrastructure/firestore-project-repository';
@@ -12,6 +14,7 @@ const projectRepository = new FirestoreProjectRepository();
 const expenseService = new ExpenseService(expenseRepository, providerRepository, projectRepository);
 
 export async function rejectExpenseAction(expenseId: string) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const expense = await expenseService.rejectExpense(expenseId);
         revalidatePath('/dashboard/expenses');

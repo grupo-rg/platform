@@ -1,6 +1,8 @@
 
 'use server';
 
+import { requireAdmin } from '@/actions/_guards';
+
 import { SemanticSearchUseCase } from '@/backend/price-book/application/semantic-search.use-case';
 import { RestApiVectorizerAdapter } from '@/backend/price-book/infrastructure/ai/rest-api-vectorizer.adapter';
 import { FirestorePriceBookRepository } from '@/backend/price-book/infrastructure/firestore/firestore-price-book.repository';
@@ -9,6 +11,7 @@ import { adaptV005Item, V005ItemDoc } from '@/lib/price-book/v005-adapter';
 import { priceBookCollection } from '@/lib/catalog/catalog-config';
 
 export async function searchPriceBookAction(query: string, year: number = 2025): Promise<PriceBookItem[]> {
+    await requireAdmin();
     if (!query || query.trim().length === 0) {
         return [];
     }

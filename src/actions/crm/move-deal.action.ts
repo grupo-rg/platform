@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { revalidatePath } from 'next/cache';
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
 import { PipelineStage } from '@/backend/crm/domain/deal';
@@ -8,6 +10,7 @@ export async function moveDealStageAction(
     dealId: string,
     newStage: PipelineStage
 ): Promise<{ success: boolean; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const repo = new FirebaseDealRepository();
         const deal = await repo.findById(dealId);

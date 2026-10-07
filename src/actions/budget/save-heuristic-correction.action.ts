@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 /**
  * Fase 6.B — server action para capturar una corrección humana del aparejador
  * como `HeuristicFragment`. Escribe en la colección `heuristic_fragments`,
@@ -22,6 +24,7 @@ import {
 export async function saveHeuristicCorrectionAction(
     input: Omit<BuildHeuristicFragmentInput, 'timestamp'>,
 ): Promise<{ success: boolean; fragmentId?: string; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         initFirebaseAdminApp();
         const db = getFirestore();

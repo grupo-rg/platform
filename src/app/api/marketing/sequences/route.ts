@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FirebaseSequenceRepository } from '@/backend/marketing/infrastructure/persistence/firebase.sequence.repository';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
+import { requireAdminRoute } from '@/app/api/_lib/route-guards';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,6 +12,8 @@ export const runtime = 'nodejs';
  * Lista todas las secuencias (activas e inactivas).
  */
 export async function GET() {
+    const denied = await requireAdminRoute();
+    if (denied) return denied;
     try {
         initFirebaseAdminApp();
         const db = getFirestore();
@@ -29,6 +32,9 @@ export async function GET() {
  * Body: { id: string, active: boolean }
  */
 export async function PATCH(req: NextRequest) {
+    const denied = await requireAdminRoute();
+    if (denied) return denied;
+
     let body: any;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 

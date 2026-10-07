@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { revalidatePath } from 'next/cache';
 
@@ -13,6 +15,7 @@ export async function saveLeadPdfConfigAction(
         notes: string;
     }
 ) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const repository = new FirestoreLeadRepository();
         const lead = await repository.findById(leadId);

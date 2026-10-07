@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { ProjectSpecs } from '@/backend/budget/domain/project-specs';
 import { aparejadorOrchestratorAgent } from '@/backend/ai/core/agents/aparejador-orchestrator.agent';
 import { budgetSearchAgent } from '@/backend/ai/private/agents/budget-search.agent';
@@ -31,6 +33,7 @@ export async function orchestrateNlpToBudgetAction(
     userMessage: string,
     specs?: ProjectSpecs
 ): Promise<{ success: boolean; data?: OrchestratedBudgetResult; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     console.log(`[Orchestration] Starting NLP to Budget flow for lead ${leadId}`);
 
     try {

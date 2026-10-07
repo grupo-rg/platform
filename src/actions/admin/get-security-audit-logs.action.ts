@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 import type { AuditEventType } from '@/backend/shared/security/audit-log';
@@ -21,6 +23,7 @@ export interface SecurityAuditEvent {
 export async function getSecurityAuditLogsAction(
     limit: number = 100
 ): Promise<{ success: boolean; events?: SecurityAuditEvent[]; error?: string }> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         const db = getFirestore();
         const snap = await db

@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 /**
  * WS-D — server action del "Aparejador Copilot".
  *
@@ -85,6 +87,7 @@ function normalizeComponent(c: any): BudgetBreakdownComponent {
 export async function editBreakdownWithNlAction(
     input: EditBreakdownNlInput,
 ): Promise<EditBreakdownNlResult> {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         if (!input?.instruction || !input.instruction.trim()) {
             return { success: false, error: 'Escribe una instrucción para el copiloto.' };

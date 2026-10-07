@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 /**
  * Pre-flight to the heavy measurements/vision pipeline. Once the client has
  * uploaded a PDF to `gs://...` we call this action which proxies to the
@@ -30,6 +32,7 @@ export type ExtractPdfMetadataResult =
 export async function extractPdfMetadataAction(
   input: ExtractPdfMetadataInput,
 ): Promise<ExtractPdfMetadataResult> {
+  if (!(await checkAdmin())) return unauthorizedResult();
   try {
     const AI_CORE_URL = process.env.AI_CORE_URL || 'http://127.0.0.1:8080';
     const targetUrl = `${AI_CORE_URL}/api/v1/jobs/extract-metadata`;

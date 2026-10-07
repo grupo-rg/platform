@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FirestoreReEngagementScheduleRepository } from '@/backend/re-engagement/infrastructure/firestore-schedule-repository';
 import { ReEngagementMailer } from '@/backend/re-engagement/application/re-engagement-mailer';
+import { requireBearerSecret } from '@/app/api/_lib/route-guards';
 
 /**
  * Cron de re-engagement.
@@ -10,16 +11,12 @@ import { ReEngagementMailer } from '@/backend/re-engagement/application/re-engag
  * envía los emails y marca `sentAt`.
  *
  * Seguridad: protegido con `CRON_SECRET` enviado como bearer header
- * `Authorization: Bearer <secret>` (estándar de Vercel Cron).
+ * `Authorization: Bearer <secret>` (estándar de Vercel Cron). Comparación
+ * en tiempo constante y fail-closed: sin `CRON_SECRET` definido, deniega.
  */
 export async function GET(request: NextRequest) {
-    const expected = process.env.CRON_SECRET;
-    if (expected) {
-        const auth = request.headers.get('authorization') || '';
-        if (auth !== `Bearer ${expected}`) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-    }
+    const denied = requireBearerSecret(request, 'CRON_SECRET');
+    if (denied) return denied;
 
     const repo = new FirestoreReEngagementScheduleRepository();
     const mailer = new ReEngagementMailer();

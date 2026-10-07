@@ -1,10 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminFirestore } from '@/backend/shared/infrastructure/firebase/admin-app';
+import { requireAdminRoute } from '@/app/api/_lib/route-guards';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
 
+/**
+ * SSE de telemetría del pipeline (`pipeline_telemetry/{budgetId}/events`).
+ *
+ * Seguridad: admin-only. Hoy solo lo consumen componentes del wizard privado
+ * (`BudgetGenerationProgress` / `BudgetStreamListener`, montados desde
+ * `BudgetWizardChat` en /dashboard/assistant). El EventSource same-origin
+ * envía la cookie `session`. Si en el futuro la demo pública necesitara
+ * progreso en vivo, debe ir por un endpoint separado y con un token de
+ * un solo uso ligado al budget, no reabriendo éste.
+ * Respuesta 401/403 JSON (no text/event-stream) → el EventSource falla sin
+ * reintentar en bucle.
+ */
 export async function GET(req: NextRequest) {
+  const denied = await requireAdminRoute();
+  if (denied) return denied;
+
   const searchParams = req.nextUrl.searchParams;
   const budgetId = searchParams.get('budgetId');
 

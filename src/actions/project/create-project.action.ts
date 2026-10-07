@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreProjectRepository } from '@/backend/project/infrastructure/firestore-project-repository';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { ProjectService } from '@/backend/project/application/project-service';
@@ -25,6 +27,7 @@ export interface CreateProjectInput {
 }
 
 export async function createProjectAction(data: CreateProjectInput) {
+    if (!(await checkAdmin())) return unauthorizedResult();
     try {
         // --- Flujo 1: con presupuesto aprobado ---
         if (data.budgetId) {
