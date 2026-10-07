@@ -4,6 +4,5 @@
     "emailLabel": "Email",
     "passwordLabel": "Password",
     "button": "Log In",
-    "noAccount": "Don't have an account?",
-    "signupLink": "Sign up"
+    "inviteOnly": "Privétoegang van Grupo RG. Accounts worden alleen op uitnodiging aangemaakt."
 }

@@ -68,7 +68,7 @@ export const routing = defineRouting({
             nl: '/juridische-kennisgeving'
         },
         '/login': '/login',
-        '/signup': '/signup',
+        '/invitacion/[token]': '/invitacion/[token]',
         '/zonas/[zone]': {
             es: '/zonas/[zone]',
             en: '/locations/[zone]',

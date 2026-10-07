@@ -4,6 +4,5 @@
     "emailLabel": "Correo Electrónico",
     "passwordLabel": "Contraseña",
     "button": "Iniciar Sesión",
-    "noAccount": "¿No tienes una cuenta?",
-    "signupLink": "Regístrate"
+    "inviteOnly": "Acceso privado de Grupo RG. Las cuentas se crean solo por invitación."
 }

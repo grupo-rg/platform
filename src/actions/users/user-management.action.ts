@@ -83,7 +83,7 @@ export async function inviteUserAction(input: { email: string; role: string; loc
             role: input.role,
         });
         const locale = ['es', 'en', 'ca', 'de', 'nl'].includes(input.locale ?? '') ? input.locale : 'es';
-        const link = `${await resolveBaseUrl()}/${locale}/signup?invite=${encodeURIComponent(token)}`;
+        const link = `${await resolveBaseUrl()}/${locale}/invitacion/${encodeURIComponent(token)}`;
 
         let emailSent = false;
         let emailError: string | null = null;

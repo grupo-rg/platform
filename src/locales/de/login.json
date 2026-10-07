@@ -4,6 +4,5 @@
     "emailLabel": "E-Mail",
     "passwordLabel": "Passwort",
     "button": "Anmelden",
-    "noAccount": "Haben Sie noch kein Konto?",
-    "signupLink": "Registrieren"
+    "inviteOnly": "Privater Zugang von Grupo RG. Konten werden nur per Einladung erstellt."
 }

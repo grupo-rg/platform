@@ -10,7 +10,7 @@ import { PLATFORM_ROLE_LABELS, type PlatformRole } from '@/backend/auth/roles';
 import { UserManagementError, UserManagementService } from '@/backend/auth/user-management.service';
 
 /**
- * Acciones PÚBLICAS de la página /signup. No requieren sesión: la
+ * Acciones PÚBLICAS de la página /invitacion/<token>. No requieren sesión: la
  * autorización es la posesión del token de invitación (single-use, 7 días,
  * guardado como hash).
  */

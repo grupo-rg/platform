@@ -15,7 +15,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Link } from '@/i18n/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getSafeAuth } from '@/lib/firebase/client';
 import { useRouter } from 'next/navigation';
@@ -110,12 +109,9 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
             </Button>
           </form>
         </Form>
-        <div className="mt-4 text-center text-sm">
-          {dict.noAccount}{' '}
-          <Link href="/signup" className="underline">
-            {dict.signupLink}
-          </Link>
-        </div>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          {dict.inviteOnly}
+        </p>
       </CardContent>
     </Card>
   );

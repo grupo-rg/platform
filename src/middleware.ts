@@ -5,10 +5,25 @@ import { PATHNAME_HEADER } from './backend/auth/roles';
 
 const handleI18nRouting = createMiddleware(routing);
 
+// `/signup` ya no existe (alta solo por invitación). Los enlaces enviados
+// antes del cambio (`/signup?invite=<token>`) se redirigen a la ruta nueva;
+// sin `invite`, la petición sigue su curso y acaba en 404.
+const LEGACY_SIGNUP_PATH = new RegExp(`^/(?:(${routing.locales.join('|')})/)?signup/?$`);
+
 const DASHBOARD_PATH = new RegExp(`^/(?:(${routing.locales.join('|')})/)?dashboard(?:/|$)`);
 
 export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const legacySignup = LEGACY_SIGNUP_PATH.exec(pathname);
+  const legacyInvite = request.nextUrl.searchParams.get('invite');
+  if (legacySignup && legacyInvite && /^[A-Za-z0-9_-]{43}$/.test(legacyInvite)) {
+    const locale = legacySignup[1] || routing.defaultLocale;
+    const inviteUrl = request.nextUrl.clone();
+    inviteUrl.pathname = `/${locale}/invitacion/${legacyInvite}`;
+    inviteUrl.search = '';
+    return NextResponse.redirect(inviteUrl);
+  }
 
   // Chequeo barato: sin cookie `session` no se entra al panel. NO verifica la
   // firma (edge runtime, sin admin SDK); la verificación real está en

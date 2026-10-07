@@ -4,6 +4,5 @@
     "emailLabel": "Correu Electrònic",
     "passwordLabel": "Contrasenya",
     "button": "Iniciar Sessió",
-    "noAccount": "No tens un compte?",
-    "signupLink": "Registra't"
+    "inviteOnly": "Accés privat de Grupo RG. Els comptes es creen només per invitació."
 }

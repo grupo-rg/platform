@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
                 '/*/dashboard/',
                 '/*/admin/',
                 '/*/private/',
+                '/*/invitacion/',
             ],
         },
         sitemap: `${baseUrl}/sitemap.xml`,

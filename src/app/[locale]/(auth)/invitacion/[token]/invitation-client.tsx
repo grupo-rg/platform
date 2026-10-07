@@ -19,7 +19,7 @@ import { Link } from '@/i18n/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getSafeAuth } from '@/lib/firebase/client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState } from 'react';
 import { getDictionary } from '@/lib/dictionaries';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -30,7 +30,8 @@ import {
 } from '@/actions/users/invitation-accept.action';
 
 /**
- * Alta SOLO por invitación. Sin `?invite=<token>` válido no hay formulario.
+ * Alta SOLO por invitación (`/invitacion/<token>`). No existe página de
+ * registro pública: sin token bien formado la ruta da 404 (ver page.tsx).
  * La cuenta nueva se crea en servidor (admin SDK) al aceptar la invitación,
  * para que funcione aunque el alta pública esté desactivada en Firebase Auth.
  */
@@ -50,27 +51,16 @@ const existingAccountSchema = z.object({
   confirmPassword: z.string().optional(),
 });
 
-export default function SignupPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ locale: string }>;
-  searchParams: Promise<{ invite?: string | string[] }>;
-}) {
-  const { locale } = use(params);
-  const sp = use(searchParams);
-  const token = typeof sp.invite === 'string' ? sp.invite : null;
-
+export default function InvitationClient({ locale, token }: { locale: string; token: string }) {
   const [dict, setDict] = useState<any>(null);
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
-  const [checking, setChecking] = useState(!!token);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     getDictionary(locale as any).then(d => setDict(d.signup));
   }, [locale]);
 
   useEffect(() => {
-    if (!token) return;
     let cancelled = false;
     getInvitationPreviewAction(token)
       .then(p => { if (!cancelled) setPreview(p); })
@@ -88,20 +78,6 @@ export default function SignupPage({
       </Link>
     </div>
   );
-
-  if (!token) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline text-2xl">{dict.title}</CardTitle>
-          <CardDescription>
-            El acceso es solo por invitación. Si necesitas una cuenta, pide a un administrador que te envíe un enlace de invitación.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>{loginLink}</CardContent>
-      </Card>
-    );
-  }
 
   if (checking || !preview) {
     return (
