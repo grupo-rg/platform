@@ -21,6 +21,7 @@ import { getSafeAuth } from '@/lib/firebase/client';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, use } from 'react';
 import { getDictionary } from '@/lib/dictionaries';
+import { createServerSession } from '@/context/auth-context';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Por favor, introduce un correo electrónico válido.' }),
@@ -48,7 +49,11 @@ export default function LoginPage({ params }: { params: Promise<{ locale: string
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       const auth = getSafeAuth();
-      await signInWithEmailAndPassword(auth, values.email, values.password);
+      const cred = await signInWithEmailAndPassword(auth, values.email, values.password);
+      // Esperamos a la cookie `session` antes de navegar: el middleware y el
+      // layout del panel la exigen y, si no, rebotarían de vuelta al login.
+      const { ok } = await createServerSession(cred.user);
+      if (!ok) throw new Error('No se pudo crear la sesión en el servidor. Inténtalo de nuevo.');
       toast({
         title: '¡Éxito!',
         description: 'Has iniciado sesión correctamente.',

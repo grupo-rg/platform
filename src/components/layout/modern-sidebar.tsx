@@ -31,6 +31,7 @@ import {
     BrainCircuit,
     ListOrdered,
     FileCog,
+    UserCog,
 } from 'lucide-react';
 import Image from 'next/image';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -38,6 +39,7 @@ import { NotificationBell } from '@/components/notifications/notification-bell';
 import { Logo } from '@/components/logo';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from '@/i18n/navigation';
+import { canSeeNavItem, PLATFORM_ROLE_LABELS } from '@/backend/auth/roles';
 
 interface ModernSidebarProps {
     t: any;
@@ -47,7 +49,7 @@ interface ModernSidebarProps {
 export function ModernSidebar({ t, className }: ModernSidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const { user, signOut } = useAuth();
+    const { user, signOut, platformRole } = useAuth();
     const [collapsed, setCollapsed] = useState(false);
     const [signingOut, setSigningOut] = useState(false);
 
@@ -120,10 +122,18 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                 { href: '/dashboard/admin/prices?view=catalog', label: 'Catálogo', icon: Package },
                 { href: '/dashboard/settings/budget', label: 'Calibración', icon: SlidersHorizontal },
                 { href: '/dashboard/admin/models', label: 'Registro de modelos', icon: BrainCircuit },
+                { href: '/dashboard/settings/users', label: 'Usuarios', icon: UserCog },
                 { href: '/dashboard/settings', label: t.dashboard.nav.settings, icon: Settings },
             ]
         }
     ];
+
+    // Filtrado por rol (lista central en src/backend/auth/roles.ts). Es solo
+    // UX: la protección real está en el layout de servidor y en las actions.
+    const showHighlight = canSeeNavItem(platformRole, highlightItem.href);
+    const visibleNavGroups = navGroups
+        .map(group => ({ ...group, items: group.items.filter(item => canSeeNavItem(platformRole, item.href)) }))
+        .filter(group => group.items.length > 0);
 
     return (
         <aside
@@ -186,7 +196,7 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
             {/* Navigation */}
             <nav className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden custom-scrollbar px-2">
                 {/* Highlighted Asistente IA (top-level, fuera de grupos) */}
-                {(() => {
+                {showHighlight && (() => {
                     const isActive = pathname === highlightItem.href || pathname.startsWith(highlightItem.href);
                     const Icon = highlightItem.icon;
                     return (
@@ -222,7 +232,7 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                     );
                 })()}
 
-                {navGroups.map((group, idx) => (
+                {visibleNavGroups.map((group, idx) => (
                     <div key={idx} className="space-y-1">
                         {/* Group Label */}
                         <AnimatePresence>
@@ -326,7 +336,7 @@ export function ModernSidebar({ t, className }: ModernSidebarProps) {
                     {!collapsed && (
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-sidebar-foreground truncate group-hover/user:text-primary transition-colors">{displayName}</p>
-                            <p className="text-[10px] text-muted-foreground">Administrador</p>
+                            <p className="text-[10px] text-muted-foreground">{PLATFORM_ROLE_LABELS[platformRole]}</p>
                         </div>
                     )}
                     {!collapsed && <LogOut className="h-4 w-4 text-muted-foreground group-hover/user:text-foreground transition-colors shrink-0" />}

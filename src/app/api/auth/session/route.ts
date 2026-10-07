@@ -33,6 +33,21 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'idToken required' }, { status: 400 });
         }
 
+        // CSRF básico: si el navegador manda Origin, debe ser el mismo host.
+        const origin = request.headers.get('origin');
+        const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
+        if (origin && host) {
+            let originHost: string | null = null;
+            try { originHost = new URL(origin).host; } catch { originHost = null; }
+            if (originHost !== host) {
+                return NextResponse.json({ error: 'invalid origin' }, { status: 403 });
+            }
+        }
+
+        // checkRevoked=true: rechaza tokens de usuarios desactivados o con
+        // sesiones revocadas (cambio de rol / desactivación desde /settings/users).
+        await adminAuth.verifyIdToken(idToken, true);
+
         const sessionCookie = await adminAuth.createSessionCookie(idToken, {
             expiresIn: SESSION_MAX_AGE_SECONDS * 1000,
         });
@@ -50,7 +65,7 @@ export async function POST(request: Request) {
     } catch (error: any) {
         console.error('[api/auth/session][POST] failed:', error?.code, error?.message);
         return NextResponse.json(
-            { error: error?.message || 'failed to create session cookie' },
+            { error: 'failed to create session cookie', code: error?.code ?? null },
             { status: 401 },
         );
     }
