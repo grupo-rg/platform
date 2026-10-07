@@ -20,6 +20,8 @@ import {
     Ruler,
     Calendar,
     Camera,
+    UserRound,
+    CheckCircle2,
 } from 'lucide-react';
 import { useLocale } from 'next-intl';
 import { Button } from '@/components/ui/button';
@@ -28,14 +30,25 @@ import { cn } from '@/lib/utils';
 import { processPublicChatAction } from '@/actions/chat/process-public-chat.action';
 import { useVerifiedLead } from '@/hooks/use-verified-lead';
 import { InlineBookingPicker } from '@/components/chat/InlineBookingPicker';
+import { requestHumanAgentAction } from '@/actions/chat/request-human-agent.action';
+import { LeadConsentFields, EMPTY_CONSENT, type LeadConsentValue } from '@/components/forms/lead-consent-fields';
+import { Link } from '@/i18n/navigation';
 
 const SESSION_STORAGE_KEY = 'rg_public_chat_session_id';
 const HISTORY_STORAGE_KEY_PREFIX = 'rg_public_chat_history_';
+const CONSENT_STORAGE_KEY = 'rg_public_chat_consent';
 
-const ANON_WELCOME = `¡Hola! Soy el asistente de Grupo RG. ¿En qué obra estás pensando? Cuéntame tipo, ubicación y lo que tienes en mente — si tienes fotos puedes adjuntarlas.`;
+/**
+ * Aviso de IA (Reglamento (UE) 2024/1689 — AI Act, art. 50.1, aplicable desde
+ * el 2-08-2026): el visitante debe saber desde el primer mensaje que habla
+ * con un sistema de IA. Se repite en la cabecera del chat.
+ */
+const AI_DISCLOSURE = 'Estás hablando con un asistente de inteligencia artificial, no con una persona.';
+
+const ANON_WELCOME = `¡Hola! ${AI_DISCLOSURE} Soy el asistente virtual de Grupo RG. ¿En qué obra estás pensando? Cuéntame tipo, ubicación y lo que tienes en mente — si tienes fotos puedes adjuntarlas. Si prefieres hablar con una persona, pulsa "Hablar con una persona" arriba.`;
 
 const verifiedWelcome = (firstName: string) =>
-    `¡Hola ${firstName}! Soy el asistente de Grupo RG. Como ya estás identificado, vamos directos al grano: ¿qué obra tienes en mente? Tipo, ubicación, m² aproximados y lo que estés visualizando — si tienes fotos, adjúntalas.`;
+    `¡Hola ${firstName}! ${AI_DISCLOSURE} Soy el asistente virtual de Grupo RG. Como ya estás identificado, vamos directos al grano: ¿qué obra tienes en mente? Tipo, ubicación, m² aproximados y lo que estés visualizando — si tienes fotos, adjúntalas.`;
 
 interface QuickStarter {
     Icon: any;
@@ -119,8 +132,10 @@ interface ChatMessage {
     createdAt: number;
     /** Si este mensaje del agente vino con bookingSlots, los renderizamos como picker. */
     bookingSlots?: { date: string; startTime: string; endTime: string; label: string }[];
-    /** LeadId asociado al mensaje cuando hay bookingSlots — necesario para confirmar. */
-    bookingLeadId?: string;
+    /** true si el servidor confirmó sesión de lead (cookie) → el picker puede reservar. */
+    canBook?: boolean;
+    /** Mensaje informativo del sistema (p. ej. aviso de traspaso a humano). */
+    isNotice?: boolean;
 }
 
 interface PendingFile {
@@ -149,6 +164,10 @@ export function PublicCommercialChat() {
     const [pending, setPending] = useState<PendingFile[]>([]);
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [consent, setConsent] = useState<LeadConsentValue>(EMPTY_CONSENT);
+    const [consentError, setConsentError] = useState(false);
+    const [humanRequested, setHumanRequested] = useState(false);
+    const [isRequestingHuman, setIsRequestingHuman] = useState(false);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -186,6 +205,52 @@ export function PublicCommercialChat() {
         ]);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLeadVerified, verifiedLead?.id]);
+
+    // Rehidrata las casillas de consentimiento de esta sesión de chat.
+    useEffect(() => {
+        try {
+            const raw = sessionStorage.getItem(CONSENT_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                setConsent({ privacyAccepted: parsed?.privacyAccepted === true, marketingAccepted: parsed?.marketingAccepted === true });
+            }
+        } catch {
+            // ignorar
+        }
+    }, []);
+
+    const updateConsent = (v: LeadConsentValue) => {
+        setConsent(v);
+        if (v.privacyAccepted) setConsentError(false);
+        try {
+            sessionStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(v));
+        } catch {
+            // ignorar
+        }
+    };
+
+    const handleRequestHuman = async () => {
+        if (isRequestingHuman || humanRequested) return;
+        setIsRequestingHuman(true);
+        try {
+            const res = await requestHumanAgentAction({ chatSessionId: sessionId });
+            setMessages(prev => [
+                ...prev,
+                {
+                    id: `notice-${Date.now()}`,
+                    role: 'assistant',
+                    isNotice: true,
+                    content: res.success
+                        ? (res.message || 'Hemos avisado a nuestro equipo. Una persona te contactará lo antes posible.')
+                        : (res.error || 'No se pudo avisar al equipo. Inténtalo de nuevo.'),
+                    createdAt: Date.now(),
+                },
+            ]);
+            if (res.success) setHumanRequested(true);
+        } finally {
+            setIsRequestingHuman(false);
+        }
+    };
 
     // Persiste historial en sessionStorage cada vez que cambia.
     useEffect(() => {
@@ -256,46 +321,45 @@ export function PublicCommercialChat() {
         try {
             // Construimos history en el formato que espera el agente Genkit.
             const history = newMessages
-                .filter(m => m.id !== 'welcome' && m.id !== userMessage.id)
+                .filter(m => m.id !== 'welcome' && m.id !== userMessage.id && !m.isNotice)
                 .map(m => ({
                     role: m.role === 'user' ? 'user' : 'model',
                     content: [{ text: m.content }],
                 }));
 
-            const result = await processPublicChatAction(
-                trimmed || 'He adjuntado fotos para que las analices.',
+            // La identidad del visitante la resuelve el servidor con la cookie
+            // httpOnly firmada; aquí no se envía ningún leadId.
+            const result = await processPublicChatAction({
+                message: trimmed || 'He adjuntado fotos para que las analices.',
                 history,
-                filesToSend.length > 0 ? filesToSend : undefined,
-                undefined,
+                files: filesToSend.length > 0 ? filesToSend : undefined,
                 locale,
-                sessionId,
-                verifiedLead?.id,
-                verifiedLead?.name
-            );
+                chatSessionId: sessionId,
+                consent,
+            });
 
             if (!result.success) {
                 setError(result.error || 'No se pudo procesar tu mensaje. Inténtalo de nuevo.');
                 return;
             }
 
+            if (result.consentRequired) setConsentError(true);
+
             // Adjuntamos slots al mensaje para renderizar el InlineBookingPicker
             // en dos casos:
             //   a) Handoff cualificado con slots (camino post-cualificación inicial).
-            //   b) Llamada explícita a 'listAvailableSlots' por parte del modelo
-            //      (visitante OTP-verificado que pide ver/cambiar horarios).
-            // En (b) sólo tiene sentido si conocemos el leadId del visitante
-            // verificado, porque el botón de confirmar lo necesita.
-            const handoff = (result as any).handoff;
-            const availableSlots = (result as any).availableSlots as
-                | { date: string; startTime: string; endTime: string; label: string }[]
-                | undefined;
+            //   b) Llamada explícita a 'listAvailableSlots' por parte del modelo.
+            // Sólo si el servidor confirma sesión de lead (`canBook`).
+            const handoff = result.handoff;
+            const availableSlots = result.availableSlots;
+            const canBook = result.canBook === true;
 
-            const handoffSlots = (handoff?.decision === 'qualified' && handoff?.bookingSlots?.length > 0)
-                ? { bookingSlots: handoff.bookingSlots, bookingLeadId: handoff.leadId }
+            const handoffSlots = (canBook && handoff?.decision === 'qualified' && handoff.bookingSlots && handoff.bookingSlots.length > 0)
+                ? { bookingSlots: handoff.bookingSlots, canBook: true }
                 : null;
 
-            const listedSlots = (!handoffSlots && availableSlots && availableSlots.length > 0 && verifiedLead?.id)
-                ? { bookingSlots: availableSlots, bookingLeadId: verifiedLead.id }
+            const listedSlots = (!handoffSlots && canBook && availableSlots && availableSlots.length > 0)
+                ? { bookingSlots: availableSlots, canBook: true }
                 : null;
 
             const assistantMessage: ChatMessage = {
@@ -349,6 +413,33 @@ export function PublicCommercialChat() {
 
     return (
         <div className="flex h-full w-full flex-col bg-background">
+            {/* Cabecera: aviso permanente de IA + traspaso a humano */}
+            <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-2.5 md:px-8">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                        <Bot className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
+                            Asistente virtual Grupo RG
+                            <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">IA</span>
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground" role="note">{AI_DISCLOSURE}</p>
+                    </div>
+                </div>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRequestHuman}
+                    disabled={isRequestingHuman || humanRequested || !sessionId}
+                    className="flex-shrink-0 gap-1.5 text-xs"
+                >
+                    {isRequestingHuman ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : humanRequested ? <CheckCircle2 className="h-3.5 w-3.5" /> : <UserRound className="h-3.5 w-3.5" />}
+                    {humanRequested ? 'Aviso enviado' : 'Hablar con una persona'}
+                </Button>
+            </div>
+
             {/* Mensajes */}
             <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
                 <div className="mx-auto flex max-w-2xl flex-col gap-4">
@@ -356,10 +447,9 @@ export function PublicCommercialChat() {
                         {messages.map(msg => (
                             <div key={msg.id}>
                                 <ChatBubble message={msg} />
-                                {msg.bookingSlots && msg.bookingSlots.length > 0 && msg.bookingLeadId && (
+                                {msg.bookingSlots && msg.bookingSlots.length > 0 && msg.canBook && (
                                     <div className="ml-11 mt-1">
                                         <InlineBookingPicker
-                                            leadId={msg.bookingLeadId}
                                             slots={msg.bookingSlots}
                                         />
                                     </div>
@@ -489,9 +579,25 @@ export function PublicCommercialChat() {
                             )}
                         </Button>
                     </div>
-                    <p className="text-center text-[11px] text-muted-foreground">
-                        Tu conversación queda registrada. Un asesor revisará tu solicitud.
-                    </p>
+                    {consent.privacyAccepted && !consentError ? (
+                        <p className="text-center text-[11px] text-muted-foreground">
+                            Asistente de IA · Tu conversación queda registrada y la revisará un asesor ·{' '}
+                            <Link href="/privacy" target="_blank" className="underline underline-offset-2">Privacidad</Link>
+                        </p>
+                    ) : (
+                        <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                            <p className="mb-1.5 text-[11px] text-muted-foreground">
+                                Para registrar tu solicitud necesitamos tu conformidad. La conversación se guarda y la procesa un asistente de IA (Google Gemini, servidores en la UE).
+                            </p>
+                            <LeadConsentFields
+                                value={consent}
+                                onChange={updateConsent}
+                                showError={consentError}
+                                compact
+                                idPrefix="chat-consent"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

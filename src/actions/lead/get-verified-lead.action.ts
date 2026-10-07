@@ -1,6 +1,7 @@
 'use server';
 
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
+import { clearLeadSession, getLeadSession } from '@/backend/lead/infrastructure/lead-session';
 
 export interface VerifiedLeadDTO {
     id: string;
@@ -12,21 +13,28 @@ export interface VerifiedLeadDTO {
 }
 
 /**
- * Devuelve el snapshot de los campos del lead que un formulario público necesita
- * para precargar después de pasar el OTP. Sólo expone datos personales —
- * intake/qualification se obtienen por otras vías.
+ * Devuelve los datos de contacto del lead de la SESIÓN (cookie httpOnly
+ * firmada emitida tras verificar el OTP), para precargar formularios.
  *
- * Se usa desde `useVerifiedLead()` en cliente. Devuelve null si el lead no
- * existe (e.g. localStorage stale apuntando a un lead borrado en producción).
+ * Ya no acepta `leadId` del navegador (antes devolvía nombre/email/teléfono
+ * de cualquier leadId → IDOR). Sólo responde con datos personales si la
+ * sesión es de identidad verificada (`v=1`).
  */
-export async function getVerifiedLeadAction(
-    leadId: string
-): Promise<{ success: boolean; lead?: VerifiedLeadDTO | null; error?: string }> {
+export async function getVerifiedLeadAction(): Promise<{
+    success: boolean;
+    lead?: VerifiedLeadDTO | null;
+    error?: string;
+}> {
     try {
-        if (!leadId) return { success: true, lead: null };
+        const session = await getLeadSession();
+        if (!session || !session.verified) return { success: true, lead: null };
+
         const repo = new FirestoreLeadRepository();
-        const lead = await repo.findById(leadId);
-        if (!lead) return { success: true, lead: null };
+        const lead = await repo.findById(session.leadId);
+        if (!lead) {
+            await clearLeadSession();
+            return { success: true, lead: null };
+        }
 
         return {
             success: true,
@@ -36,11 +44,11 @@ export async function getVerifiedLeadAction(
                 email: lead.personalInfo.email,
                 phone: lead.personalInfo.phone,
                 address: lead.personalInfo.address,
-                isVerified: lead.verification.isVerified,
+                isVerified: true,
             },
         };
     } catch (error: any) {
         console.error('getVerifiedLeadAction Error:', error);
-        return { success: false, error: error?.message || 'Error obteniendo lead' };
+        return { success: false, error: 'Error obteniendo lead' };
     }
 }

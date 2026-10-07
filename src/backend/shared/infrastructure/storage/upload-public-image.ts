@@ -28,6 +28,10 @@ export async function uploadBuffer(
 }
 
 /**
+ * @deprecated para datos de leads: usa `storeLeadUploadBuffer` /
+ * `normalizeLeadAttachments` (src/backend/lead/infrastructure/lead-uploads.ts),
+ * que guardan en `lead_uploads/` sin hacer público el fichero.
+ *
  * Sube una imagen base64 al bucket bajo `public_uploads/{folder}/{uuid}.{ext}`
  * y devuelve una URL estable (pública si el bucket lo permite, o URL firmada).
  */
@@ -47,6 +51,9 @@ export async function uploadBase64Image(
 }
 
 /**
+ * @deprecated para datos de leads (acepta URLs http(s) arbitrarias y hace
+ * públicos los ficheros). Usa `normalizeLeadAttachments`.
+ *
  * Normaliza una lista mixta de URLs (ya subidas) y base64 strings:
  * - Las URLs (http/https) se devuelven tal cual.
  * - Las base64 se suben al bucket y se devuelve la URL resultante.

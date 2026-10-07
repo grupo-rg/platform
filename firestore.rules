@@ -3,14 +3,19 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Allow client to send emails
+    // `mail/*` era la cola de la extensión Firebase Trigger Email (nunca
+    // instalada). El envío va por Resend desde servidor → cerrado del todo:
+    // antes cualquiera podía crear documentos (spam / relay).
     match /mail/{mailId} {
-      allow create: if true;
+      allow read, write: if false;
     }
 
-    // Allow frontend client to write tracking analytics
+    // `analytics/*`: no hay tracking cliente que escriba en Firestore (las
+    // métricas se registran desde servidor con Admin SDK). Cerrado; si en el
+    // futuro se añade tracking cliente, abrir sólo `create` con validación de
+    // campos (hasOnly) y tamaño.
     match /analytics/{docId} {
-      allow write: if true;
+      allow read, write: if false;
     }
 
     // Pipeline Jobs — coordination layer for the long-running budget

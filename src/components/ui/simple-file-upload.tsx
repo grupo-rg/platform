@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, X, File, FileVideo, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { uploadLeadAttachmentAction } from '@/actions/lead/upload-lead-attachment.action';
 
 interface SimpleFileUploadProps {
     value?: string[];
@@ -25,6 +26,12 @@ export function SimpleFileUpload({
     description = "Arrastra imágenes, vídeos o PDFs aquí"
 }: SimpleFileUploadProps) {
     const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    // ref (gs://… privado) → { previewUrl firmada de corta duración, tipo }.
+    const [previews, setPreviews] = useState<Record<string, { url?: string; kind?: string }>>({});
+    const uploadSessionId = useRef<string>(
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : ''
+    );
 
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
         const remainingSlots = maxFiles - value.length;
@@ -33,34 +40,34 @@ export function SimpleFileUpload({
         if (filesToProcess.length === 0) return;
 
         setUploading(true);
+        setUploadError(null);
         try {
-            // Dynamically import Firebase logic
-            const { getSafeStorage } = await import('@/lib/firebase/client');
-            const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-
-            const storage = getSafeStorage();
-            if (!storage) {
-                console.error("Firebase Storage not available");
-                return;
-            }
-
-            const newUrls: string[] = [];
+            // Subida vía server action a almacenamiento PRIVADO (lead_uploads/).
+            // El formulario guarda la referencia opaca; el panel la resuelve a
+            // una URL firmada de corta duración.
+            const newRefs: string[] = [];
+            const newPreviews: Record<string, { url?: string; kind?: string }> = {};
 
             for (const file of filesToProcess) {
-                const timestamp = Date.now();
-                // Sanitize filename
-                const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-                const storageRef = ref(storage, `public_uploads/${timestamp}_${safeName}`);
-
-                await uploadBytes(storageRef, file);
-                const url = await getDownloadURL(storageRef);
-                newUrls.push(url);
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('uploadSessionId', uploadSessionId.current);
+                const res = await uploadLeadAttachmentAction(fd);
+                if (res.success && res.ref) {
+                    newRefs.push(res.ref);
+                    newPreviews[res.ref] = { url: res.previewUrl, kind: res.kind };
+                } else {
+                    setUploadError(res.error || 'No se pudo subir un archivo.');
+                }
             }
 
-            onChange([...value, ...newUrls]);
+            if (newRefs.length > 0) {
+                setPreviews(prev => ({ ...prev, ...newPreviews }));
+                onChange([...value, ...newRefs]);
+            }
         } catch (error) {
             console.error("Upload failed:", error);
-            // Optionally notify user
+            setUploadError('No se pudo subir el archivo. Inténtalo de nuevo.');
         } finally {
             setUploading(false);
         }
@@ -101,20 +108,24 @@ export function SimpleFileUpload({
                     <p className="text-xs">Máximo {maxFiles} archivos.</p>
                 </div>
             </div>
+            {uploadError && <p className="text-xs text-rose-600" role="alert">{uploadError}</p>}
 
             {value.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {value.map((file, index) => {
-                        // Guess type from extension or firebase url (often has ?alt=media etc so regex is safer)
-                        const isVideo = file.match(/\.(mp4|mov|webm)(\?.*)?$/i);
-                        const isPdf = file.match(/\.pdf(\?.*)?$/i);
+                        // `file` es una referencia privada gs://… (subidas nuevas) o
+                        // una URL antigua. Para las privadas usamos la preview firmada.
+                        const preview = previews[file];
+                        const displayUrl = preview?.url || (/^https?:\/\//.test(file) ? file : '');
+                        const isVideo = preview?.kind === 'video' || /\.(mp4|mov|webm)(\?.*)?$/i.test(file);
+                        const isPdf = preview?.kind === 'pdf' || /\.pdf(\?.*)?$/i.test(file);
                         const isImage = !isVideo && !isPdf;
 
                         return (
                             <div key={index} className="relative group aspect-square bg-slate-100 rounded-md overflow-hidden border">
-                                {isImage && (
+                                {isImage && displayUrl && (
                                     <img
-                                        src={file}
+                                        src={displayUrl}
                                         alt="Uploaded file"
                                         className="w-full h-full object-cover"
                                     />
@@ -142,15 +153,15 @@ export function SimpleFileUpload({
                                 </button>
 
                                 {/* Link to view */}
-                                <a
-                                    href={file}
+                                {displayUrl && <a
+                                    href={displayUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
                                     className="absolute bottom-1 right-1 bg-white/80 p-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto z-10 hover:bg-white text-slate-700 font-medium shadow-sm"
                                 >
                                     Ver
-                                </a>
+                                </a>}
                             </div>
                         );
                     })}

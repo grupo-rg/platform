@@ -18,6 +18,8 @@ export class ScheduleReEngagementOnLeadCreated implements EventHandler<LeadCreat
 
     async handle(event: LeadCreatedEvent): Promise<void> {
         if (event.decision !== 'qualified') return;
+        // Solicitud con email ajeno sin verificar: no enviamos nada a ese buzón.
+        if (event.identityUnverified) return;
         if (!event.leadEmail) return;
 
         const offsets: { attempt: ReEngagementAttempt; days: number }[] = [

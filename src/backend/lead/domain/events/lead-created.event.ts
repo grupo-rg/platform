@@ -1,5 +1,6 @@
 import { DomainEvent } from "../../../shared/domain/domain-event";
 import type { QualificationDecision, LeadIntake, LeadIntakeSource } from "../lead";
+import type { LeadConsent } from "../lead-consent";
 
 export class LeadCreatedEvent implements DomainEvent {
     readonly eventName = 'LeadCreatedEvent';
@@ -24,7 +25,16 @@ export class LeadCreatedEvent implements DomainEvent {
          * Idioma del visitante (lead.preferences.language). Lo usa el
          * listener de re-engagement para elegir plantilla del email.
          */
-        public readonly locale?: string
+        public readonly locale?: string,
+        /**
+         * true si la solicitud llegó con el email de un lead EXISTENTE sin
+         * sesión verificada de ese lead. El intake NO se ha escrito en el lead;
+         * sólo viaja en este evento (→ Deal marcado `identityUnverified`).
+         * Los listeners de marketing/re-engagement deben ignorarla.
+         */
+        public readonly identityUnverified: boolean = false,
+        /** Consentimientos declarados en esta solicitud (sólo informativo para el Deal). */
+        public readonly submittedConsents?: LeadConsent[]
     ) {
         this.occurredOn = new Date();
     }

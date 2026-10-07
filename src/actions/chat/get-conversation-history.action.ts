@@ -3,6 +3,7 @@
 import { FirestoreMessageRepository } from '@/backend/chat/infrastructure/firestore-message-repository';
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { GetConversationHistoryUseCase } from '@/backend/chat/application/get-conversation-history.usecase';
+import { resolveLeadAssetUrl } from '@/backend/lead/infrastructure/lead-uploads';
 
 export async function getConversationHistoryAction(conversationId: string) {
     try {
@@ -25,7 +26,7 @@ export async function getConversationHistoryAction(conversationId: string) {
         return {
             success: true,
             requirements,
-            messages: messages.map(m => ({
+            messages: await Promise.all(messages.map(async m => ({
                 id: m.id,
                 content: m.content,
                 // `sender` se conserva para consumidores que lo leen directo (AdminChatWindow).
@@ -34,9 +35,10 @@ export async function getConversationHistoryAction(conversationId: string) {
                 // TODOS los mensajes quedaban con role=undefined y se pintaban como el agente.
                 role: m.sender.type === 'admin' || m.sender.type === 'lead' ? 'user' : 'assistant',
                 createdAt: m.createdAt.toISOString(),
-                attachments: m.attachments || [],
+                // Adjuntos privados (lead_uploads) → URL firmada de 60 min.
+                attachments: await Promise.all((m.attachments || []).map(async a => ({ ...a, url: await resolveLeadAssetUrl(a.url) }))),
                 type: m.type
-            }))
+            })))
         };
 
     } catch (error: any) {

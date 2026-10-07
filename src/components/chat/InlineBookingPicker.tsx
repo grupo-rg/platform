@@ -14,7 +14,6 @@ export interface BookingSlot {
 }
 
 interface Props {
-    leadId: string;
     slots: BookingSlot[];
     onConfirmed?: (slot: BookingSlot, bookingId: string) => void;
 }
@@ -24,7 +23,11 @@ interface Props {
  * de la respuesta del agente cuando un lead se cualifica. Click en un chip
  * pide confirmación y agenda la reunión.
  */
-export function InlineBookingPicker({ leadId, slots, onConfirmed }: Props) {
+/**
+ * La reserva se asocia al lead de la cookie httpOnly firmada (servidor);
+ * el componente no maneja ningún leadId.
+ */
+export function InlineBookingPicker({ slots, onConfirmed }: Props) {
     const [isPending, startTransition] = useTransition();
     const [confirmed, setConfirmed] = useState<{ slot: BookingSlot; bookingId: string } | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -51,7 +54,6 @@ export function InlineBookingPicker({ leadId, slots, onConfirmed }: Props) {
         setError(null);
         startTransition(async () => {
             const res = await confirmBookingFromChatAction({
-                leadId,
                 date: slot.date,
                 timeSlot: slot.startTime,
             });

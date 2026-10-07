@@ -1,6 +1,6 @@
 import { ai } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
-import { cancelBookingAction } from '@/actions/agenda/booking.action';
+import { cancelBookingWithSideEffects } from '@/backend/agenda/application/lead-booking-self-service';
 
 interface AgendaToolContext {
     leadId?: string;
@@ -46,7 +46,9 @@ export const cancelBookingTool = ai.defineTool(
             };
         }
 
-        return cancelBookingAction({
+        // ctx.leadId viene de la cookie firmada (la inyecta el flow del agente
+        // a partir de la sesión resuelta en la server action), nunca del modelo.
+        return cancelBookingWithSideEffects({
             bookingId: input.bookingId,
             requesterLeadId: ctx.leadId,
             actor: 'lead',

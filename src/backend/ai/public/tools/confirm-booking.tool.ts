@@ -1,6 +1,6 @@
 import { ai } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
-import { confirmBookingFromChatAction } from '@/actions/agenda/confirm-booking-from-chat.action';
+import { confirmLeadBooking } from '@/backend/agenda/application/lead-booking-self-service';
 
 interface AgendaToolContext {
     leadId?: string;
@@ -45,8 +45,9 @@ export const confirmBookingTool = ai.defineTool(
             };
         }
 
-        const result = await confirmBookingFromChatAction({
+        const result = await confirmLeadBooking({
             leadId: ctx.leadId,
+            source: 'chat_public',
             date: input.date,
             timeSlot: input.timeSlot,
         });

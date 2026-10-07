@@ -22,3 +22,19 @@ export async function getClientIdentity(): Promise<string> {
         return 'unknown_unknown';
     }
 }
+
+/**
+ * IP del cliente (primer valor de `x-forwarded-for`, que en Vercel es la IP
+ * real). A diferencia de `getClientIdentity`, NO incluye el User-Agent: úsala
+ * para rate limits que el cliente no deba poder esquivar rotando el UA.
+ */
+export async function getClientIp(): Promise<string> {
+    try {
+        const h = await headers();
+        const xff = h.get('x-forwarded-for') || '';
+        const realIp = h.get('x-real-ip') || '';
+        return (xff.split(',')[0] || realIp || 'unknown').trim() || 'unknown';
+    } catch {
+        return 'unknown';
+    }
+}

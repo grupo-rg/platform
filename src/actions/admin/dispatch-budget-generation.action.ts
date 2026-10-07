@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
+import { resolveLeadAssetUrls } from '@/backend/lead/infrastructure/lead-uploads';
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { BudgetService } from '@/backend/budget/application/budget-service';
 import { generateBudgetFromSpecsAction } from '@/actions/budget/generate-budget-from-specs.action';
@@ -132,7 +133,11 @@ export async function dispatchBudgetGenerationAction(
         // lo usamos. Si no, construimos uno mínimo desde el intake bruto.
         const requirement = enrichedRequirement
             ? { ...enrichedRequirement, leadId: lead.id }
-            : buildRequirementFromIntake(lead.id, lead.intake);
+            : buildRequirementFromIntake(lead.id, {
+                  ...lead.intake,
+                  // Adjuntos privados → URL firmada (12 h) sólo para el motor IA.
+                  imageUrls: await resolveLeadAssetUrls(lead.intake.imageUrls, 12 * 60),
+              });
         const result = await generateBudgetFromSpecsAction(
             lead.id,
             requirement,

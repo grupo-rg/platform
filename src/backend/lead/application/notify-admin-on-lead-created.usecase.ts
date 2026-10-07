@@ -1,7 +1,9 @@
 import { EventHandler } from '../../shared/events/event-dispatcher';
 import { LeadCreatedEvent } from '../domain/events/lead-created.event';
 import { LeadRepository } from '../domain/lead-repository';
+import type { LeadIntake } from '../domain/lead';
 import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/resend-email.service';
+import { escapeHtml } from '@/backend/shared/security/html-escape';
 
 const SOURCE_LABELS: Record<string, string> = {
     chat_public: 'Chat público',
@@ -18,8 +20,96 @@ const DECISION_LABELS: Record<string, string> = {
     rejected: 'Rechazado ❌',
 };
 
+export interface AdminLeadEmailData {
+    leadId: string;
+    name: string;
+    email: string;
+    phone?: string;
+    address?: string;
+    source: string;
+    decision: string;
+    score: number;
+    intake: LeadIntake | null;
+    identityUnverified?: boolean;
+    detailUrl: string;
+}
+
 /**
- * Listener: encola un email al admin cada vez que se registra un lead nuevo
+ * Render puro del email al admin. TODOS los campos procedentes del visitante
+ * se escapan (antes nombre, email, teléfono, ciudad… se interpolaban en
+ * crudo → inyección HTML en el buzón del admin).
+ *
+ * Los adjuntos ya no se enlazan (son privados): se indica cuántos hay y se
+ * remite al dashboard, que genera URLs firmadas de corta duración.
+ */
+export function renderAdminLeadEmail(d: AdminLeadEmailData): { subject: string; html: string } {
+    const e = escapeHtml;
+    const sourceLabel = SOURCE_LABELS[d.source] || d.source;
+    const decisionLabel = DECISION_LABELS[d.decision] || d.decision;
+    const intake = d.intake;
+    const attachmentsCount = intake?.imageUrls?.length || 0;
+
+    const imagesBlock = attachmentsCount
+        ? `<p><strong>Archivos adjuntos:</strong> ${attachmentsCount} (consúltalos en el dashboard).</p>`
+        : '';
+
+    const suspiciousBlock = intake?.suspicious
+        ? `<p style="background:#fff4d4;padding:8px;border-left:3px solid #f0a800;">
+             ⚠️ <strong>Atención:</strong> el sanitizer detectó patrones de prompt injection en este mensaje.
+           </p>`
+        : '';
+
+    const unverifiedBlock = d.identityUnverified
+        ? `<p style="background:#fde8e8;padding:8px;border-left:3px solid #d93025;">
+             ⚠️ <strong>Identidad NO verificada:</strong> la solicitud usa el email de un lead existente pero el
+             visitante no tenía sesión verificada. No se ha modificado el lead; se ha creado un Deal marcado
+             como no verificado. Confirma la identidad antes de tratarla como del mismo cliente.
+           </p>`
+        : '';
+
+    const subject = `[Grupo RG] Nuevo lead — ${decisionLabel} — ${d.name}`.replace(/[\r\n]+/g, ' ').slice(0, 200);
+    const html = `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; max-width: 640px; line-height: 1.6;">
+            <h2 style="margin-bottom: 4px;">Nuevo lead capturado</h2>
+            <p style="color:#666;margin-top:0;">Origen: ${e(sourceLabel)} · Score: ${e(d.score)}/100</p>
+            ${unverifiedBlock}
+            ${suspiciousBlock}
+            <h3>Cliente${d.identityUnverified ? ' (datos declarados)' : ''}</h3>
+            <ul>
+                <li><strong>Nombre:</strong> ${e(d.name)}</li>
+                <li><strong>Email:</strong> ${e(d.email)}</li>
+                <li><strong>Teléfono:</strong> ${d.phone ? e(d.phone) : '—'}</li>
+                ${d.address ? `<li><strong>Dirección:</strong> ${e(d.address)}</li>` : ''}
+            </ul>
+            ${intake ? `
+            <h3>Solicitud</h3>
+            <ul>
+                <li><strong>Tipo de obra:</strong> ${e(intake.projectType)}</li>
+                ${intake.approxSquareMeters ? `<li><strong>Superficie aprox.:</strong> ${e(intake.approxSquareMeters)} m²</li>` : ''}
+                ${intake.qualityLevel ? `<li><strong>Calidad:</strong> ${e(intake.qualityLevel)}</li>` : ''}
+                ${intake.postalCode ? `<li><strong>Código postal:</strong> ${e(intake.postalCode)}</li>` : ''}
+                ${intake.city ? `<li><strong>Ciudad:</strong> ${e(intake.city)}</li>` : ''}
+                ${intake.timeline ? `<li><strong>Plazo:</strong> ${e(intake.timeline)}</li>` : ''}
+                ${intake.approxBudget ? `<li><strong>Presupuesto cliente:</strong> ${e(intake.approxBudget)} €</li>` : ''}
+            </ul>
+            <p><strong>Descripción:</strong></p>
+            <blockquote style="border-left:3px solid #ddd;padding-left:12px;color:#444;white-space:pre-wrap;">${e(intake.description)}</blockquote>
+            ${imagesBlock}
+            ` : ''}
+            <hr style="border:none;border-top:1px solid #eaeaea;margin:20px 0;" />
+            <p>
+                <a href="${e(d.detailUrl)}" style="background:#1a1a1a;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px;display:inline-block;">
+                    Ver lead en el dashboard
+                </a>
+            </p>
+            <p style="color:#888;font-size:12px;">Lead ID: <code>${e(d.leadId)}</code></p>
+        </div>
+    `;
+    return { subject, html };
+}
+
+/**
+ * Listener: envía un email al admin cada vez que se registra un lead nuevo
  * (excepto los rechazados, que se archivan sin notificar).
  *
  * Variables de entorno:
@@ -48,60 +138,23 @@ export class NotifyAdminOnLeadCreatedUseCase implements EventHandler<LeadCreated
         }
 
         const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002';
-        const detailUrl = `${baseUrl}/dashboard/leads/${lead.id}`;
+        const unverified = event.identityUnverified === true;
 
-        const sourceLabel = SOURCE_LABELS[event.source] || event.source;
-        const decisionLabel = DECISION_LABELS[event.decision] || event.decision;
-        const intake = lead.intake;
-
-        const imagesBlock = intake?.imageUrls?.length
-            ? `<p><strong>Archivos adjuntos:</strong></p>
-               <ul>${intake.imageUrls.map(url => `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a></li>`).join('')}</ul>`
-            : '';
-
-        const suspiciousBlock = intake?.suspicious
-            ? `<p style="background:#fff4d4;padding:8px;border-left:3px solid #f0a800;">
-                 ⚠️ <strong>Atención:</strong> el sanitizer detectó patrones de prompt injection en este mensaje.
-               </p>`
-            : '';
-
-        const subject = `[Grupo RG] Nuevo lead — ${decisionLabel} — ${event.leadName}`;
-        const html = `
-            <div style="font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; max-width: 640px; line-height: 1.6;">
-                <h2 style="margin-bottom: 4px;">Nuevo lead capturado</h2>
-                <p style="color:#666;margin-top:0;">Origen: ${sourceLabel} · Score: ${event.score}/100</p>
-                ${suspiciousBlock}
-                <h3>Cliente</h3>
-                <ul>
-                    <li><strong>Nombre:</strong> ${lead.personalInfo.name}</li>
-                    <li><strong>Email:</strong> ${lead.personalInfo.email}</li>
-                    <li><strong>Teléfono:</strong> ${lead.personalInfo.phone || '—'}</li>
-                    ${lead.personalInfo.address ? `<li><strong>Dirección:</strong> ${lead.personalInfo.address}</li>` : ''}
-                </ul>
-                ${intake ? `
-                <h3>Solicitud</h3>
-                <ul>
-                    <li><strong>Tipo de obra:</strong> ${intake.projectType}</li>
-                    ${intake.approxSquareMeters ? `<li><strong>Superficie aprox.:</strong> ${intake.approxSquareMeters} m²</li>` : ''}
-                    ${intake.qualityLevel ? `<li><strong>Calidad:</strong> ${intake.qualityLevel}</li>` : ''}
-                    ${intake.postalCode ? `<li><strong>Código postal:</strong> ${intake.postalCode}</li>` : ''}
-                    ${intake.city ? `<li><strong>Ciudad:</strong> ${intake.city}</li>` : ''}
-                    ${intake.timeline ? `<li><strong>Plazo:</strong> ${intake.timeline}</li>` : ''}
-                    ${intake.approxBudget ? `<li><strong>Presupuesto cliente:</strong> ${intake.approxBudget} €</li>` : ''}
-                </ul>
-                <p><strong>Descripción:</strong></p>
-                <blockquote style="border-left:3px solid #ddd;padding-left:12px;color:#444;">${escapeHtml(intake.description)}</blockquote>
-                ${imagesBlock}
-                ` : ''}
-                <hr style="border:none;border-top:1px solid #eaeaea;margin:20px 0;" />
-                <p>
-                    <a href="${detailUrl}" style="background:#1a1a1a;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px;display:inline-block;">
-                        Ver lead en el dashboard
-                    </a>
-                </p>
-                <p style="color:#888;font-size:12px;">Lead ID: <code>${lead.id}</code></p>
-            </div>
-        `;
+        const { subject, html } = renderAdminLeadEmail({
+            leadId: lead.id,
+            // Caso no verificado: mostramos lo DECLARADO y el intake del evento,
+            // no los datos del lead existente.
+            name: unverified ? event.leadName : lead.personalInfo.name,
+            email: unverified ? event.leadEmail : lead.personalInfo.email,
+            phone: unverified ? undefined : lead.personalInfo.phone,
+            address: unverified ? undefined : lead.personalInfo.address,
+            source: event.source,
+            decision: event.decision,
+            score: event.score,
+            intake: event.intakeSnapshot || lead.intake,
+            identityUnverified: unverified,
+            detailUrl: `${baseUrl}/dashboard/leads/${encodeURIComponent(lead.id)}`,
+        });
 
         const { id: resendId } = await ResendEmailService.send({
             to: adminEmail,
@@ -117,13 +170,4 @@ export class NotifyAdminOnLeadCreatedUseCase implements EventHandler<LeadCreated
             console.log(`[NotifyAdminOnLeadCreated] Email enviado al admin (resend id=${resendId}) sobre lead ${lead.id}`);
         }
     }
-}
-
-function escapeHtml(s: string): string {
-    return s
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
