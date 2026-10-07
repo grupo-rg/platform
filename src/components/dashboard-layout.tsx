@@ -9,9 +9,28 @@ import { ModernSidebar } from '@/components/layout/modern-sidebar';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
+import {
+  canAccessRoute,
+  DEFAULT_DASHBOARD_ROUTE,
+  normalizeDashboardPath,
+  type PlatformRole,
+} from '@/backend/auth/roles';
 
-export function DashboardLayout({ children, t }: { children: React.ReactNode, t: any }) {
-  const { user, loading } = useAuth();
+export function DashboardLayout({
+  children,
+  t,
+  platformRole,
+  restrictedHome,
+}: {
+  children: React.ReactNode,
+  t: any,
+  /** Rol verificado en servidor (layout). Si falta, se usa el del AuthContext. */
+  platformRole?: PlatformRole,
+  /** Home alternativo para roles restringidos (encargado) en /dashboard. */
+  restrictedHome?: React.ReactNode,
+}) {
+  const { user, loading, platformRole: clientRole } = useAuth();
+  const effectiveRole: PlatformRole = platformRole ?? clientRole;
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -44,6 +63,16 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
     }
   }, [user, loading, router]);
 
+  // Guard por ruta en cliente: el layout de servidor no se re-ejecuta en
+  // navegaciones cliente, así que aquí se re-evalúa en cada cambio de ruta.
+  const routeAllowed = canAccessRoute(effectiveRole, pathname);
+  React.useEffect(() => {
+    if (!loading && user && !routeAllowed) {
+      router.replace(DEFAULT_DASHBOARD_ROUTE as any);
+    }
+  }, [loading, user, routeAllowed, router]);
+  const showRestrictedHome = !!restrictedHome && normalizeDashboardPath(pathname) === DEFAULT_DASHBOARD_ROUTE;
+
   // Importante: NO sincronizamos `user.uid` con el `leadId` del widget context.
   // Son dominios distintos: el widget existe para visitantes públicos
   // OTP-verificados (lead anónimo), mientras que el admin tiene su propia
@@ -52,7 +81,7 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
   // del visitante. Si un componente del dashboard necesita el UID, debe
   // leerlo de `useAuth()` directamente, no del widget context.
 
-  if (loading || !user) {
+  if (loading || !user || !routeAllowed) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0a0a0a] text-white">
         <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-yellow-500"></div>
@@ -103,7 +132,7 @@ export function DashboardLayout({ children, t }: { children: React.ReactNode, t:
           "flex-1 min-h-0",
           isAppPage ? "overflow-hidden p-0" : "overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-10"
         )}>
-          {children}
+          {showRestrictedHome ? restrictedHome : children}
         </div>
       </main>
     </div>
