@@ -1,8 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 import { formatCurrency, formatNumberES } from '@/lib/utils';
+import { DocumentHeader, DocumentFooter, TemplateBlocksView, DisclaimerView } from './shared/pdf-common';
+import type { TemplateBlock, TemplatePlaceholderValues } from '@/backend/document-template/domain/document-template';
+import { builtinTemplateFor } from '@/backend/document-template/domain/template-resolution';
+import { DEFAULT_BUDGET_VALIDITY_DAYS } from '@/backend/document-template/domain/default-budget-template';
 import { stripExplicitMaterialTag } from '@/lib/budget/explicit-material';
 import type { CompanyConfig } from '@/backend/platform/domain/company-config';
 import type { ExecutionMode } from '@/types/budget-editor';
@@ -18,45 +22,7 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: '#333333'
     },
-    header: {
-        marginBottom: 20,
-        paddingBottom: 20,
-        borderBottom: 1,
-        borderColor: '#E2E8F0',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start'
-    },
-    logoSection: {
-        width: '50%'
-    },
-    companyLogo: {
-        width: 210,
-        height: 90,
-        marginBottom: 8,
-        objectFit: 'contain'
-    },
-    // Bloque de datos del emisor bajo el logo (cabecera, columna izquierda).
-    issuerBlock: {
-        marginTop: 6,
-    },
-    issuerName: {
-        fontSize: 9,
-        fontWeight: 'bold',
-        color: '#0F172A',
-        marginBottom: 1,
-    },
-    issuerLine: {
-        fontSize: 7.5,
-        color: '#64748B',
-        lineHeight: 1.45,
-    },
-    metaSection: {
-        textAlign: 'right',
-        fontSize: 8,
-        color: '#64748B',
-        lineHeight: 1.4
-    },
+    // Cabecera / pie: ver `./shared/pdf-common.tsx` (estilos compartidos con la lista de precios).
     title: {
         fontSize: 22,
         fontWeight: 'bold',
@@ -229,22 +195,6 @@ const styles = StyleSheet.create({
         paddingTop: 5,
         textAlign: 'right'
     },
-    footerContainer: {
-        position: 'absolute',
-        bottom: 30,
-        left: 40,
-        right: 40,
-    },
-    footerLine: {
-        borderTop: 1,
-        borderColor: '#E2E8F0',
-        marginBottom: 5
-    },
-    footerText: {
-        textAlign: 'center',
-        color: '#94A3B8',
-        fontSize: 7,
-    },
     badge: {
         backgroundColor: '#F1F5F9',
         color: '#0F172A',
@@ -289,73 +239,22 @@ interface BudgetDocumentProps {
      *   - false: vista comercial — solo la fila principal de la partida.
      */
     includeBreakdown?: boolean;
+    /**
+     * Condiciones (plantilla resuelta: asignada → predeterminada → constante).
+     * Si no se pasa, se usa la plantilla estándar en código → mismo PDF de siempre.
+     * `blocks` vacío = sin página de condiciones.
+     */
+    conditions?: { blocks: TemplateBlock[]; disclaimer?: string };
+    /** Días de validez para `{{validez_dias}}` (por defecto 15). */
+    validityDays?: number;
 }
 
-const Footer = ({ company }: { company: CompanyConfig }) => {
-    // Línea fiscal mínima (los datos completos del emisor van en la cabecera).
-    const line = [company.legalName || company.name, company.cif && `CIF: ${company.cif}`, company.address]
-        .filter(Boolean)
-        .join(' · ');
-    return (
-        <View style={styles.footerContainer} fixed>
-            <View style={styles.footerLine} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.footerText}>{line}</Text>
-                {/* `render` se evalúa por página física, así que el número es correcto
-                    incluso cuando una <Page> desborda en varias páginas. */}
-                <Text
-                    style={styles.footerText}
-                    render={({ pageNumber, totalPages }) => `Página ${pageNumber} / ${totalPages}`}
-                    fixed
-                />
-            </View>
-            {company.footerText && (
-                <Text style={{ fontSize: 6, color: '#94A3B8', marginTop: 2 }}>{company.footerText}</Text>
-            )}
-        </View>
-    );
-};
+const Header = ({ budgetNumber, date, logoUrl, company, totalAmount }: { budgetNumber: string; date: string; logoUrl?: string; company: CompanyConfig; totalAmount?: number }) => (
+    <DocumentHeader docLabel="PRESUPUESTO Nº" docNumber={budgetNumber} date={date} logoUrl={logoUrl} company={company} totalAmount={totalAmount} />
+);
 
-const Header = ({ budgetNumber, date, logoUrl, company, totalAmount }: { budgetNumber: string; date: string; logoUrl?: string; company: CompanyConfig; totalAmount?: number }) => {
-    const resolvedLogo = logoUrl || company.logoUrl;
-    return (
-        <View style={styles.header}>
-            <View style={styles.logoSection}>
-                {resolvedLogo ? (
-                    <Image src={resolvedLogo} style={styles.companyLogo} />
-                ) : (
-                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>{company.name}</Text>
-                )}
-                {company.tagline && (
-                    <Text style={{ fontSize: 8, color: '#64748B', marginTop: 2 }}>{company.tagline}</Text>
-                )}
-                {/* Datos de la empresa emisora bajo el logo. */}
-                <View style={styles.issuerBlock}>
-                    {(company.legalName || company.name) && (
-                        <Text style={styles.issuerName}>{company.legalName || company.name}</Text>
-                    )}
-                    {company.cif && <Text style={styles.issuerLine}>CIF: {company.cif}</Text>}
-                    {company.address && <Text style={styles.issuerLine}>{company.address}</Text>}
-                    {(company.phone || company.email) && (
-                        <Text style={styles.issuerLine}>
-                            {[company.phone, company.email].filter(Boolean).join('  ·  ')}
-                        </Text>
-                    )}
-                    {company.web && <Text style={styles.issuerLine}>{company.web}</Text>}
-                </View>
-            </View>
-            <View style={styles.metaSection}>
-                <Text style={styles.bold}>PRESUPUESTO Nº {budgetNumber}</Text>
-                <Text>Fecha: {date}</Text>
-                {totalAmount !== undefined && totalAmount > 0 && (
-                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#0F172A', marginTop: 4 }}>
-                        Total: {formatCurrency(totalAmount)}
-                    </Text>
-                )}
-            </View>
-        </View>
-    );
-};
+const Footer = DocumentFooter;
+
 
 export const BudgetDocument = ({
     budgetNumber,
@@ -375,7 +274,18 @@ export const BudgetDocument = ({
     selectedRenderIds,
     company,
     includeBreakdown = true,
+    conditions,
+    validityDays = DEFAULT_BUDGET_VALIDITY_DAYS,
 }: BudgetDocumentProps) => {
+    const effectiveConditions = conditions ?? builtinTemplateFor('budget');
+    const placeholderValues: TemplatePlaceholderValues = {
+        empresa: company.name,
+        cliente: clientName,
+        fecha: date,
+        total: formatCurrency(costBreakdown.total),
+        validez_dias: String(validityDays),
+    };
+
     const selectedRenders = selectedRenderIds && selectedRenderIds.length > 0
         ? renders.filter((r: any) => selectedRenderIds.includes(r.id))
         : [];
@@ -579,96 +489,18 @@ export const BudgetDocument = ({
                     </View>
                 )}
 
-                <View style={{ marginTop: 20, borderTop: 1, borderColor: '#E2E8F0', paddingTop: 15 }} wrap={false}>
-                    <Text style={[styles.textBlock, { fontStyle: 'italic', color: '#64748B' }]}>
-                        * Este documento es una estimación técnica preliminar. Un experto contactará con usted para realizar una visita técnica y refinar los detalles finales del presupuesto.
-                    </Text>
-                </View>
+                <DisclaimerView text={effectiveConditions.disclaimer} values={placeholderValues} />
                 <Footer company={company} />
             </Page>
 
-            {/* --- PAGE: METHODOLOGY & INFO (MOVED TO THE END) --- */}
-            <Page size="A4" style={styles.page}>
-                <Header budgetNumber={budgetNumber} date={date} logoUrl={logoUrl} company={company} totalAmount={costBreakdown.total} />
-
-                <Text style={styles.sectionTitle}>1. Por qué es importante leer este presupuesto hasta el final</Text>
-                <Text style={styles.textBlock}>
-                    Independientemente de que finalmente trabajemos juntos o no, le recomendamos leer este presupuesto hasta el final.
-                    La información que contiene le ayudará a comprender cómo debe desarrollarse un proceso de reforma bien organizado, seguro y de calidad, qué riesgos es importante evitar y cómo tomar una decisión informada al elegir a la empresa ejecutora.
-                </Text>
-                <Text style={styles.textBlock}>
-                    Este documento no es solo un precio: describe nuestra forma de trabajar, el nivel de responsabilidad que asumimos y el valor real que recibe como cliente.
-                </Text>
-
-                <Text style={styles.sectionTitle}>2. Precio y Validez del Presupuesto</Text>
-                <Text style={styles.textBlock}>
-                    El precio total estimado para este proyecto es de <Text style={styles.bold}>{formatCurrency(costBreakdown.total)}</Text>.
-                </Text>
-                <Text style={styles.textBlock}>
-                    <Text style={styles.bold}>Validez del presupuesto:</Text> hasta el 15 días posteriores a la fecha de emisión.
-                    Trabajamos con planificación previa y con capacidad limitada. Una vez finalizado el plazo de validez, no podemos garantizar ni el precio ni las fechas de inicio y ejecución indicadas.
-                </Text>
-
-                <Text style={styles.sectionTitle}>3. Qué problemas resolvemos por usted</Text>
-                <Text style={styles.textBlock}>
-                    Como cliente, no debería supervisar diariamente si los trabajos se están realizando correctamente, conocer materiales técnicos, coordinar operarios o asumir riesgos de mala planificación.
-                </Text>
-                <Text style={styles.textBlock}>
-                    En la práctica, la falta de organización suele provocar retrasos y sobrecostes. Nuestro trabajo consiste en asumir ese riesgo por usted y ofrecerle un proceso tranquilo, claro y previsible.
-                </Text>
-
-                <Text style={styles.sectionTitle}>4. Qué hacemos y qué beneficios obtiene usted</Text>
-                <View style={{ marginBottom: 15 }}>
-                    <Text style={[styles.textBlock, styles.bold]}>✔ Experiencia contrastada y control real</Text>
-                    <Text style={styles.textBlock}>
-                        Contamos con 25 años de experiencia práctica real. Dispongo de formación profesional en diseño de interiores, lo que me permite tener una visión global de cada proyecto: funcional, estético y duradero. Cada fase está supervisada personalmente.
-                    </Text>
-                </View>
-
-                <View style={{ marginBottom: 15 }}>
-                    <Text style={[styles.textBlock, styles.bold]}>✔ Equipo propio, medios y estándares</Text>
-                    <Text style={styles.textBlock}>
-                        Trabajamos con personal propio y formado. Todos cuentan con equipos de protección individual y siguen estándares claros de ejecución. Disponemos de herramientas profesionales de alta precisión.
-                    </Text>
-                </View>
-
-                <View style={{ marginBottom: 15 }}>
-                    <Text style={[styles.textBlock, styles.bold]}>✔ Materiales de calidad y buena ejecución</Text>
-                    <Text style={styles.textBlock}>
-                        Utilizamos materiales contrastados que previenen problemas futuros y evitan reparaciones innecesarias, suponiendo un ahorro de tiempo y dinero para usted.
-                    </Text>
-                </View>
-
-                <View style={{ marginBottom: 15 }}>
-                    <Text style={[styles.textBlock, styles.bold]}>✔ Pensamos como inversor y como cliente</Text>
-                    <Text style={styles.textBlock}>
-                        Como profesional que ha sido inversor, entiendo perfectamente sus necesidades. Abordamos cada proyecto como si fuera para nosotros mismos.
-                    </Text>
-                </View>
-
-                <Text style={styles.sectionTitle}>5. Plazos de inicio y organización</Text>
-                <Text style={styles.textBlock}>
-                    Este sistema de trabajo nos permite no asumir más proyectos de los que podemos ejecutar correctamente, cumplir los plazos acordados y mantener un nivel de calidad constante.
-                </Text>
-
-                <Text style={styles.sectionTitle}>6. Preguntas frecuentes</Text>
-                <View style={{ marginBottom: 10 }}>
-                    <Text style={[styles.textBlock, styles.bold]}>¿Por qué el precio es más alto que otras ofertas?</Text>
-                    <Text style={styles.textBlock}>Porque incluye organización integral, 25 años de experiencia y responsabilidad real. Un precio más bajo casi siempre implica concesiones en materiales, ejecución o control.</Text>
-                </View>
-                <View style={{ marginBottom: 10 }}>
-                    <Text style={[styles.textBlock, styles.bold]}>¿Tendré que supervisar la obra constantemente?</Text>
-                    <Text style={styles.textBlock}>No. Nuestro trabajo es que usted no tenga que involucrarse en cuestiones técnicas u operativas.</Text>
-                </View>
-
-                <View wrap={false} style={{ marginTop: 30, padding: 15, backgroundColor: '#E2E8F0', borderRadius: 4 }}>
-                    <Text style={[styles.textBlock, styles.bold, { textAlign: 'center', marginBottom: 0 }]}>
-                        No buscamos clientes que elijan únicamente por precio. Trabajamos con quienes valoran seguridad, calidad y profesionalidad.
-                    </Text>
-                </View>
-
-                <Footer company={company} />
-            </Page>
+            {/* --- PAGE: CONDICIONES (plantilla editable; por defecto, la estándar en código) --- */}
+            {effectiveConditions.blocks.length > 0 && (
+                <Page size="A4" style={styles.page}>
+                    <Header budgetNumber={budgetNumber} date={date} logoUrl={logoUrl} company={company} totalAmount={costBreakdown.total} />
+                    <TemplateBlocksView blocks={effectiveConditions.blocks} values={placeholderValues} />
+                    <Footer company={company} />
+                </Page>
+            )}
 
             {/* --- AI VISUAL PROPOSAL PAGES (antes / después) --- */}
             {renderPages.map((pageRenders, pageIdx) => (

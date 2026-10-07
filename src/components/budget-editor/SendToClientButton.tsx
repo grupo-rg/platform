@@ -20,6 +20,7 @@ import { sendBudgetToClientAction } from '@/actions/budget/send-budget-to-client
 import type { CompanyConfig } from '@/backend/platform/domain/company-config';
 import type { BudgetCostBreakdown, BudgetRender } from '@/backend/budget/domain/budget';
 import type { ExecutionMode } from '@/types/budget-editor';
+import type { TemplateBlock } from '@/backend/document-template/domain/document-template';
 
 interface SendToClientButtonProps {
     budgetId: string;
@@ -41,6 +42,8 @@ interface SendToClientButtonProps {
     bakedConfig?: { marginGG: number; marginBI: number; tax: number };
     /** Sprint 4 — controla si el PDF muestra los componentes (descompuesto) bajo cada partida. */
     includeBreakdown?: boolean;
+    /** Condiciones resueltas de la plantilla (si no se pasa, la estándar en código). */
+    conditions?: { blocks: TemplateBlock[]; disclaimer?: string };
     /** Callback opcional cuando el envío se confirma con éxito. */
     onSent?: () => void;
 }
@@ -62,6 +65,7 @@ export function SendToClientButton({
     calibrationVersion,
     bakedConfig,
     includeBreakdown = true,
+    conditions,
     onSent,
 }: SendToClientButtonProps) {
     const [open, setOpen] = useState(false);
@@ -92,6 +96,7 @@ export function SendToClientButton({
                     calibrationVersion={calibrationVersion}
                     bakedConfig={bakedConfig}
                     includeBreakdown={includeBreakdown}
+                    conditions={conditions}
                 />
             ).toBlob();
 

@@ -15,6 +15,11 @@ import { PDFDownloadLink } from '@react-pdf/renderer';
 import { BudgetDocument } from '@/components/pdf/BudgetDocument';
 import type { CompanyConfig } from '@/backend/platform/domain/company-config';
 import { SendToClientButton } from './SendToClientButton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { DocumentTemplate, TemplateBlock } from '@/backend/document-template/domain/document-template';
+
+/** Valor del selector para "usar la predeterminada" (Radix Select no admite ''). */
+const DEFAULT_TEMPLATE_OPTION = '__default__';
 
 interface BudgetEconomicSummaryProps {
     costBreakdown: BudgetCostBreakdown;
@@ -44,6 +49,13 @@ interface BudgetEconomicSummaryProps {
     budgetStatus?: 'draft' | 'pending_review' | 'approved' | 'sent';
     clientEmail?: string;
     clientAddress?: string;
+    /** Condiciones resueltas para el PDF (asignada → predeterminada → estándar). */
+    conditions?: { blocks: TemplateBlock[]; disclaimer?: string; name?: string; source?: string };
+    /** Plantillas aplicables (budget/any) para el selector. */
+    documentTemplates?: DocumentTemplate[];
+    documentTemplateId?: string | null;
+    /** Si no se pasa, el selector no se muestra (modo demo/traza). */
+    onChangeDocumentTemplate?: (id: string | null) => void;
 }
 
 export const BudgetEconomicSummary = ({
@@ -69,6 +81,10 @@ export const BudgetEconomicSummary = ({
     budgetStatus,
     clientEmail,
     clientAddress,
+    conditions,
+    documentTemplates = [],
+    documentTemplateId,
+    onChangeDocumentTemplate,
 }: BudgetEconomicSummaryProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [globalMarkup, setGlobalMarkup] = useState<number | ''>('');
@@ -327,6 +343,7 @@ export const BudgetEconomicSummary = ({
                             calibrationVersion={calibrationVersion}
                             bakedConfig={bakedConfig}
                             includeBreakdown={includeBreakdown}
+                            conditions={conditions}
                         />
                     </div>
                 )}
@@ -375,6 +392,33 @@ export const BudgetEconomicSummary = ({
                                         className="w-full h-24 p-3 text-sm bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 resize-none"
                                     />
                                 </div>
+
+                                {onChangeDocumentTemplate && (
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Plantilla de condiciones</label>
+                                        <Select
+                                            value={documentTemplateId ?? DEFAULT_TEMPLATE_OPTION}
+                                            onValueChange={(v) => onChangeDocumentTemplate(v === DEFAULT_TEMPLATE_OPTION ? null : v)}
+                                        >
+                                            <SelectTrigger className="h-11 bg-slate-50 dark:bg-zinc-900/50 border-slate-200 dark:border-zinc-800">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value={DEFAULT_TEMPLATE_OPTION}>Predeterminada</SelectItem>
+                                                {documentTemplates.map((t) => (
+                                                    <SelectItem key={t.id} value={t.id}>
+                                                        {t.name}{t.isDefault ? ' (predeterminada)' : ''}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                                            Se usará: <span className="font-medium">{conditions?.name || 'Condiciones estándar'}</span>
+                                            {' · '}
+                                            <a href="/dashboard/settings/document-templates" className="underline underline-offset-2">Gestionar plantillas</a>
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Toggle "Incluir descompuestos" — alterna entre vista técnica
                                     (con descompuesto de componentes) y comercial (solo partidas). */}
@@ -496,6 +540,7 @@ export const BudgetEconomicSummary = ({
                                                 selectedRenderIds={includeRenders ? selectedRenderIds : []}
                                                 company={companyForPdf}
                                                 includeBreakdown={includeBreakdown}
+                                                conditions={conditions}
                                             />
                                         }
                                         fileName={`Presupuesto-${budgetNumber}.pdf`}
