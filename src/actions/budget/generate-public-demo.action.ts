@@ -1,5 +1,7 @@
 'use server';
 
+import { checkUser, unauthorizedResult } from '@/actions/_guards';
+
 import { BudgetNarrativeBuilder } from '@/backend/budget/domain/budget-narrative-builder';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { FirestoreAiTrainingRepository } from '@/backend/ai-training/infrastructure/firestore-ai-training-repository';
@@ -17,6 +19,9 @@ import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 
 export async function generatePublicDemoAction(leadId: string, requirements: BudgetRequirement, chatHistory?: { role: string, content: string }[], providedBudgetId?: string) {
     try {
+        const auth = await checkUser();
+        if (!auth) return unauthorizedResult();
+
         console.log(`>> [PUBLIC DEMO] Starting limit validation for Lead: ${leadId}`);
 
         if (!leadId || leadId.trim() === '') {

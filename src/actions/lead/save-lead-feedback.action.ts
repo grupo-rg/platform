@@ -1,10 +1,15 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '../../backend/lead/infrastructure/firestore-lead-repository';
 import { ClientProfile } from '../../backend/lead/domain/lead';
 
 export async function saveLeadFeedbackAction(leadId: string, feedback: Record<string, string>) {
     try {
+        const auth = await checkAdmin();
+        if (!auth) return unauthorizedResult();
+
         const repo = new FirestoreLeadRepository();
         const lead = await repo.findById(leadId);
 

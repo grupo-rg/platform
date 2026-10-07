@@ -1,5 +1,7 @@
 'use server';
 
+import { checkUser, unauthorizedResult } from '@/actions/_guards';
+
 import { publicDemoRequirementsFlow } from '@/backend/ai/public-demo/agents/public-demo.agent';
 import { BudgetRequirement } from '@/backend/budget/domain/budget-requirements';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
@@ -16,6 +18,9 @@ export async function processClientMessageAction(
     attachments: string[] = []
 ) {
     try {
+        const auth = await checkUser();
+        if (!auth) return unauthorizedResult();
+
         const leadRepo = new FirestoreLeadRepository();
         const lead = await leadRepo.findById(leadId);
 

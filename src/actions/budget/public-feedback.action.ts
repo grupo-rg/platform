@@ -1,5 +1,7 @@
 'use server';
 
+import { checkUser, unauthorizedResult } from '@/actions/_guards';
+
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 import { HeuristicFragment } from '@/backend/ai-training/domain/heuristic-fragment';
@@ -15,6 +17,9 @@ interface PublicDemoFeedbackPayload {
 
 export async function savePublicDemoFeedbackAction(payload: PublicDemoFeedbackPayload) {
     try {
+        const auth = await checkUser();
+        if (!auth) return unauthorizedResult();
+
         initFirebaseAdminApp();
         const db = getFirestore();
 

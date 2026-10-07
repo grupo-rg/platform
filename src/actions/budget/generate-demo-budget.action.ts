@@ -1,5 +1,7 @@
 'use server';
 
+import { checkUser, unauthorizedResult } from '@/actions/_guards';
+
 // Deprecated import removed
 import { runWithContext } from '@/backend/ai/shared/context/genkit.context';
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
@@ -14,6 +16,9 @@ const leadRepository = new FirestoreLeadRepository();
 
 export async function generateDemoBudgetAction(leadId: string, requirements: Partial<BudgetRequirement>, providedBudgetId?: string) {
     try {
+        const auth = await checkUser();
+        if (!auth) return unauthorizedResult();
+
         console.log(`[Demo] Generating Budget for Lead: ${leadId}`);
 
         // 1. Fetch Lead & Enforce Limit

@@ -1,11 +1,16 @@
 'use server';
 
+import { checkUser, unauthorizedResult } from '@/actions/_guards';
+
 import { analyzeAttachmentsFlow } from '@/backend/ai/private-core/flows/analyze-attachments.flow';
 import { adminStorage } from '@/backend/shared/infrastructure/firebase/admin-app';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function processAttachmentsAction(formData: FormData) {
     try {
+        const auth = await checkUser();
+        if (!auth) return unauthorizedResult();
+
         const files = formData.getAll('files') as File[];
         if (!files || files.length === 0) throw new Error("No files provided");
 

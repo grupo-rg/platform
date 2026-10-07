@@ -1,11 +1,16 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 
 const leadRepo = new FirestoreLeadRepository();
 
 export async function getLeadAction(leadId: string) {
     try {
+        const auth = await checkAdmin();
+        if (!auth) return unauthorizedResult();
+
         const lead = await leadRepo.findById(leadId);
         if (!lead) return { success: false, error: 'Lead no encontrado' };
 

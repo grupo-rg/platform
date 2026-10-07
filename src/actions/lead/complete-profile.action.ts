@@ -1,5 +1,7 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import {
     BiggestPain,
@@ -33,6 +35,9 @@ export async function completeProfileAction(
     data: ProfileData
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const auth = await checkAdmin();
+        if (!auth) return unauthorizedResult();
+
         const lead = await leadRepo.findById(leadId);
         if (!lead) return { success: false, error: 'Lead no encontrado.' };
 

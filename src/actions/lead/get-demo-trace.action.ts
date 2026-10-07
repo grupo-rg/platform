@@ -1,9 +1,14 @@
 'use server';
 
+import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
+
 import { FirestoreAiTrainingRepository } from '@/backend/ai-training/infrastructure/firestore-ai-training-repository';
 
 export async function getPublicDemoTraceByLeadIdAction(leadId: string) {
     try {
+        const auth = await checkAdmin();
+        if (!auth) return unauthorizedResult();
+
         const repo = new FirestoreAiTrainingRepository();
         const existingTraces = await repo.findByLeadId(leadId);
         
