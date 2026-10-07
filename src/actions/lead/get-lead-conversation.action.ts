@@ -4,6 +4,7 @@ import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
 
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { FirestoreMessageRepository } from '@/backend/chat/infrastructure/firestore-message-repository';
+import { resolveLeadAssetUrl } from '@/backend/lead/infrastructure/lead-uploads';
 
 export interface ConversationMessageDTO {
     id: string;
@@ -57,20 +58,21 @@ export async function getLeadConversationAction(leadId: string): Promise<{
                 createdAt: conv.createdAt.toISOString(),
                 updatedAt: conv.updatedAt.toISOString(),
                 metadata: conv.metadata || {},
-                messages: messages.map(m => ({
+                // Adjuntos privados del chat público → URL firmada (60 min).
+                messages: await Promise.all(messages.map(async m => ({
                     id: m.id,
                     senderId: m.sender.id,
                     senderType: m.sender.type,
                     senderName: m.sender.name,
                     content: m.content,
                     type: m.type,
-                    attachments: (m.attachments || []).map(a => ({
+                    attachments: await Promise.all((m.attachments || []).map(async a => ({
                         type: a.type,
-                        url: a.url,
+                        url: await resolveLeadAssetUrl(a.url),
                         name: a.name,
-                    })),
+                    }))),
                     createdAt: m.createdAt.toISOString(),
-                })),
+                }))),
             },
         };
     } catch (error: any) {

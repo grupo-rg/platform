@@ -57,6 +57,18 @@ export class CreateDealOnLeadCreatedUseCase implements EventHandler<LeadCreatedE
             // Snapshot completo del intake — cada deal viaja con su contexto.
             ...(event.intakeSnapshot ? { intakeSnapshot: serializeIntake(event.intakeSnapshot) } : {}),
             ...(latestDeal ? { previousDealId: latestDeal.id, previousDealStage: latestDeal.stage } : {}),
+            // Solicitud pública con el email de un lead existente SIN sesión
+            // verificada: el intake no se escribió en el lead. El admin debe
+            // confirmar la identidad antes de tratarla como del mismo cliente.
+            ...(event.identityUnverified ? { identityUnverified: true } : {}),
+            ...(event.submittedConsents && event.submittedConsents.length > 0
+                ? {
+                      submittedConsents: event.submittedConsents.map(c => ({
+                          ...c,
+                          at: c.at instanceof Date ? c.at.toISOString() : c.at,
+                      })),
+                  }
+                : {}),
         };
         await this.dealRepo.save(deal);
         console.log(

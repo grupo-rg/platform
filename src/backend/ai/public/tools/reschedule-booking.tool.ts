@@ -1,6 +1,6 @@
 import { ai } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
-import { rescheduleBookingAction } from '@/actions/agenda/reschedule-booking.action';
+import { rescheduleBookingWithSideEffects } from '@/backend/agenda/application/lead-booking-self-service';
 
 interface AgendaToolContext {
     leadId?: string;
@@ -52,7 +52,7 @@ export const rescheduleBookingTool = ai.defineTool(
             };
         }
 
-        return rescheduleBookingAction({
+        return rescheduleBookingWithSideEffects({
             bookingId: input.bookingId,
             requesterLeadId: ctx.leadId,
             actor: 'lead',

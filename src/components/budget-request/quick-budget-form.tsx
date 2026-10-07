@@ -30,6 +30,7 @@ import { SimpleFileUpload } from '@/components/ui/simple-file-upload';
 import { createBudgetAction } from '@/actions/budget/create-budget.action';
 import { useVerifiedLead } from '@/hooks/use-verified-lead';
 import { VerifiedContactBanner, VerifiedFieldIcon } from '@/components/forms/verified-contact-banner';
+import { LeadConsentFields, EMPTY_CONSENT, type LeadConsentValue } from '@/components/forms/lead-consent-fields';
 
 const pricingConfig = {
   integral: { basic: 400, medium: 600, premium: 800 },
@@ -58,6 +59,8 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [calculatedBudget, setCalculatedBudget] = useState<number | null>(null);
+  const [consent, setConsent] = useState<LeadConsentValue>(EMPTY_CONSENT);
+  const [consentError, setConsentError] = useState(false);
 
   // Precarga datos del lead verificado por OTP (si existen).
   const { lead: verifiedLead, isReady: isLeadVerified } = useVerifiedLead();
@@ -99,6 +102,10 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
 
 
   async function handleFormSubmit(values: QuickFormValues) {
+    if (!consent.privacyAccepted) {
+      setConsentError(true);
+      return;
+    }
     setIsLoading(true);
     try {
       let budget = null;
@@ -110,7 +117,7 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
 
       // Registra la solicitud como Lead cualificable. El listener
       // NotifyAdminOnLeadCreatedUseCase envía el email al admin vía Resend.
-      await createBudgetAction('quick', {
+      const result = await createBudgetAction('quick', {
         name: values.name,
         email: values.email,
         phone: values.phone,
@@ -120,7 +127,8 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
         renovationType: values.renovationType,
         squareMeters: values.squareMeters,
         quality: values.quality,
-      } as any);
+      } as any, consent);
+      if (!result.success) throw new Error(result.error || 'submit_failed');
 
       toast({
         title: t.budgetRequest.form.toast.success.title,
@@ -338,6 +346,14 @@ export function QuickBudgetForm({ t, onBack }: { t: any; onBack?: () => void }) 
                   )}
                 />
               </div>
+
+              <LeadConsentFields
+                value={consent}
+                onChange={v => { setConsent(v); if (v.privacyAccepted) setConsentError(false); }}
+                showError={consentError}
+                idPrefix="quick-consent"
+                className="mt-6"
+              />
 
               <div className="flex flex-col sm:flex-row justify-end items-center gap-4 mt-8">
                 <FormField control={form.control} name="testEmail" render={({ field }) => (

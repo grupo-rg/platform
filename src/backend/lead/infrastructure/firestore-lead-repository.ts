@@ -1,5 +1,6 @@
 import { LeadRepository } from '../domain/lead-repository';
 import { Lead, PersonalInfo, LeadPreferences, LeadVerification, ClientProfile, LeadIntake, LeadQualification } from '../domain/lead';
+import type { LeadConsent } from '../domain/lead-consent';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initFirebaseAdminApp } from '@/backend/shared/infrastructure/firebase/admin-app';
 
@@ -86,10 +87,13 @@ export class FirestoreLeadRepository implements LeadRepository {
             data.preferences as LeadPreferences,
             {
                 isVerified: data.verification?.isVerified || false,
-                otpCode: data.verification?.otpCode,
-                otpExpiresAt: data.verification?.otpExpiresAt?.toDate(),
-                verifiedAt: data.verification?.verifiedAt?.toDate(),
-                attempts: data.verification?.attempts || 0
+                // `otpCode` legacy (en claro) se ignora a propósito: un código
+                // antiguo no puede verificarse; el lead debe pedir uno nuevo.
+                otpHash: data.verification?.otpHash || undefined,
+                otpExpiresAt: data.verification?.otpExpiresAt?.toDate?.(),
+                verifiedAt: data.verification?.verifiedAt?.toDate?.(),
+                attempts: data.verification?.attempts || 0,
+                lockedUntil: data.verification?.lockedUntil?.toDate?.(),
             } as LeadVerification,
             data.profile ? {
                 biggestPain: data.profile.biggestPain,
@@ -109,7 +113,17 @@ export class FirestoreLeadRepository implements LeadRepository {
             data.demoPdfsDownloaded || 0,
             data.pdfMetadata || {},
             intake,
-            qualification
+            qualification,
+            Array.isArray(data.consents)
+                ? data.consents.map((c: any): LeadConsent => ({
+                      type: c.type,
+                      granted: !!c.granted,
+                      at: c.at?.toDate?.() || new Date(c.at || 0),
+                      source: c.source,
+                      textVersion: String(c.textVersion || ''),
+                      ...(c.ip ? { ip: String(c.ip) } : {}),
+                  }))
+                : []
         );
     }
 
@@ -160,11 +174,22 @@ export class FirestoreLeadRepository implements LeadRepository {
             preferences: lead.preferences,
             verification: {
                 isVerified: lead.verification.isVerified,
-                otpCode: lead.verification.otpCode || null,
+                // Nunca persistimos el OTP en claro (purga el legacy al guardar).
+                otpCode: null,
+                otpHash: lead.verification.otpHash || null,
                 otpExpiresAt: lead.verification.otpExpiresAt || null,
                 verifiedAt: lead.verification.verifiedAt || null,
-                attempts: lead.verification.attempts
+                attempts: lead.verification.attempts || 0,
+                lockedUntil: lead.verification.lockedUntil || null,
             },
+            consents: (lead.consents || []).map(c => ({
+                type: c.type,
+                granted: c.granted,
+                at: c.at,
+                source: c.source,
+                textVersion: c.textVersion,
+                ...(c.ip ? { ip: c.ip } : {}),
+            })),
             profile: lead.profile ? {
                 biggestPain: lead.profile.biggestPain,
                 simultaneousProjects: lead.profile.simultaneousProjects,
@@ -197,14 +222,28 @@ export class FirestoreLeadRepository implements LeadRepository {
         return this.toDomain(doc);
     }
 
+    /**
+     * Busca por email (exacto o en minúsculas — los leads antiguos pueden
+     * tener mayúsculas). Si hubiera duplicados históricos, devuelve de forma
+     * DETERMINISTA el más antiguo, para que la emisión y la verificación del
+     * OTP siempre operen sobre el mismo documento.
+     */
     async findByEmail(email: string): Promise<Lead | null> {
+        const raw = String(email || '').trim();
+        if (!raw) return null;
+        const candidates = Array.from(new Set([raw, raw.toLowerCase()]));
         const snapshot = await this.db.collection(this.collectionName)
-            .where('personalInfo.email', '==', email)
-            .limit(1)
+            .where('personalInfo.email', 'in', candidates)
+            .limit(10)
             .get();
 
         if (snapshot.empty) return null;
-        return this.toDomain(snapshot.docs[0]);
+        const docs = [...snapshot.docs].sort((a, b) => {
+            const ta = a.data()?.createdAt?.toMillis?.() ?? 0;
+            const tb = b.data()?.createdAt?.toMillis?.() ?? 0;
+            return ta - tb || a.id.localeCompare(b.id);
+        });
+        return this.toDomain(docs[0]);
     }
 
     async findAll(limit: number, offset: number): Promise<Lead[]> {

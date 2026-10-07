@@ -1,27 +1,43 @@
 'use server';
 
 import { FirestoreBookingRepository } from '@/backend/agenda/infrastructure/firestore-booking-repository';
-import { CreateBookingUseCase, GetAvailabilityUseCase, CancelBookingUseCase } from '@/backend/agenda/application/booking-use-cases';
+import { CreateBookingUseCase, GetAvailabilityUseCase } from '@/backend/agenda/application/booking-use-cases';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { FirestoreAvailabilityRepository } from '@/backend/agenda/infrastructure/firestore-availability-repository';
 import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/resend-email.service';
+import { verifyAuth } from '@/backend/auth/auth.middleware';
+import { getLeadSession } from '@/backend/lead/infrastructure/lead-session';
+import { cancelBookingWithSideEffects, type CancelErrorCode } from '@/backend/agenda/application/lead-booking-self-service';
+import { escapeHtml } from '@/backend/shared/security/html-escape';
+import { checkRateLimit, RATE_LIMITS } from '@/backend/shared/security/rate-limiter';
+import { getClientIp } from '@/backend/shared/security/client-identity';
 
 const bookingRepo = new FirestoreBookingRepository();
 const leadRepo = new FirestoreLeadRepository();
 const availabilityRepo = new FirestoreAvailabilityRepository();
 
+type CancelResult = {
+    success: boolean;
+    error?: string;
+    errorCode?: CancelErrorCode;
+    minHours?: number;
+};
+
 /**
- * Get available time slots for a date range
+ * Get available time slots for a date range (público: sólo disponibilidad,
+ * sin datos personales).
  */
 export async function getAvailableSlotsAction(
     startDate: string,
     endDate: string
 ): Promise<Record<string, { startTime: string; endTime: string; isAvailable: boolean }[]>> {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return {};
+    // Acotamos el rango para evitar consultas masivas (máx. 62 días).
+    const maxEnd = new Date(start.getTime() + 62 * 24 * 60 * 60 * 1000);
     const useCase = new GetAvailabilityUseCase(bookingRepo, availabilityRepo);
-    const result = await useCase.execute({
-        startDate: new Date(startDate),
-        endDate: new Date(endDate)
-    });
+    const result = await useCase.execute({ startDate: start, endDate: end > maxEnd ? maxEnd : end });
 
     const serialized: Record<string, { startTime: string; endTime: string; isAvailable: boolean }[]> = {};
     for (const [dateKey, slots] of Object.entries(result)) {
@@ -35,7 +51,9 @@ export async function getAvailableSlotsAction(
 }
 
 /**
- * Create a new booking
+ * Create a new booking con datos arbitrarios. ADMIN: un visitante no puede
+ * crear reservas a nombre de terceros (el flujo público usa
+ * `confirmBookingFromChatAction`, que toma el lead de la cookie firmada).
  */
 export async function createBookingAction(params: {
     name: string;
@@ -44,6 +62,8 @@ export async function createBookingAction(params: {
     date: string;
     timeSlot: string;
 }): Promise<{ success: boolean; bookingId?: string; error?: string }> {
+    const auth = await verifyAuth(true);
+    if (!auth) return { success: false, error: 'No autorizado' };
     const useCase = new CreateBookingUseCase(bookingRepo);
     return useCase.execute({
         ...params,
@@ -52,102 +72,52 @@ export async function createBookingAction(params: {
 }
 
 /**
- * Cancel a booking. Acepta `requesterLeadId` para autorizar self-service del
- * chat público (sólo permite cancelar bookings propios) y `actor` para
- * decidir si se aplica la validación de antelación mínima — los admins
- * pueden cancelar fuera de plazo, los leads no.
+ * Cancelación SELF-SERVICE del lead (chat público).
  *
- * Side effects al cancelar OK:
- *   - Email al lead.
- *   - Despacho de BookingCancelledEvent (CRM revierte stage, score baja si
- *     cancelledBy='lead', marketing apaga reminders).
+ * El lead se toma de la cookie firmada `rg_lead_session`; `actor` es siempre
+ * 'lead' (antes lo decidía el cliente y la llamada con string actuaba como
+ * admin, saltándose el plazo mínimo). Se respeta `minCancellationHours`.
+ *
+ * Se aceptan las firmas antiguas (string u objeto) pero cualquier
+ * `requesterLeadId` / `actor` enviado por el cliente se ignora.
  */
 export async function cancelBookingAction(
-    bookingIdOrParams: string | {
-        bookingId: string;
-        requesterLeadId?: string;
-        actor?: 'lead' | 'admin' | 'system';
+    bookingIdOrParams: string | { bookingId: string; requesterLeadId?: string; actor?: string }
+): Promise<CancelResult> {
+    const bookingId = typeof bookingIdOrParams === 'string' ? bookingIdOrParams : bookingIdOrParams?.bookingId;
+    const session = await getLeadSession();
+    if (!session) {
+        return { success: false, error: 'Necesitas verificar tu email para gestionar tus reservas.', errorCode: 'forbidden' };
     }
-): Promise<{
-    success: boolean;
-    error?: string;
-    errorCode?: 'not_found' | 'forbidden' | 'too_late' | 'already_cancelled' | 'internal';
-    minHours?: number;
-}> {
-    const params = typeof bookingIdOrParams === 'string'
-        ? { bookingId: bookingIdOrParams, actor: 'admin' as const }
-        : { ...bookingIdOrParams, actor: bookingIdOrParams.actor || 'lead' as const };
-
-    const useCase = new CancelBookingUseCase(bookingRepo, availabilityRepo);
-    const result = await useCase.execute({
-        bookingId: params.bookingId,
-        requesterLeadId: params.requesterLeadId,
-        skipMinHoursCheck: params.actor === 'admin',
+    const rl = await checkRateLimit('publicBookingAction', await getClientIp(), RATE_LIMITS.publicBookingAction);
+    if (!rl.allowed) {
+        return { success: false, error: 'Demasiadas operaciones de agenda. Inténtalo más tarde.', errorCode: 'internal' };
+    }
+    return cancelBookingWithSideEffects({
+        bookingId: String(bookingId || ''),
+        actor: 'lead',
+        requesterLeadId: session.leadId,
     });
+}
 
-    if (!result.success) {
-        return {
-            success: false,
-            error: result.error,
-            errorCode: result.errorCode,
-            minHours: result.minHours,
-        };
-    }
-
-    // Email + evento (best-effort, no bloquean la respuesta de éxito).
-    try {
-        if (result.leadId) {
-            const lead = await leadRepo.findById(result.leadId);
-            if (lead?.personalInfo.email) {
-                const dateStr = result.slotDateTime.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
-                const timeStr = result.slotDateTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-                const html = `
-                    <div style="font-family: sans-serif; color: #333;">
-                        <h2>Hola ${lead.personalInfo.name.split(' ')[0]},</h2>
-                        <p>Confirmamos la <strong>cancelación</strong> de tu sesión prevista para el <strong>${dateStr}</strong> a las <strong>${timeStr}</strong>.</p>
-                        <p>Si quieres reagendar, vuelve al chat o contáctanos directamente.</p>
-                        <br/>
-                        <p>Un saludo,<br/><strong>Equipo Grupo RG</strong></p>
-                    </div>
-                `;
-                await ResendEmailService.send({
-                    to: lead.personalInfo.email,
-                    subject: 'Cancelación de tu sesión · Grupo RG',
-                    html,
-                    tags: [
-                        { name: 'category', value: 'booking_cancellation' },
-                        { name: 'lead_id', value: lead.id },
-                    ],
-                });
-            }
-        }
-    } catch (err) {
-        console.error('[cancelBookingAction] email cancelación falló (no crítico):', err);
-    }
-
-    try {
-        const { EventDispatcher } = await import('@/backend/shared/events/event-dispatcher');
-        const { BookingCancelledEvent } = await import('@/backend/agenda/domain/events/booking-cancelled.event');
-        const { registerEventListeners } = await import('@/backend/shared/events/register-listeners');
-        registerEventListeners();
-        await EventDispatcher.getInstance().dispatch(
-            new BookingCancelledEvent(result.bookingId, result.leadId, result.slotDateTime, params.actor)
-        );
-    } catch (err) {
-        console.error('[cancelBookingAction] dispatch BookingCancelledEvent falló:', err);
-    }
-
-    return { success: true };
+/** Cancelación desde el dashboard: admin, sin plazo mínimo. */
+export async function cancelBookingAsAdminAction(bookingId: string): Promise<CancelResult> {
+    const auth = await verifyAuth(true);
+    if (!auth) return { success: false, error: 'No autorizado', errorCode: 'forbidden' };
+    return cancelBookingWithSideEffects({ bookingId: String(bookingId || ''), actor: 'admin' });
 }
 
 /**
- * Create a new booking directly from a Lead ID
+ * Create a new booking directly from a Lead ID. ADMIN (dashboard).
  */
 export async function createBookingFromLeadAction(params: {
     leadId: string;
     date: string;
     timeSlot: string;
 }): Promise<{ success: boolean; bookingId?: string; error?: string }> {
+    const auth = await verifyAuth(true);
+    if (!auth) return { success: false, error: 'No autorizado' };
+
     const lead = await leadRepo.findById(params.leadId);
     if (!lead) return { success: false, error: 'Lead no encontrado' };
 
@@ -165,8 +135,8 @@ export async function createBookingFromLeadAction(params: {
     if (result.success && lead.personalInfo.email) {
         const html = `
             <div style="font-family: sans-serif; color: #333;">
-                <h2>Hola ${lead.personalInfo.name.split(' ')[0]},</h2>
-                <p>Tu sesión ha sido confirmada para el <strong>${params.date}</strong> a las <strong>${params.timeSlot}</strong>.</p>
+                <h2>Hola ${escapeHtml(lead.personalInfo.name.split(' ')[0])},</h2>
+                <p>Tu sesión ha sido confirmada para el <strong>${escapeHtml(params.date)}</strong> a las <strong>${escapeHtml(params.timeSlot)}</strong>.</p>
                 <p>En breve recibirás una invitación de calendario con el enlace a la videollamada.</p>
                 <br/>
                 <p>¿Qué veremos en la sesión?</p>
@@ -212,9 +182,12 @@ export async function createBookingFromLeadAction(params: {
 }
 
 /**
- * Get bookings for the admin calendar
+ * Get bookings for the admin calendar. ADMIN: devuelve nombre/email/teléfono.
  */
 export async function getAdminBookingsAction(startDate: string, endDate: string): Promise<any[]> {
+    const auth = await verifyAuth(true);
+    if (!auth) return [];
+
     const start = new Date(startDate);
     const end = new Date(endDate);
     const bookings = await bookingRepo.findByDateRange(start, end);

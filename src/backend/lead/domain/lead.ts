@@ -1,3 +1,5 @@
+import { LeadConsent, mergeConsents, hasMarketingConsent as hasMarketingConsentFn } from './lead-consent';
+
 
 export interface PersonalInfo {
     name: string;
@@ -51,11 +53,30 @@ export interface LeadPreferences {
 
 export interface LeadVerification {
     isVerified: boolean;
+    /**
+     * @deprecated Código OTP en claro (legacy). Ya no se escribe: el
+     * repositorio lo persiste siempre a null. Se mantiene en el tipo sólo por
+     * compatibilidad con scripts de depuración.
+     */
     otpCode?: string;
+    /** HMAC-SHA256 del código OTP (nunca el código en claro). */
+    otpHash?: string;
     otpExpiresAt?: Date;
     verifiedAt?: Date;
+    /** Intentos fallidos sobre el código vigente. */
     attempts: number;
+    /** Si está presente y es futuro, no se aceptan ni se emiten códigos. */
+    lockedUntil?: Date;
 }
+
+/** Política OTP (también la usa el email: "válido durante N minutos"). */
+export const OTP_POLICY = {
+    ttlMinutes: 10,
+    maxAttempts: 5,
+    lockMinutes: 15,
+} as const;
+
+export type OtpVerificationResult = 'verified' | 'invalid' | 'expired' | 'locked' | 'no_code';
 
 // ── Public Intake (datos capturados al solicitar presupuesto) ──
 
@@ -163,7 +184,9 @@ export class Lead {
         public demoPdfsDownloaded: number = 0,
         public pdfMetadata: Record<string, any> = {},
         public intake: LeadIntake | null = null,
-        public qualification: LeadQualification | null = null
+        public qualification: LeadQualification | null = null,
+        /** Log append-only de consentimientos RGPD (ver lead-consent.ts). */
+        public consents: LeadConsent[] = []
     ) { }
 
     static create(id: string, info: PersonalInfo, preferences: LeadPreferences): Lead {
@@ -179,8 +202,23 @@ export class Lead {
             0,
             {},
             null,
-            null
+            null,
+            []
         );
+    }
+
+    /** Registra consentimientos (sólo cambios respecto al último de cada tipo). */
+    recordConsents(incoming: LeadConsent[]): void {
+        if (!incoming || incoming.length === 0) return;
+        const merged = mergeConsents(this.consents, incoming);
+        if (merged.length !== this.consents.length) {
+            this.consents = merged;
+            this.updatedAt = new Date();
+        }
+    }
+
+    get hasMarketingConsent(): boolean {
+        return hasMarketingConsentFn(this);
     }
 
     setIntake(intake: LeadIntake): void {
@@ -231,44 +269,83 @@ export class Lead {
         return this.profile?.completedAt != null;
     }
 
-    // Domain Logic: Request OTP
-    generateOtp(code: string, expiresInMinutes: number = 15): void {
-        const expiresAt = new Date();
-        expiresAt.setMinutes(expiresAt.getMinutes() + expiresInMinutes);
-
-        this.verification = {
-            ...this.verification,
-            otpCode: code,
-            otpExpiresAt: expiresAt,
-            attempts: 0
-        };
-        this.updatedAt = new Date();
+    isOtpLocked(now: Date = new Date()): boolean {
+        return !!this.verification.lockedUntil && this.verification.lockedUntil.getTime() > now.getTime();
     }
 
-    // Domain Logic: Verify OTP
-    verifyOtp(code: string): boolean {
-        if (this.verification.isVerified) return true;
+    /**
+     * Emite un nuevo OTP guardando SÓLO su hash. Devuelve `false` (sin tocar
+     * nada) si el lead está bloqueado por demasiados intentos fallidos.
+     *
+     * Nota: NO cambia `isVerified`. Un lead verificado anteriormente que pide
+     * código vuelve a tener que demostrar el control del email: la identidad
+     * en servidor la da la cookie firmada emitida tras verificar, no el flag.
+     */
+    generateOtp(codeHash: string, now: Date = new Date(), ttlMinutes: number = OTP_POLICY.ttlMinutes): boolean {
+        if (this.isOtpLocked(now)) return false;
+        this.verification = {
+            ...this.verification,
+            otpCode: undefined,
+            otpHash: codeHash,
+            otpExpiresAt: new Date(now.getTime() + ttlMinutes * 60_000),
+            attempts: 0,
+            lockedUntil: undefined,
+        };
+        this.updatedAt = now;
+        return true;
+    }
 
-        if (!this.verification.otpCode || !this.verification.otpExpiresAt) {
-            return false;
+    /**
+     * Verifica SIEMPRE el código (no hay atajo por `isVerified`).
+     *
+     * @param matches compara el código introducido con el hash guardado
+     *                (inyectado para no acoplar el dominio a `crypto`).
+     */
+    verifyOtp(
+        code: string,
+        matches: (code: string, storedHash: string) => boolean,
+        now: Date = new Date()
+    ): OtpVerificationResult {
+        if (this.isOtpLocked(now)) return 'locked';
+
+        const { otpHash, otpExpiresAt } = this.verification;
+        if (!otpHash || !otpExpiresAt) return 'no_code';
+
+        if (now.getTime() > otpExpiresAt.getTime()) {
+            // Código caducado: lo invalidamos para que no pueda reutilizarse.
+            this.verification = { ...this.verification, otpHash: undefined, otpExpiresAt: undefined, otpCode: undefined };
+            this.updatedAt = now;
+            return 'expired';
         }
 
-        if (new Date() > this.verification.otpExpiresAt) {
-            return false;
+        if (!code || !matches(code, otpHash)) {
+            const attempts = (this.verification.attempts || 0) + 1;
+            if (attempts >= OTP_POLICY.maxAttempts) {
+                // Bloqueo temporal + invalidación del código vigente.
+                this.verification = {
+                    ...this.verification,
+                    attempts,
+                    otpHash: undefined,
+                    otpExpiresAt: undefined,
+                    otpCode: undefined,
+                    lockedUntil: new Date(now.getTime() + OTP_POLICY.lockMinutes * 60_000),
+                };
+                this.updatedAt = now;
+                return 'locked';
+            }
+            this.verification = { ...this.verification, attempts };
+            this.updatedAt = now;
+            return 'invalid';
         }
 
-        if (this.verification.otpCode !== code) {
-            this.verification.attempts++;
-            return false;
-        }
-
+        // Éxito: el código es de un solo uso.
         this.verification = {
             isVerified: true,
-            verifiedAt: new Date(),
-            attempts: this.verification.attempts
+            verifiedAt: now,
+            attempts: 0,
         };
-        this.updatedAt = new Date();
-        return true;
+        this.updatedAt = now;
+        return 'verified';
     }
 
     updatePdfMetadata(metadata: Record<string, any>): void {

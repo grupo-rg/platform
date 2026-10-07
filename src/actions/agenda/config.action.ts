@@ -2,10 +2,14 @@
 
 import { FirestoreAvailabilityRepository } from '@/backend/agenda/infrastructure/firestore-availability-repository';
 import { AvailabilityConfig } from '@/backend/agenda/domain/availability-config';
+import { verifyAuth } from '@/backend/auth/auth.middleware';
 
 const availabilityRepo = new FirestoreAvailabilityRepository();
 
+/** ADMIN: configuración de agenda (pantalla de ajustes del dashboard). */
 export async function getAvailabilityConfigAction(): Promise<AvailabilityConfig> {
+    const auth = await verifyAuth(true);
+    if (!auth) throw new Error('No autorizado');
     const config = await availabilityRepo.getConfig();
     // Return a plain object to avoid serialization issues across server boundaries
     return {
@@ -28,6 +32,8 @@ export async function updateAvailabilityConfigAction(
         minCancellationHours?: number,
     }
 ): Promise<{ success: boolean; error?: string }> {
+    const auth = await verifyAuth(true);
+    if (!auth) return { success: false, error: 'No autorizado' };
     try {
         const current = await availabilityRepo.getConfig();
         const updated = new AvailabilityConfig(

@@ -7,20 +7,26 @@ import { confirmBookingTool } from '../tools/confirm-booking.tool';
 import { cancelBookingTool } from '../tools/cancel-booking.tool';
 import { rescheduleBookingTool } from '../tools/reschedule-booking.tool';
 import { HandoffBookingSlotSchema } from '../protocols/handoff.schema';
+import { sanitizeChatHistory, wrapUserInput } from '../security/chat-history';
 
 export const PublicCommercialAgentInputSchema = z.object({
     userId: z.string().optional(),
     userMessage: z.string().max(2000),
     /**
-     * Imágenes a inspeccionar visualmente. Pueden venir como base64 (legacy)
-     * o como URLs públicas ya subidas a Storage. El server action las normaliza
-     * y pasa también `imageUrls` para que el tool de handoff las persista.
+     * Imágenes del turno actual para análisis visual (base64 + mime real,
+     * detectado por magic bytes en la server action).
      */
-    imagesBase64: z.array(z.string()).optional(),
-    imageUrls: z.array(z.string().url()).optional(),
+    images: z.array(z.object({ base64: z.string(), mime: z.string() })).optional(),
+    /**
+     * Referencias privadas (`gs://…/lead_uploads/…`) de esas mismas imágenes,
+     * ya guardadas. Sólo viajan en el context para que el tool de handoff
+     * las asocie al intake; el modelo NO las recibe como media.
+     */
+    attachmentRefs: z.array(z.string()).optional(),
+    /** Historial enviado por el cliente. Se re-sanea aquí (defensa en profundidad). */
     history: z.array(
         z.object({
-            role: z.enum(['user', 'model', 'system']),
+            role: z.enum(['user', 'model']),
             content: z.array(z.any())
         })
     ).optional(),
@@ -29,8 +35,17 @@ export const PublicCommercialAgentInputSchema = z.object({
     suspicious: z.boolean().optional(),
     /** ID de sesión del chat público para vincular conversación al lead en handoff. */
     chatSessionId: z.string().optional(),
-    /** Si el visitante ya pasó OTP. El agente skipeará la captura de identidad. */
-    existingLeadId: z.string().optional(),
+    /**
+     * leadId de la cookie firmada `rg_lead_session` (resuelto en la server
+     * action). Nunca un valor enviado por el navegador.
+     */
+    sessionLeadId: z.string().optional(),
+    /** true si la sesión es de identidad verificada por OTP (v=1). */
+    sessionVerified: z.boolean().optional(),
+    /** El visitante marcó la casilla de privacidad en este chat. */
+    privacyConsentGranted: z.boolean().optional(),
+    /** Consentimientos (construidos en servidor) a registrar en el handoff. */
+    consents: z.array(z.any()).optional(),
     /** Snapshot del nombre del visitante verificado (para personalizar la conversación). */
     leadName: z.string().optional(),
     /**
@@ -50,11 +65,11 @@ export const PublicCommercialAgentInputSchema = z.object({
 });
 
 function buildSystemPrompt(opts: {
-    existingLeadId?: string;
+    sessionLeadId?: string;
     leadName?: string;
     activeBookings?: Array<{ id: string; label: string; status: string }>;
 }): string {
-    const isVerified = !!opts.existingLeadId;
+    const isVerified = !!opts.sessionLeadId;
     const greeting = isVerified && opts.leadName
         ? `El visitante ya está identificado como "${opts.leadName}". NO le pidas nombre, email ni teléfono — ya están registrados. Cuando llames a la herramienta 'requestBudgetHandoff', OMITE los campos 'leadName' y 'leadEmail' (no los inventes ni pongas valores como "registrado") — el sistema los recupera automáticamente del registro previo.`
         : `Captura nombre, email y teléfono del visitante durante la conversación. Al llamar a 'requestBudgetHandoff', pasa 'leadName' y un 'leadEmail' válido (formato email).`;
@@ -86,7 +101,7 @@ function buildSystemPrompt(opts: {
     const todayHuman = `${parts.weekday} ${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
 
     return `
-Eres el Agente Comercial Público de Grupo RG, constructora con sede en Mallorca.
+Eres el Agente Comercial Público de Grupo RG, constructora con sede en Mallorca. Eres un ASISTENTE DE INTELIGENCIA ARTIFICIAL, no una persona: si te preguntan, dilo con claridad y nunca finjas ser humano. Si el visitante pide hablar con una persona, indícale que pulse el botón "Hablar con una persona" de la cabecera del chat y que un asesor le contactará.
 
 FECHA Y HORA ACTUAL (Europe/Madrid): ${todayHuman}
 HOY EN FORMATO ISO: ${todayIso}
@@ -99,8 +114,9 @@ Tu objetivo:
 2. Resolver dudas generales sobre Grupo RG (constructora con experiencia en reformas y obra nueva, que usa tecnología e IA para presupuestar y gestionar obras con total transparencia).
 3. Recopilar los datos del proyecto: tipo de obra (bathroom/kitchen/integral/new_build/pool/other), descripción detallada, y si los menciona: m², código postal, ciudad, plazo, presupuesto aproximado.
 4. Si el usuario sube fotos de la estancia, analízalas y haz preguntas pertinentes (ej. "Veo azulejos antiguos, ¿quieres quitarlos o poner encima?").
-5. CUANDO TENGAS COMO MÍNIMO ${isVerified ? 'tipo de obra y una descripción de al menos 10 caracteres' : 'nombre, email, tipo de obra y una descripción de al menos 10 caracteres'}: utiliza la herramienta 'requestBudgetHandoff'. NO la llames antes.
-6. Tras la respuesta de la herramienta, comunica al usuario lo que indique 'suggestedNextStep'. Si decision='rejected', despídete cordialmente; si decision='qualified' o 'review_required', confirma registro y ofrece agendar videollamada.
+5. PRIVACIDAD: antes de registrar la solicitud el visitante debe marcar la casilla "He leído la política de privacidad" que aparece bajo el chat. Si la herramienta responde que falta el consentimiento, pídeselo con amabilidad (sin presionar) y vuelve a llamarla cuando lo confirme.
+6. CUANDO TENGAS COMO MÍNIMO ${isVerified ? 'tipo de obra y una descripción de al menos 10 caracteres' : 'nombre, email, tipo de obra y una descripción de al menos 10 caracteres'}: utiliza la herramienta 'requestBudgetHandoff'. NO la llames antes.
+7. Tras la respuesta de la herramienta, comunica al usuario lo que indique 'suggestedNextStep'. Si decision='rejected', despídete cordialmente; si decision='qualified' o 'review_required', confirma registro y ofrece agendar videollamada.
 
 GESTIÓN DE AGENDA (sólo para visitantes ya registrados):
 - 'listAvailableSlots': llámala cuando el visitante pregunte por horarios concretos ("¿el viernes?", "otras horas?", "por la tarde?") o cuando pida ver alternativas. Filtros disponibles: weekday (mon/tue/.../sun), periodOfDay (morning <14h, afternoon ≥14h), fromDate (YYYY-MM-DD), daysAhead, limit. NO la llames si en el mismo turno se mostró el InlineBookingPicker (ya tiene los slots).
@@ -135,10 +151,16 @@ Sé persuasivo, profesional, y corto en tus respuestas. Siempre orienta hacia la
 export const PublicCommercialAgentOutputSchema = z.object({
     reply: z.string(),
     handoff: z.object({
+        /** '' cuando la solicitud quedó pendiente de verificación (email ajeno). */
         leadId: z.string(),
         decision: z.enum(['qualified', 'review_required', 'rejected']),
         bookingSlots: z.array(HandoffBookingSlotSchema).optional(),
+        identityUnverified: z.boolean().optional(),
+        /** leadId recién creado por este navegador → la action emite sesión v=0. USO INTERNO, no se reenvía al cliente. */
+        grantOwnerSessionLeadId: z.string().optional(),
     }).optional(),
+    /** El modelo intentó el handoff sin consentimiento de privacidad. */
+    consentRequired: z.boolean().optional(),
     /**
      * Slots devueltos por la última llamada a 'listAvailableSlots' en este
      * turno. La UI los renderiza como tarjetas clicables igual que los
@@ -148,6 +170,17 @@ export const PublicCommercialAgentOutputSchema = z.object({
     availableSlots: z.array(HandoffBookingSlotSchema).optional(),
 });
 
+export type HandoffSink = {
+    result?: {
+        leadId: string;
+        decision: 'qualified' | 'review_required' | 'rejected';
+        bookingSlots?: any;
+        identityUnverified?: boolean;
+        grantOwnerSessionLeadId?: string;
+    };
+    consentRequired?: boolean;
+};
+
 export const publicCommercialAgent = ai.defineFlow(
     {
         name: 'publicCommercialAgent',
@@ -155,11 +188,11 @@ export const publicCommercialAgent = ai.defineFlow(
         outputSchema: PublicCommercialAgentOutputSchema,
     },
     async (input) => {
-        console.log(`[PublicCommercialAgent] Mensaje de usuario: ${input.userId || 'Anonymous'} (suspicious=${input.suspicious || false})`);
+        console.log(`[PublicCommercialAgent] Mensaje (session=${input.sessionLeadId ? 'yes' : 'no'}, suspicious=${input.suspicious || false})`);
 
         // Sink mutable que el handoff tool puede rellenar tras ejecutarse.
         // Se pasa por referencia en el `context` de ai.generate.
-        const handoffSink: { result?: { leadId: string; decision: 'qualified' | 'review_required' | 'rejected'; bookingSlots?: any } } = {};
+        const handoffSink: HandoffSink = {};
 
         // Sink para los slots devueltos por listAvailableSlots. Si el modelo
         // llama a la tool varias veces en un mismo turno (filtros distintos),
@@ -167,26 +200,17 @@ export const publicCommercialAgent = ai.defineFlow(
         // realmente comunicó al usuario.
         const slotsSink: { slots?: Array<{ date: string; startTime: string; endTime: string; label: string }> } = {};
 
-        const messages: any[] = input.history ? [...input.history] : [];
+        // Historial re-saneado: sólo user/model, sólo texto, acotado.
+        const messages: any[] = sanitizeChatHistory(input.history);
 
         // Texto del usuario delimitado para reforzar el separador instrucción/datos
-        const wrappedText = `<user_input>\n${input.userMessage}\n</user_input>`;
-        const userContent: any[] = [{ text: wrappedText }];
+        const userContent: any[] = [{ text: wrapUserInput(input.userMessage) }];
 
-        // Las imágenes se pasan como `media` al modelo para análisis visual.
-        // Aceptamos tanto URLs (preferido) como base64 (legacy).
-        if (input.imageUrls && input.imageUrls.length > 0) {
-            for (const url of input.imageUrls) {
-                userContent.push({ media: { url, contentType: 'image/jpeg' } });
-            }
-        }
-        if (input.imagesBase64 && input.imagesBase64.length > 0) {
-            for (const imgData of input.imagesBase64) {
-                const mimeType = imgData.startsWith('/9j/') ? 'image/jpeg' : 'image/png';
-                userContent.push({
-                    media: { url: `data:${mimeType};base64,${imgData}`, contentType: mimeType }
-                });
-            }
+        // Imágenes del turno como media inline (mime real detectado en servidor).
+        for (const img of input.images || []) {
+            userContent.push({
+                media: { url: `data:${img.mime};base64,${img.base64}`, contentType: img.mime },
+            });
         }
 
         messages.push({ role: 'user', content: userContent });
@@ -195,7 +219,7 @@ export const publicCommercialAgent = ai.defineFlow(
             const response = await ai.generate({
                 model: geminiFlash,
                 system: buildSystemPrompt({
-                    existingLeadId: input.existingLeadId,
+                    sessionLeadId: input.sessionLeadId,
                     leadName: input.leadName,
                     activeBookings: input.activeBookings,
                 }),
@@ -220,15 +244,18 @@ export const publicCommercialAgent = ai.defineFlow(
                         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
                     ],
                 },
-                // Contexto leído por los tools (URLs en Storage, leadId verificado).
+                // Contexto leído por los tools. `leadId` SIEMPRE proviene de la
+                // cookie firmada (resuelta en la server action).
                 context: {
-                    imageUrls: input.imageUrls || [],
+                    attachmentRefs: input.attachmentRefs || [],
                     locale: input.locale,
                     suspicious: input.suspicious || false,
                     chatSessionId: input.chatSessionId,
-                    existingLeadId: input.existingLeadId,
-                    /** Alias usado por las tools de agenda. Si no hay verified lead, undefined. */
-                    leadId: input.existingLeadId,
+                    sessionLeadId: input.sessionLeadId,
+                    privacyConsentGranted: input.privacyConsentGranted === true,
+                    consents: input.consents || [],
+                    /** Alias usado por las tools de agenda. Sin sesión → undefined. */
+                    leadId: input.sessionLeadId,
                     handoffSink,
                     slotsSink,
                 },
@@ -236,15 +263,8 @@ export const publicCommercialAgent = ai.defineFlow(
 
             return {
                 reply: response.text,
-                ...(handoffSink.result
-                    ? {
-                          handoff: {
-                              leadId: handoffSink.result.leadId,
-                              decision: handoffSink.result.decision,
-                              bookingSlots: handoffSink.result.bookingSlots,
-                          },
-                      }
-                    : {}),
+                ...(handoffSink.result ? { handoff: handoffSink.result } : {}),
+                ...(handoffSink.consentRequired ? { consentRequired: true } : {}),
                 ...(slotsSink.slots && slotsSink.slots.length > 0
                     ? { availableSlots: slotsSink.slots }
                     : {}),

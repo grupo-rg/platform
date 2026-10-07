@@ -1,6 +1,6 @@
 import { ai } from '@/backend/ai/core/config/genkit.config';
 import { z } from 'zod';
-import { getMyBookingsAction } from '@/actions/agenda/get-my-bookings.action';
+import { listLeadBookings } from '@/backend/agenda/application/lead-booking-self-service';
 
 interface AgendaToolContext {
     /** El agente NUNCA recibe leadId del modelo — viene del context inyectado. */
@@ -57,7 +57,7 @@ export const getMyBookingsTool = ai.defineTool(
                 error: 'Sólo puedo consultar reservas de visitantes autenticados. Pide al usuario que verifique su identidad primero.',
             };
         }
-        return getMyBookingsAction(ctx.leadId, {
+        return listLeadBookings(ctx.leadId, {
             includePast: input.includePast,
             includeCancelled: input.includeCancelled,
         });

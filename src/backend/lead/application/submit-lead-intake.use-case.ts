@@ -11,9 +11,10 @@ import {
     PersonalInfo,
     QualificationDecision,
 } from '../domain/lead';
+import type { LeadConsent } from '../domain/lead-consent';
 import { LeadCreatedEvent } from '../domain/events/lead-created.event';
 import { EventDispatcher } from '@/backend/shared/events/event-dispatcher';
-import { normalizeToPublicUrls } from '@/backend/shared/infrastructure/storage/upload-public-image';
+import { normalizeLeadAttachments } from '@/backend/lead/infrastructure/lead-uploads';
 import { QualifyLeadService } from './qualify-lead.service';
 
 export interface SubmitLeadIntakeInput {
@@ -30,7 +31,11 @@ export interface SubmitLeadIntakeInput {
     approxBudget?: number;
     timeline?: LeadTimeline;
     qualityLevel?: LeadQualityLevel;
-    /** URLs ya subidas (cliente), o base64 (chat). Se normaliza a URLs estables. */
+    /**
+     * Adjuntos: base64 (chat) o referencias privadas `gs://…/lead_uploads/…`
+     * (formularios, devueltas por `uploadLeadAttachmentAction`). Las URLs
+     * http(s) arbitrarias se descartan.
+     */
     images?: string[];
     /** Marcado por sanitizer si detectó intentos de injection. */
     suspicious?: boolean;
@@ -42,65 +47,87 @@ export interface SubmitLeadIntakeInput {
     rawFormData?: Record<string, any>;
     /** Sesión de chat público temporal (sólo si source==='chat_public'). */
     chatSessionId?: string;
-    /** Si el visitante ya pasó OTP, usamos su leadId directamente y saltamos la búsqueda por email. */
-    existingLeadId?: string;
+    /**
+     * leadId de CONFIANZA: el de la cookie firmada `rg_lead_session`. Nunca
+     * un valor enviado por el navegador.
+     */
+    sessionLeadId?: string;
+    /** Consentimientos declarados en esta solicitud. */
+    consents?: LeadConsent[];
 }
 
 export interface SubmitLeadIntakeResult {
+    /**
+     * Lead al que se asoció la solicitud. Si `identityUnverified=true` es el
+     * id de un lead AJENO a la sesión: NO debe devolverse al navegador.
+     */
     leadId: string;
     decision: QualificationDecision;
     score: number;
     reasons: string[];
     isNewLead: boolean;
+    /** true → email existente sin sesión verificada: lead no modificado. */
+    identityUnverified: boolean;
+    /** true → el llamador puede emitir una sesión `v=0` para este lead (lo acaba de crear este navegador). */
+    canGrantOwnerSession: boolean;
 }
 
 /**
  * Use case central para todas las solicitudes públicas (chat, formularios).
  *
- * 1. Sube imágenes a Storage si vienen como base64.
- * 2. Crea o reusa el Lead por email.
- * 3. Persiste el intake.
- * 4. Cualifica (provisional, F2 reemplaza esto).
- * 5. Despacha LeadCreatedEvent (listener envía email al admin si corresponde).
+ * Resolución de identidad:
+ *  1. Si hay `sessionLeadId` (cookie firmada) → se usa ese lead.
+ *  2. Si no, y el email NO existe → se crea un lead nuevo (propiedad de
+ *     este navegador: el llamador puede emitir sesión `v=0`).
+ *  3. Si no, y el email YA existe → NO se toca el lead existente (ni
+ *     intake, ni cualificación, ni consentimientos): la solicitud viaja en
+ *     el `LeadCreatedEvent` con `identityUnverified=true`, el CRM crea un
+ *     Deal marcado como no verificado y el admin decide. Antes cualquiera
+ *     sobrescribía el intake de otro cliente conociendo su email.
  */
 export class SubmitLeadIntakeUseCase {
     constructor(private readonly leadRepository: LeadRepository) {}
 
     async execute(input: SubmitLeadIntakeInput): Promise<SubmitLeadIntakeResult> {
-        // 1. Normalizar imágenes
-        const imageUrls = input.images && input.images.length > 0
-            ? await normalizeToPublicUrls(input.images, `leads/${input.email.replace(/[^a-zA-Z0-9.-]/g, '_')}`)
-            : [];
+        const email = String(input.email || '').trim();
 
-        // 2. Resolver Lead: prioridad al ID verificado por OTP, luego por email,
-        // y si ninguno existe, crear nuevo.
+        // 1. Resolver Lead
         let lead: Lead | null = null;
-        if (input.existingLeadId) {
-            lead = await this.leadRepository.findById(input.existingLeadId);
+        let isNewLead = false;
+        let identityUnverified = false;
+
+        if (input.sessionLeadId) {
+            lead = await this.leadRepository.findById(input.sessionLeadId);
         }
         if (!lead) {
-            lead = await this.leadRepository.findByEmail(input.email);
+            const existing = email ? await this.leadRepository.findByEmail(email) : null;
+            if (existing) {
+                lead = existing;
+                identityUnverified = true;
+            } else {
+                const personalInfo: PersonalInfo = {
+                    name: input.name,
+                    email: email.toLowerCase(),
+                    phone: input.phone,
+                    address: input.address,
+                };
+                lead = Lead.create(randomUUID(), personalInfo, {
+                    contactMethod: input.contactMethod || 'email',
+                    language: input.language || 'es',
+                });
+                isNewLead = true;
+            }
         }
 
-        let isNewLead: boolean;
+        // 2. Adjuntos a almacenamiento privado (sin email en la ruta).
+        const owner = identityUnverified
+            ? `u-${input.chatSessionId || randomUUID()}`
+            : lead.id;
+        const imageUrls = input.images && input.images.length > 0
+            ? await normalizeLeadAttachments(input.images, owner, { allowPdf: true, allowVideo: true })
+            : [];
 
-        if (lead) {
-            isNewLead = false;
-        } else {
-            const personalInfo: PersonalInfo = {
-                name: input.name,
-                email: input.email,
-                phone: input.phone,
-                address: input.address,
-            };
-            lead = Lead.create(randomUUID(), personalInfo, {
-                contactMethod: input.contactMethod || 'email',
-                language: input.language || 'es',
-            });
-            isNewLead = true;
-        }
-
-        // 3. Persistir intake
+        // 3. Intake
         const intake: LeadIntake = {
             projectType: input.projectType,
             description: input.description,
@@ -117,31 +144,36 @@ export class SubmitLeadIntakeUseCase {
             rawFormData: input.rawFormData,
             chatSessionId: input.chatSessionId,
         };
-        lead.setIntake(intake);
 
         // 4. Cualificación con reglas determinísticas
-        const qualification = new QualifyLeadService().qualify(intake, input.email);
-        lead.setQualification(qualification);
+        const qualification = new QualifyLeadService().qualify(intake, email);
 
-        // 5. Persistir
-        await this.leadRepository.save(lead);
+        // 5. Persistir SÓLO si el lead es de esta sesión o nuevo.
+        if (!identityUnverified) {
+            lead.setIntake(intake);
+            lead.setQualification(qualification);
+            if (input.consents && input.consents.length > 0) lead.recordConsents(input.consents);
+            await this.leadRepository.save(lead);
+        }
 
-        // 6. Despachar evento (no bloquea si listener falla — Promise.allSettled interno)
+        // 6. Despachar evento (no bloquea si listener falla)
         try {
-            // Idempotente: protege cuando instrumentation.ts no haya corrido (e.g. tests, dev hot-reload)
             const { registerEventListeners } = await import('@/backend/shared/events/register-listeners');
             registerEventListeners();
 
             await EventDispatcher.getInstance().dispatch(
                 new LeadCreatedEvent(
                     lead.id,
-                    lead.personalInfo.name,
+                    // En el caso no verificado, el nombre es el DECLARADO (no el del lead).
+                    identityUnverified ? input.name : lead.personalInfo.name,
                     lead.personalInfo.email,
                     input.source,
                     qualification.decision,
                     qualification.score,
                     intake,
-                    lead.preferences?.language
+                    input.language || lead.preferences?.language,
+                    identityUnverified,
+                    input.consents
                 )
             );
         } catch (err) {
@@ -154,6 +186,8 @@ export class SubmitLeadIntakeUseCase {
             score: qualification.score,
             reasons: qualification.reasons,
             isNewLead,
+            identityUnverified,
+            canGrantOwnerSession: isNewLead,
         };
     }
 }

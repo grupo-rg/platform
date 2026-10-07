@@ -1,36 +1,52 @@
 import { Lead, PersonalInfo, LeadPreferences } from '../domain/lead';
 import { LeadRepository } from '../domain/lead-repository';
-import { OtpService } from '../domain/otp-service';
+import { OtpHasher, OtpService } from '../domain/otp-service';
+import type { LeadConsent } from '../domain/lead-consent';
 import { v4 as uuidv4 } from 'uuid';
 
+export type RequestLeadAccessOutcome = 'sent' | 'locked';
+
+/**
+ * Emite un OTP para el email indicado.
+ *
+ * Seguridad:
+ *  - NUNCA devuelve el leadId (evita enumeración / IDOR: antes cualquiera
+ *    obtenía el leadId de cualquier email). La action responde siempre con un
+ *    mensaje genérico.
+ *  - Si el lead ya existe NO se sobrescriben sus datos personales ni sus
+ *    consentimientos con lo que envíe un tercero no verificado.
+ *  - Sólo se guarda el hash del código.
+ */
 export class RequestLeadAccess {
     constructor(
         private leadRepository: LeadRepository,
-        private otpService: OtpService
+        private otpService: OtpService,
+        private otpHasher: OtpHasher
     ) { }
 
-    async execute(info: PersonalInfo, preferences: LeadPreferences): Promise<{ leadId: string }> {
-        // 1. Check if lead exists by email
+    async execute(
+        info: PersonalInfo,
+        preferences: LeadPreferences,
+        consents: LeadConsent[] = []
+    ): Promise<{ outcome: RequestLeadAccessOutcome }> {
         let lead = await this.leadRepository.findByEmail(info.email);
 
         if (!lead) {
-            // Create new lead
             lead = Lead.create(uuidv4(), info, preferences);
-        } else {
-            // Update existing lead contact info/prefs if needed (optional logic)
-            // For now, valid to just re-verify
+            // Lead nuevo: los consentimientos los declara su propio creador.
+            lead.recordConsents(consents);
         }
 
-        // 2. Generate OTP
         const code = this.otpService.generateCode();
-        lead.generateOtp(code);
+        const issued = lead.generateOtp(this.otpHasher.hash(lead.id, code));
+        if (!issued) {
+            // Bloqueado por intentos fallidos: no enviamos nada.
+            return { outcome: 'locked' };
+        }
 
-        // 3. Save Lead (with new OTP)
         await this.leadRepository.save(lead);
-
-        // 4. Send Email (Async, don't block? Better to await to ensure delivery trigger)
         await this.otpService.sendOtp(lead.personalInfo.email, code);
 
-        return { leadId: lead.id };
+        return { outcome: 'sent' };
     }
 }

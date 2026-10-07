@@ -25,6 +25,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { cn } from '@/lib/utils';
+import { LeadConsentFields, EMPTY_CONSENT, type LeadConsentValue } from '@/components/forms/lead-consent-fields';
 
 const identitySchema = z.object({
     name: z.string().min(2, "El nombre es necesario"),
@@ -55,7 +56,11 @@ const countryCodes = [
 export function IdentityForm({ onVerified, onBack, intent, dictionary }: IdentityFormProps) {
     const [step, setStep] = useState<'contact' | 'otp'>('contact');
     const [isLoading, setIsLoading] = useState(false);
-    const [leadId, setLeadId] = useState<string | null>(null);
+    // Email al que se envió el código. La verificación va por email: el
+    // servidor ya no devuelve leadId hasta que el código es correcto.
+    const [otpEmail, setOtpEmail] = useState<string | null>(null);
+    const [consent, setConsent] = useState<LeadConsentValue>(EMPTY_CONSENT);
+    const [consentError, setConsentError] = useState(false);
     const { toast } = useToast();
 
     // Use dictionary if available, otherwise fallback
@@ -118,16 +123,21 @@ export function IdentityForm({ onVerified, onBack, intent, dictionary }: Identit
     });
 
     const onSubmitContact = async (data: IdentityValues) => {
+        if (!consent.privacyAccepted) {
+            setConsentError(true);
+            return;
+        }
         setIsLoading(true);
         try {
             const fullPhone = `${data.countryCode}${data.phone}`;
             const result = await requestLeadOtpAction(
                 { name: data.name, email: data.email, phone: fullPhone },
-                { contactMethod: 'email', language: 'es' }
+                { contactMethod: 'email', language: 'es' },
+                consent
             );
 
-            if (result.success && result.leadId) {
-                setLeadId(result.leadId);
+            if (result.success) {
+                setOtpEmail(data.email);
                 setStep('otp');
                 toast({ title: "Código enviado", description: "Revisa tu bandeja de entrada." });
             } else {
@@ -141,15 +151,15 @@ export function IdentityForm({ onVerified, onBack, intent, dictionary }: Identit
     };
 
     const onVerifyOtp = async (otp: string) => {
-        if (!leadId || otp.length < 6) return;
+        if (!otpEmail || otp.length < 6) return;
         setIsLoading(true);
         try {
-            const result = await verifyLeadOtpAction(leadId, otp);
-            if (result.success) {
+            const result = await verifyLeadOtpAction(otpEmail, otp, consent);
+            if (result.success && result.leadId) {
                 toast({ title: "Verificado", description: "Accediendo a la herramienta..." });
-                onVerified(leadId, form.getValues());
+                onVerified(result.leadId, form.getValues());
             } else {
-                toast({ variant: "destructive", title: "Código inválido", description: "Inténtalo de nuevo." });
+                toast({ variant: "destructive", title: "Código inválido", description: result.error || "Inténtalo de nuevo." });
             }
         } catch (error) {
             toast({ variant: "destructive", title: "Error", description: "Error al verificar." });
@@ -293,6 +303,15 @@ export function IdentityForm({ onVerified, onBack, intent, dictionary }: Identit
                                             />
                                         </div>
 
+                                        <LeadConsentFields
+                                            value={consent}
+                                            onChange={v => { setConsent(v); if (v.privacyAccepted) setConsentError(false); }}
+                                            showError={consentError}
+                                            compact
+                                            idPrefix="identity-consent"
+                                            className="pt-1"
+                                        />
+
                                         <Button
                                             type="submit"
                                             className="w-full mt-4 bg-gray-900 dark:bg-emerald-600 hover:bg-black dark:hover:bg-emerald-700 text-white shadow-lg shadow-gray-200 dark:shadow-none transition-all h-11 text-base font-medium rounded-xl"
@@ -350,7 +369,7 @@ export function IdentityForm({ onVerified, onBack, intent, dictionary }: Identit
             {/* Trust badge */}
             <div className="mt-6 text-center">
                 <p className="text-xs text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1">
-                    <ShieldCheck className="w-3 h-3" /> Privacidad garantizada. No compartimos tus datos.
+                    <ShieldCheck className="w-3 h-3" /> Tratamos tus datos según nuestra política de privacidad. No los vendemos a terceros.
                 </p>
             </div>
         </div>

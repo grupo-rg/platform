@@ -28,6 +28,7 @@ import { SimpleFileUpload } from '@/components/ui/simple-file-upload';
 import { createBudgetAction } from '@/actions/budget/create-budget.action';
 import { useVerifiedLead } from '@/hooks/use-verified-lead';
 import { VerifiedContactBanner, VerifiedFieldIcon } from '@/components/forms/verified-contact-banner';
+import { LeadConsentFields, EMPTY_CONSENT, type LeadConsentValue } from '@/components/forms/lead-consent-fields';
 
 // Schema
 const newBuildSchema = z.object({
@@ -48,6 +49,8 @@ export function NewBuildForm({ t, onSuccess, onBack }: { t: any, onSuccess?: () 
     const { toast } = useToast();
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const [consent, setConsent] = useState<LeadConsentValue>(EMPTY_CONSENT);
+    const [consentError, setConsentError] = useState(false);
     const { lead: verifiedLead, isReady: isLeadVerified } = useVerifiedLead();
 
     const form = useForm<NewBuildValues>({
@@ -94,11 +97,15 @@ export function NewBuildForm({ t, onSuccess, onBack }: { t: any, onSuccess?: () 
     const prevStep = () => setStep(prev => prev - 1);
 
     async function onSubmit(values: NewBuildValues) {
+        if (!consent.privacyAccepted) {
+            setConsentError(true);
+            return;
+        }
         setIsLoading(true);
         try {
             // Registra el lead. El listener NotifyAdminOnLeadCreatedUseCase
             // notifica al admin vía Resend.
-            await createBudgetAction('new_build', {
+            const result = await createBudgetAction('new_build', {
                 name: values.name,
                 email: values.email,
                 phone: values.phone,
@@ -108,7 +115,8 @@ export function NewBuildForm({ t, onSuccess, onBack }: { t: any, onSuccess?: () 
                 floors: 1,
                 description: `Obra Nueva en ${values.location}. Terreno: ${values.hasLand}. Proyecto: ${values.hasProject || 'N/A'}. Detalles: ${values.details}`,
                 files: values.files || [],
-            });
+            }, consent);
+            if (!result.success) throw new Error(result.error || 'submit_failed');
 
             toast({
                 title: "Solicitud Recibida",
@@ -259,7 +267,14 @@ export function NewBuildForm({ t, onSuccess, onBack }: { t: any, onSuccess?: () 
                     )}
                 </AnimatePresence>
 
-
+                {step === 3 && (
+                    <LeadConsentFields
+                        value={consent}
+                        onChange={v => { setConsent(v); if (v.privacyAccepted) setConsentError(false); }}
+                        showError={consentError}
+                        idPrefix="newbuild-consent"
+                    />
+                )}
 
                 <div className="flex justify-between pt-4 border-t">
                     {step > 1 ? (

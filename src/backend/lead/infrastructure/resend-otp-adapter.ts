@@ -1,15 +1,26 @@
 import 'server-only';
-import { OtpService } from '../domain/otp-service';
+import { OtpHasher, OtpService } from '../domain/otp-service';
+import { OTP_POLICY } from '../domain/lead';
 import { ResendEmailService } from '@/backend/shared/infrastructure/messaging/resend-email.service';
+import { generateOtpCode, hashOtp, otpMatches } from './otp-crypto';
+
+export class HmacOtpHasher implements OtpHasher {
+    hash(leadId: string, code: string): string {
+        return hashOtp(leadId, code);
+    }
+    matches(leadId: string, code: string, storedHash: string): boolean {
+        return otpMatches(leadId, code, storedHash);
+    }
+}
 
 export class ResendOtpAdapter implements OtpService {
     generateCode(length: number = 6): string {
-        return Math.floor(100000 + Math.random() * 900000).toString();
+        return generateOtpCode(length);
     }
 
     async sendOtp(email: string, code: string): Promise<void> {
         const html = renderOtpHtml(code);
-        const text = `Tu código de verificación Grupo RG: ${code}\n\nVálido durante 15 minutos. Si no lo solicitaste, ignora este correo.`;
+        const text = `Tu código de verificación Grupo RG: ${code}\n\nVálido durante ${OTP_POLICY.ttlMinutes} minutos. Si no lo solicitaste, ignora este correo.`;
 
         const { id, error } = await ResendEmailService.send({
             to: email,
@@ -20,7 +31,7 @@ export class ResendOtpAdapter implements OtpService {
         });
 
         if (id) {
-            console.log(`[OTP] Código enviado a ${email} (resend id=${id})`);
+            console.log(`[OTP] Código enviado (resend id=${id})`);
             return;
         }
 
@@ -73,7 +84,7 @@ function renderOtpHtml(code: string): string {
                         <span style="font-family:ui-monospace,Menlo,Monaco,Consolas,monospace;font-size:36px;font-weight:700;color:#0f172a;letter-spacing:8px;">${code}</span>
                     </div>
                     <p style="margin:28px 0 0;font-size:13px;color:#64748b;text-align:center;">
-                        Este código expira en <strong>15 minutos</strong>.
+                        Este código expira en <strong>${OTP_POLICY.ttlMinutes} minutos</strong>.
                     </p>
                 </td></tr>
                 <tr><td style="background:#0f172a;padding:24px;text-align:center;">

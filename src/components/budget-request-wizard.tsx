@@ -27,6 +27,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createBudgetAction } from '@/actions/budget/create-budget.action';
 import { BudgetGenerationLoading } from './budget-request/BudgetGenerationLoading';
 import type { QualificationDecision } from '@/backend/lead/domain/lead';
+import { LeadConsentFields, EMPTY_CONSENT, type LeadConsentValue } from '@/components/forms/lead-consent-fields';
 
 type SubmissionOutcome = {
   leadId?: string;
@@ -40,6 +41,8 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [direction, setDirection] = useState(1);
   const [submissionResult, setSubmissionResult] = useState<SubmissionOutcome | null>(null);
+  const [consent, setConsent] = useState<LeadConsentValue>(EMPTY_CONSENT);
+  const [consentError, setConsentError] = useState(false);
   const progressContainerRef = useRef<HTMLDivElement>(null);
 
   const form = useForm<DetailedFormValues>({
@@ -165,9 +168,13 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
   };
 
   const handleFormSubmit = async (values: DetailedFormValues) => {
+    if (!consent.privacyAccepted) {
+      setConsentError(true);
+      return;
+    }
     setIsLoading(true);
     try {
-      const result = await createBudgetAction('renovation', values);
+      const result = await createBudgetAction('renovation', values, consent);
       if (result.success) {
         setSubmissionResult({ leadId: result.leadId, decision: result.decision });
         setIsSubmitted(true);
@@ -319,6 +326,15 @@ export function BudgetRequestWizard({ t, services, onBack, isWidget = false }: {
                   {renderDetailedStep()}
                 </motion.div>
               </AnimatePresence>
+              {currentStep === activeSteps.length - 1 && (
+                <LeadConsentFields
+                  value={consent}
+                  onChange={v => { setConsent(v); if (v.privacyAccepted) setConsentError(false); }}
+                  showError={consentError}
+                  idPrefix="detailed-consent"
+                  className="mt-6 border-t pt-4"
+                />
+              )}
             </CardContent>
           </Card>
 

@@ -17,12 +17,15 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useVerifiedLead } from '@/hooks/use-verified-lead';
 import { VerifiedContactBanner, VerifiedFieldIcon } from '@/components/forms/verified-contact-banner';
+import { LeadConsentFields, EMPTY_CONSENT, type LeadConsentValue } from '@/components/forms/lead-consent-fields';
 
 export function QuickBudgetWizard() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const { toast } = useToast();
     const { lead: verifiedLead, isReady: isLeadVerified } = useVerifiedLead();
+    const [consent, setConsent] = useState<LeadConsentValue>(EMPTY_CONSENT);
+    const [consentError, setConsentError] = useState(false);
 
     const form = useForm<QuickBudgetFormValues>({
         resolver: zodResolver(quickBudgetSchema),
@@ -50,9 +53,13 @@ export function QuickBudgetWizard() {
     }, [verifiedLead?.id]);
 
     const onSubmit = async (values: QuickBudgetFormValues) => {
+        if (!consent.privacyAccepted) {
+            setConsentError(true);
+            return;
+        }
         setIsSubmitting(true);
         try {
-            const result = await createBudgetAction('quick', values);
+            const result = await createBudgetAction('quick', values, consent);
             if (result.success) {
                 setIsSuccess(true);
             } else {
@@ -220,6 +227,13 @@ export function QuickBudgetWizard() {
                                     />
                                 </div>
                             </div>
+
+                            <LeadConsentFields
+                                value={consent}
+                                onChange={v => { setConsent(v); if (v.privacyAccepted) setConsentError(false); }}
+                                showError={consentError}
+                                idPrefix="qwiz-consent"
+                            />
 
                             <Button
                                 type="submit"

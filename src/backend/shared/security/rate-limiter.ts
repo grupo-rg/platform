@@ -45,6 +45,16 @@ export const RATE_LIMITS = {
     leadOtpRequest: { max: 5, windowMs: 60 * 60 * 1000 } satisfies RateLimitConfig, // 5 / hora
     /** Submit de formulario de presupuesto. Por IP. */
     leadIntakeSubmit: { max: 10, windowMs: 60 * 60 * 1000 } satisfies RateLimitConfig, // 10 / hora
+    /** Solicitud de OTP. Por IP (complementa el límite por email). */
+    leadOtpRequestIp: { max: 15, windowMs: 60 * 60 * 1000 } satisfies RateLimitConfig, // 15 / hora
+    /** Verificación de OTP. Por IP (complementa el bloqueo por lead tras 5 fallos). */
+    leadOtpVerifyIp: { max: 20, windowMs: 15 * 60 * 1000 } satisfies RateLimitConfig, // 20 / 15min
+    /** Subida de adjuntos desde formularios públicos. Por IP. */
+    leadUploadIp: { max: 30, windowMs: 60 * 60 * 1000 } satisfies RateLimitConfig, // 30 / hora
+    /** "Hablar con una persona" desde el chat público. Por IP. */
+    publicHumanRequest: { max: 5, windowMs: 60 * 60 * 1000 } satisfies RateLimitConfig, // 5 / hora
+    /** Acciones de agenda self-service del lead (reservar/cancelar). Por IP. */
+    publicBookingAction: { max: 20, windowMs: 60 * 60 * 1000 } satisfies RateLimitConfig, // 20 / hora
 } as const;
 
 /**

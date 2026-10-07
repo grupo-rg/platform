@@ -5,6 +5,7 @@ import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
 import { FirestoreLeadRepository } from '@/backend/lead/infrastructure/firestore-lead-repository';
 import { BudgetRepositoryFirestore } from '@/backend/budget/infrastructure/budget-repository-firestore';
 import { FirebaseDealRepository } from '@/backend/crm/infrastructure/persistence/firebase.deal.repository';
+import { resolveLeadAssetUrls } from '@/backend/lead/infrastructure/lead-uploads';
 import type {
     LeadIntakeSource,
     LeadProjectType,
@@ -212,6 +213,17 @@ export async function getAdminLeadDetailAction(leadId: string): Promise<{
                 };
             }),
         };
+
+        // Adjuntos privados (gs://…/lead_uploads/…) → URLs firmadas de 60 min.
+        // Las URLs públicas antiguas se devuelven tal cual.
+        if (detail.intake) {
+            detail.intake.imageUrls = await resolveLeadAssetUrls(detail.intake.imageUrls);
+        }
+        for (const d of detail.associatedDeals) {
+            if (d.intakeSnapshot) {
+                d.intakeSnapshot.imageUrls = await resolveLeadAssetUrls(d.intakeSnapshot.imageUrls);
+            }
+        }
 
         return { success: true, lead: detail };
     } catch (error: any) {
