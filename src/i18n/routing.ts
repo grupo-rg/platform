@@ -91,6 +91,7 @@ export const routing = defineRouting({
         '/dashboard/settings/financial': '/dashboard/settings/financial',
         '/dashboard/settings/company': '/dashboard/settings/company',
         '/dashboard/settings/document-templates': '/dashboard/settings/document-templates',
+        '/dashboard/settings/users': '/dashboard/settings/users',
         '/dashboard/price-lists': '/dashboard/price-lists',
         '/dashboard/price-lists/[id]': '/dashboard/price-lists/[id]',
         '/dashboard/admin/prices': '/dashboard/admin/prices',
