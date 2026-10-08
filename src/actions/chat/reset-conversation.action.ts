@@ -1,9 +1,6 @@
 'use server';
 
 import { checkAdmin, unauthorizedResult } from '@/actions/_guards';
-
-'use server';
-
 import { FirestoreConversationRepository } from '@/backend/chat/infrastructure/firestore-conversation-repository';
 import { FirestoreMessageRepository } from '@/backend/chat/infrastructure/firestore-message-repository';
 // import { getAuthenticatedUser } from '@/lib/auth/get-authenticated-user';
