@@ -27,6 +27,16 @@ class CompanyConfigService {
         this.cache = null;
     }
 
+    /**
+     * Buzón interno para avisos (citas, alertas): `NEXT_PUBLIC_ADMIN_EMAIL` si
+     * está definido; si no, el email de Ajustes › Empresa. '' si no hay ninguno.
+     */
+    async notificationEmail(): Promise<string> {
+        const fromEnv = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim();
+        if (fromEnv) return fromEnv;
+        return (await this.get()).email?.trim() || '';
+    }
+
     invalidate(): void {
         this.cache = null;
     }

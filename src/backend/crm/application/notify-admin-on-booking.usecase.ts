@@ -1,6 +1,7 @@
 import { EventHandler } from "../../shared/events/event-dispatcher";
 import { BookingConfirmedEvent } from "../../agenda/domain/events/booking-confirmed.event";
 import { EmailProviderPort } from "../../marketing/domain/marketing.repository";
+import { companyConfigService } from "../../platform/application/company-config-service";
 
 /**
  * Listener CRM/Admin: Dispara una alerta interna por Email al equipo de Ventas
@@ -9,7 +10,8 @@ import { EmailProviderPort } from "../../marketing/domain/marketing.repository";
 export class NotifyAdminOnBookingUseCase implements EventHandler<BookingConfirmedEvent> {
     constructor(
         private readonly emailProvider: EmailProviderPort,
-        private readonly adminEmailDest: string = process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'info@gruporg.com'
+        /** Destino fijo opcional; por defecto, el buzón de Ajustes › Empresa. */
+        private readonly adminEmailDest?: string
     ) {}
 
     async handle(event: BookingConfirmedEvent): Promise<void> {
@@ -29,8 +31,13 @@ export class NotifyAdminOnBookingUseCase implements EventHandler<BookingConfirme
         `;
 
         try {
-            await this.emailProvider.sendDirectEmail(this.adminEmailDest, subject, bodyContent);
-            console.log(`[CRM Alert] ✅ Alerta de Email enviada exitosamente a ventas (${this.adminEmailDest}).`);
+            const dest = this.adminEmailDest || (await companyConfigService.notificationEmail());
+            if (!dest) {
+                console.warn('[CRM Alert] Sin email de empresa configurado (Ajustes › Empresa): aviso de cita no enviado.');
+                return;
+            }
+            await this.emailProvider.sendDirectEmail(dest, subject, bodyContent);
+            console.log(`[CRM Alert] ✅ Alerta de Email enviada exitosamente a ventas (${dest}).`);
         } catch (e) {
             console.error(`[CRM Alert] Error notificando al admin de ventas:`, e);
         }

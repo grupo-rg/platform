@@ -4,7 +4,8 @@ import { useWidgetContext } from '@/context/budget-widget-context';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_HREF } from '@/lib/contact';
+import { telHref } from '@/lib/contact';
+import { useCompanyContact } from '@/components/providers/company-contact-provider';
 
 interface ServiceCTAProps {
     title?: string;
@@ -24,6 +25,7 @@ export function ServiceCTA({
     className
 }: ServiceCTAProps) {
     const { openWidget } = useWidgetContext();
+    const { phone } = useCompanyContact();
 
     if (variant === 'inline') {
         return (
@@ -74,11 +76,11 @@ export function ServiceCTA({
                     Llámanos directamente
                 </p>
                 <a
-                    href={CONTACT_PHONE_HREF}
+                    href={telHref(phone)}
                     className="inline-flex items-center justify-center gap-2 font-headline font-bold text-xl hover:text-primary transition-colors text-foreground"
                 >
                     <Phone className="h-4 w-4 text-primary" />
-                    {CONTACT_PHONE_DISPLAY}
+                    {phone}
                 </a>
             </div>
         </div>

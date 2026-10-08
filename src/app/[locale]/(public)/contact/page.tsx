@@ -6,7 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { WebPageJsonLd, BreadcrumbJsonLd } from '@/components/seo/json-ld';
 import { SmartTriggerButton } from '@/components/contact/SmartTriggerButton';
 import * as motion from 'framer-motion/client';
-import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_HREF, CONTACT_WHATSAPP_URL } from '@/lib/contact';
+import { CONTACT_PHONE_DISPLAY, telHref, whatsappHref } from '@/lib/contact';
 import { constructMetadata } from '@/i18n/seo-utils';
 import { companyConfigService } from '@/backend/platform/application/company-config-service';
 
@@ -31,31 +31,43 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 export default async function ContactPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
-  const dict = await getDictionary(locale as any);
+  const [dict, company] = await Promise.all([
+    getDictionary(locale as any),
+    companyConfigService.get(),
+  ]);
   const t = dict.contact;
+
+  // Fuente única: Ajustes › Empresa. Los textos de traducción solo aportan
+  // etiquetas; los fallback de código cubren campos aún sin configurar.
+  const phone = company.phone || CONTACT_PHONE_DISPLAY;
+  const address = company.address || 'Petra, Mallorca';
+  const email = company.email;
+  const mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
 
   const contactDetails = [
     {
       icon: <MapPin className="h-5 w-5" />,
       label: t.address.label,
-      value: t.address.value || "Petra, Mallorca",
+      value: address,
       href: undefined,
       description: "Nuestras oficinas centrales",
     },
     {
       icon: <Phone className="h-5 w-5" />,
       label: t.phone.label,
-      value: CONTACT_PHONE_DISPLAY,
-      href: CONTACT_PHONE_HREF,
+      value: phone,
+      href: telHref(phone),
       description: "Lunes a Viernes, 9:00 - 18:00",
     },
-    {
-      icon: <Mail className="h-5 w-5" />,
-      label: t.email.label,
-      value: t.email.value || "info@gruporg.com",
-      href: `mailto:${t.email.value || "info@gruporg.com"}`,
-      description: "Respuesta en menos de 24h",
-    },
+    ...(email
+      ? [{
+          icon: <Mail className="h-5 w-5" />,
+          label: t.email.label,
+          value: email,
+          href: `mailto:${email}`,
+          description: "Respuesta en menos de 24h",
+        }]
+      : []),
   ];
 
   return (
@@ -156,14 +168,14 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
               className="lg:col-span-8 h-[500px] lg:h-[600px] rounded-[3rem] overflow-hidden border border-border/50 shadow-2xl relative grayscale hover:grayscale-0 transition-all duration-1000 group"
             >
               <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d12318.513481232811!2d3.1028782!3d39.613915!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x12964bfa95f33663%3A0xc6cb511993214e6b!2s07520%20Petra%2C%20Balearic%20Islands!5e0!3m2!1sen!2ses!4v1700000000000!5m2!1sen!2ses"
+                src={mapSrc}
                 width="100%"
                 height="100%"
                 style={{ border: 0 }}
                 allowFullScreen={false}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
-                title="Petra, Mallorca"
+                title={address}
                 className="grayscale hover:grayscale-0 transition-all duration-500 scale-[1.01] group-hover:scale-105"
               />
               <div className="absolute inset-0 pointer-events-none border-[12px] border-background/50 rounded-[3rem]" />
@@ -197,13 +209,13 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
                 className="bg-white text-primary hover:bg-stone-100 rounded-full px-10 py-7 text-lg font-bold"
               />
               <a
-                href={CONTACT_WHATSAPP_URL}
+                href={whatsappHref(phone)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/40 px-8 py-4 text-lg font-bold hover:bg-primary-foreground/10 transition-colors"
               >
                 <MessageCircle className="h-5 w-5" aria-hidden="true" />
-                WhatsApp {CONTACT_PHONE_DISPLAY}
+                WhatsApp {phone}
               </a>
             </div>
           </motion.div>

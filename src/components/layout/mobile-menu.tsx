@@ -26,7 +26,8 @@ const BudgetWidget = dynamic(
         loading: () => <div className="h-12 w-full animate-pulse rounded-md bg-primary/20" />,
     }
 );
-import { CONTACT_PHONE_DISPLAY, CONTACT_PHONE_HREF, CONTACT_WHATSAPP_URL } from '@/lib/contact';
+import { telHref, whatsappHref } from '@/lib/contact';
+import { useCompanyContact } from '@/components/providers/company-contact-provider';
 import { Phone, MessageCircle, ArrowRight } from 'lucide-react';
 
 interface MobileMenuProps {
@@ -69,6 +70,7 @@ function NavRow({
 
 export function MobileMenu({ t, onLinkClick, user }: MobileMenuProps) {
     const locale = useLocale();
+    const { phone } = useCompanyContact();
     const nav = t?.header?.nav ?? {};
 
     // Slugs traducidos: en en/ca/de/nl la URL correcta no es el id en español.
@@ -200,14 +202,14 @@ export function MobileMenu({ t, onLinkClick, user }: MobileMenuProps) {
                 />
                 <div className="mt-3 flex items-center justify-between text-sm">
                     <a
-                        href={CONTACT_PHONE_HREF}
+                        href={telHref(phone)}
                         className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-primary"
                     >
                         <Phone className="h-4 w-4 text-primary" aria-hidden="true" />
-                        {CONTACT_PHONE_DISPLAY}
+                        {phone}
                     </a>
                     <a
-                        href={CONTACT_WHATSAPP_URL}
+                        href={whatsappHref(phone)}
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="WhatsApp"

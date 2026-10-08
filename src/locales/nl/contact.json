@@ -21,15 +21,12 @@
         "button": "Send Message"
     },
     "address": {
-        "label": "Locatie",
-        "value": "Petra, Mallorca"
+        "label": "Locatie"
     },
     "phone": {
-        "label": "Telefoon",
-        "value": "+34 663 955 854"
+        "label": "Telefoon"
     },
     "email": {
-        "label": "Email",
-        "value": "info@gruporg.com"
+        "label": "Email"
     }
 }

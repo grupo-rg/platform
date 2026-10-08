@@ -4,6 +4,7 @@ import { AvailabilityRepository } from "../domain/availability-repository";
 import { EventDispatcher } from "../../shared/events/event-dispatcher";
 import { BookingConfirmedEvent } from "../domain/events/booking-confirmed.event";
 import { GoogleCalendarService } from "../../shared/infrastructure/google/google-calendar.service";
+import { companyConfigService } from "../../platform/application/company-config-service";
 
 interface CreateBookingRequest {
     name: string;
@@ -55,7 +56,9 @@ export class CreateBookingUseCase {
         const description = `Revisión Técnica con ${req.name} (${req.email} / ${req.phone || 'Sin telf'}). Lead ID: ${req.leadId || 'N/A'}`;
 
         console.log(`[Agenda] Solicitando enlace a Google Meet para: ${summary}`);
-        const meetUrl = await this.meetService.generateMeetLink(summary, description, startDateTime, 45, [req.email, 'info@gruporg.com']);
+        const companyEmail = await companyConfigService.notificationEmail();
+        const attendees = companyEmail ? [req.email, companyEmail] : [req.email];
+        const meetUrl = await this.meetService.generateMeetLink(summary, description, startDateTime, 45, attendees);
         
         // Asociamos el link de la sala a la reserva nativa
         newBooking.meetUrl = meetUrl;

@@ -42,3 +42,14 @@ export function telHref(phone?: string | null): string {
     const normalized = raw.replace(/[^\d+]/g, '');
     return `tel:${normalized}`;
 }
+
+/**
+ * Enlace de WhatsApp para un teléfono en cualquier formato. Sin teléfono,
+ * el corporativo. Números sin prefijo internacional se asumen españoles.
+ */
+export function whatsappHref(phone?: string | null, message?: string): string {
+    let digits = (phone ?? '').replace(/\D/g, '');
+    if (digits.length === 9) digits = `34${digits}`;
+    const base = digits ? `https://wa.me/${digits}` : CONTACT_WHATSAPP_URL;
+    return message ? `${base}?text=${encodeURIComponent(message)}` : base;
+}

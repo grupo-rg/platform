@@ -8,8 +8,8 @@ import { locations } from '@/lib/locations';
 import { getTranslatedCategorySlug, getTranslatedSubcategorySlug } from '@/lib/service-slugs';
 import {
   CONTACT_PHONE_DISPLAY,
-  CONTACT_WHATSAPP_URL,
   telHref,
+  whatsappHref,
 } from '@/lib/contact';
 import { MapPin, Mail, Phone, MessageCircle } from 'lucide-react';
 
@@ -102,7 +102,7 @@ export async function Footer({ t, locale: localeProp }: { t?: any; locale?: stri
               <span className="flex items-center gap-2">
                 <MessageCircle className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                 <a
-                  href={CONTACT_WHATSAPP_URL}
+                  href={whatsappHref(phone)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-primary transition-colors"
